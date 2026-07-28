@@ -1,4 +1,4 @@
-# LiteTV Channels for Jellyfin
+# LiteTV Channels for Jellyfin (Proof of Concept)
 
 Lightweight virtual TV channels for your Jellyfin library — **no transcoding, no tuner
 emulation, no separate app**. A channel is just a deterministic schedule over your own
