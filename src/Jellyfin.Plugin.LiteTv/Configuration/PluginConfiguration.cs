@@ -30,6 +30,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// button can be hidden while those stay on.
     /// </summary>
     public bool ShowHeaderButton { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the channels are published as a Jellyfin
+    /// channel, which is what makes them browsable and playable on clients the plugin
+    /// cannot inject its web UI into - TV apps, phones, anything but the web client.
+    /// </summary>
+    public bool PublishAsChannels { get; set; } = true;
 }
 
 /// <summary>

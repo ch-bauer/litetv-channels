@@ -1,7 +1,9 @@
+using Jellyfin.Plugin.LiteTv.Channels;
 using Jellyfin.Plugin.LiteTv.Core;
 using Jellyfin.Plugin.LiteTv.Sessions;
 using Jellyfin.Plugin.LiteTv.Web;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.AspNetCore.Hosting;
@@ -31,6 +33,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // schedule-following pushes for sessions tuned via the PlayOn endpoint.
         serviceCollection.AddSingleton<TunedSessionMonitor>();
         serviceCollection.AddHostedService(sp => sp.GetRequiredService<TunedSessionMonitor>());
+
+        // Publishes the channels to every client, not just the injected web UI.
+        serviceCollection.AddSingleton<IChannel, LiteTvChannelProvider>();
+        serviceCollection.AddSingleton<LiveOffsetResolver>();
 
         // Preferred: register the script injection with the File Transformation
         // plugin when installed (same mechanism as Intro Skipper).
@@ -87,6 +93,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IUserDataManager>(sp => new ShieldedUserDataManager(
             resolveInner(sp),
             sp.GetRequiredService<WatchStateShield>(),
+            sp.GetRequiredService<LiveOffsetResolver>(),
             sp.GetRequiredService<IHttpContextAccessor>(),
             sp.GetRequiredService<ILogger<ShieldedUserDataManager>>()));
     }

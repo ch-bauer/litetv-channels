@@ -36,6 +36,17 @@
                     </label>
                 </div>
 
+                <div class="checkboxContainer">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="PublishAsChannels" />
+                        <span>Publish the channels to all clients (TV apps, phones)</span>
+                    </label>
+                </div>
+                <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
+                    Adds a "TV-Sender" entry to the library that every client can browse. Playing a
+                    channel there joins whatever is on air, at the live position.
+                </div>
+
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
                 <div class="fieldDescription" style="margin-bottom: 0.6em;">
                     Based on the media in your library. Adding a suggestion creates a channel you can still edit below.
@@ -330,6 +341,7 @@
                         q('#EnableWebUi').checked = config.EnableWebUi !== false;
                         q('#ShowHomeRow').checked = config.ShowHomeRow !== false;
                         q('#ShowHeaderButton').checked = config.ShowHeaderButton !== false;
+                    q('#PublishAsChannels').checked = config.PublishAsChannels !== false;
                         currentIndex = config.Channels.length ? 0 : -1;
                         renderChannelSelect();
                         renderEditor();
@@ -380,6 +392,7 @@
                     config.EnableWebUi = q('#EnableWebUi').checked;
                     config.ShowHomeRow = q('#ShowHomeRow').checked;
                     config.ShowHeaderButton = q('#ShowHeaderButton').checked;
+                    config.PublishAsChannels = q('#PublishAsChannels').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
                         Dashboard.processPluginConfigurationUpdateResult(result);

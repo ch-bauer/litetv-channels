@@ -1,5 +1,6 @@
 using System.Reflection;
 using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Plugin.LiteTv.Channels;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -31,6 +32,7 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
 
     private readonly IUserDataManager _inner;
     private readonly WatchStateShield _shield;
+    private readonly LiveOffsetResolver _liveOffset;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<ShieldedUserDataManager> _logger;
 
@@ -39,17 +41,20 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     /// </summary>
     /// <param name="inner">The server's user data manager.</param>
     /// <param name="shield">The set of items currently airing on a channel.</param>
+    /// <param name="liveOffset">Resolves how far into its program a published channel is.</param>
     /// <param name="httpContextAccessor">Accessor for the request a save belongs to, used to
     /// tell the channel's own playback apart from the same title watched elsewhere.</param>
     /// <param name="logger">The logger.</param>
     public ShieldedUserDataManager(
         IUserDataManager inner,
         WatchStateShield shield,
+        LiveOffsetResolver liveOffset,
         IHttpContextAccessor httpContextAccessor,
         ILogger<ShieldedUserDataManager> logger)
     {
         _inner = inner;
         _shield = shield;
+        _liveOffset = liveOffset;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
@@ -101,11 +106,41 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     }
 
     /// <inheritdoc />
-    public UserItemDataDto? GetUserDataDto(BaseItem item, User user) => _inner.GetUserDataDto(item, user);
+    public UserItemDataDto? GetUserDataDto(BaseItem item, User user)
+        => JoinLive(item, _inner.GetUserDataDto(item, user));
 
     /// <inheritdoc />
     public UserItemDataDto? GetUserDataDto(BaseItem item, BaseItemDto? itemDto, User user, DtoOptions options)
-        => _inner.GetUserDataDto(item, itemDto, user, options);
+        => JoinLive(item, _inner.GetUserDataDto(item, itemDto, user, options));
+
+    /// <summary>
+    /// Reports a published channel as resumable at the point its current program has reached.
+    /// A channel item's media cannot carry a start position, but every client honours a
+    /// resume position, so this is what lets a TV app join the channel live instead of
+    /// starting the program from the top.
+    /// </summary>
+    private UserItemDataDto? JoinLive(BaseItem item, UserItemDataDto? data)
+    {
+        if (data is null)
+        {
+            return data;
+        }
+
+        var offsetTicks = _liveOffset.OffsetTicksFor(item);
+        if (offsetTicks is null or <= 0)
+        {
+            return data;
+        }
+
+        data.PlaybackPositionTicks = offsetTicks.Value;
+        var runtime = item.RunTimeTicks ?? 0;
+        if (runtime > 0)
+        {
+            data.PlayedPercentage = Math.Clamp(offsetTicks.Value * 100d / runtime, 0d, 100d);
+        }
+
+        return data;
+    }
 
     /// <inheritdoc />
     public bool UpdatePlayState(BaseItem item, UserItemData data, long? reportedPositionTicks)
