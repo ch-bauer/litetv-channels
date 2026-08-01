@@ -14,15 +14,23 @@
     var PAUSE_PANEL_ID = 'liteTvPausePanel';
     var TUNED_BODY_CLASS = 'liteTvTuned';
     var NEXT_OVERLAY_WINDOW_SECONDS = 45;
-    // Fallback margin (seconds before the real end) for advancing to the follow-up
-    // when an item has no outro segment to skip to. With a Media Segments outro the
-    // schedule advances precisely at the credits instead.
-    var NEXT_ADVANCE_SECONDS = 15;
+    // Programs play out in full, credits included. The hand-off still sits a second
+    // short of the very end: once the video actually ends Jellyfin tears the player
+    // down and routes back to the previous page, which would turn the seamless
+    // in-place swap into a visible detour through the home screen.
+    var END_MARGIN_SECONDS = 1;
 
     // Tuned state for this browser tab. mode: 'schedule' | 'binge' | 'offschedule'
     var tuned = null;
     var watchTimer = null;
     var chainInProgress = false;
+    // Set while the "Als Nächstes" overlay is up: feeds it the live remaining time so
+    // the countdown follows the player instead of the wall clock.
+    var nextOverlayCountdown = null;
+    // Set between a manual skip and the next program taking over. The player is still
+    // sitting on the old, paused item during that hand-off, which would otherwise bring
+    // the pause panel straight back up.
+    var skipInFlight = false;
     var homeRowObserver = null;
     var lastHomeRowGuide = null;
 
@@ -250,10 +258,11 @@
         var sessionId = tuned.sessionId;
         tuned = null;
         chainInProgress = false;
+        skipInFlight = false;
         stopWatcher();
         document.body.classList.remove(TUNED_BODY_CLASS);
         removeOverlay(TUNE_OVERLAY_ID);
-        removeOverlay(NEXT_OVERLAY_ID);
+        clearNextOverlay();
         removePausePanel();
         if (sessionId) {
             apiDelete('LiteTv/Tuned?sessionId=' + encodeURIComponent(sessionId)).catch(function () { });
@@ -422,6 +431,8 @@
             buttons.appendChild(scheduleBtn);
         }
 
+        buttons.appendChild(makeButton('⏭ Nächste Sendung', 'liteTvPill', skipToNext));
+
         buttons.appendChild(makeButton('↺ Von Anfang an', 'liteTvPill', function () {
             if (!tuned) {
                 return;
@@ -476,23 +487,9 @@
         }
     }
 
-    // Reads the start of the item's outro/credits from the Media Segments API
-    // (Jellyfin 10.11+). Returns the earliest outro start in seconds, or null when
-    // the item has no outro segment.
-    function fetchOutroStart(itemId) {
-        return apiGet('MediaSegments/' + itemId + '?includeSegmentTypes=Outro').then(function (result) {
-            var items = (result && result.Items) || [];
-            var earliest = null;
-            for (var i = 0; i < items.length; i++) {
-                if (items[i].Type === 'Outro' && typeof items[i].StartTicks === 'number') {
-                    var seconds = items[i].StartTicks / 10000000;
-                    if (earliest === null || seconds < earliest) {
-                        earliest = seconds;
-                    }
-                }
-            }
-            return earliest;
-        }).catch(function () { return null; });
+    function clearNextOverlay() {
+        nextOverlayCountdown = null;
+        removeOverlay(NEXT_OVERLAY_ID);
     }
 
     function startWatcher() {
@@ -506,8 +503,6 @@
         var overlayShown = false;
         var fired = false;
         var settled = false;
-        var segmentsRequested = false;
-        var advancePoint = null; // seconds into the item at which to advance
         var nextInfo = null; // { schedule: ProgramDto|null, binge: {Id, Name}|null }
 
         function armForItem(itemId) {
@@ -515,10 +510,9 @@
             overlayShown = false;
             fired = false;
             settled = false;
-            segmentsRequested = false;
-            advancePoint = null;
             nextInfo = null;
-            removeOverlay(NEXT_OVERLAY_ID);
+            skipInFlight = false;
+            clearNextOverlay();
         }
 
         watchTimer = setInterval(function () {
@@ -536,7 +530,8 @@
                 return;
             }
 
-            if (video.paused && !video.ended) {
+            var paused = video.paused && !video.ended;
+            if (paused && !skipInFlight) {
                 ensurePausePanel();
             } else {
                 removePausePanel();
@@ -562,28 +557,12 @@
                 return;
             }
 
-            // Resolve, once per item, where to advance: the start of the outro/credits
-            // from the Media Segments API when the item has one, otherwise a fixed
-            // margin before the real end. Either way the tail credits are skipped.
-            if (!segmentsRequested) {
-                segmentsRequested = true;
-                advancePoint = video.duration - NEXT_ADVANCE_SECONDS;
-                var segItemId = tuned.currentItemId;
-                var segDuration = video.duration;
-                fetchOutroStart(segItemId).then(function (outroSeconds) {
-                    if (tuned && tuned.currentItemId === segItemId
-                        && outroSeconds !== null && outroSeconds > 2 && outroSeconds < segDuration - 1) {
-                        advancePoint = outroSeconds;
-                    }
-                });
-            }
-
-            var untilAdvance = advancePoint - video.currentTime;
+            var untilAdvance = (video.duration - END_MARGIN_SECONDS) - video.currentTime;
 
             // Seeking back out of the window re-arms the overlay for the next approach.
             if (overlayShown && untilAdvance > NEXT_OVERLAY_WINDOW_SECONDS + 10) {
                 overlayShown = false;
-                removeOverlay(NEXT_OVERLAY_ID);
+                clearNextOverlay();
             }
 
             if (untilAdvance <= NEXT_OVERLAY_WINDOW_SECONDS && !overlayShown) {
@@ -591,12 +570,20 @@
                 prepareNext().then(function (info) {
                     nextInfo = info;
                     if (tuned && info) {
-                        showNextOverlay(info, Math.max(1, Math.floor(untilAdvance)));
+                        showNextOverlay(info, untilAdvance);
                     }
                 });
             }
 
-            if ((untilAdvance <= 0 || video.ended) && !fired) {
+            // The countdown is driven from the player, not from a wall-clock timer, so
+            // it holds while paused and follows along when the viewer seeks.
+            if (nextOverlayCountdown) {
+                nextOverlayCountdown(untilAdvance, paused);
+            }
+
+            // Never while paused: the program is not over for the viewer until they
+            // let it play on, so the hand-off waits for them.
+            if ((untilAdvance <= 0 || video.ended) && !fired && !paused) {
                 // Do not stop the watcher: it keeps running so the next item, which
                 // Jellyfin swaps in without a 'viewshow', is picked up and advanced
                 // in turn. playNext updates tuned.currentItemId, which re-arms us.
@@ -688,8 +675,9 @@
         bar.appendChild(barFill);
         card.appendChild(bar);
 
-        var totalSeconds = countdownSeconds;
-        var secondsLeft = countdownSeconds;
+        var totalSeconds = Math.max(1, Math.ceil(countdownSeconds));
+        var secondsLeft = totalSeconds;
+        var isPaused = false;
         var scheduleBtn = null;
         var bingeBtn = null;
         // Without a series to continue there is no real choice; the same goes for
@@ -710,7 +698,9 @@
         function update() {
             var binging = tuned && tuned.mode === 'binge' && info.binge;
             name.textContent = binging ? info.binge.Name : scheduleName();
-            countdownText.textContent = secondsLeft > 0 ? 'startet in ' + secondsLeft + ' Sekunden' : 'startet gleich';
+            countdownText.textContent = isPaused
+                ? 'startet, sobald du fortsetzt'
+                : (secondsLeft > 0 ? 'startet in ' + secondsLeft + ' Sekunden' : 'startet gleich');
             barFill.style.width = Math.max(0, (secondsLeft / totalSeconds) * 100).toFixed(1) + '%';
             if (scheduleBtn) {
                 scheduleBtn.classList.toggle('liteTvPillActive', !binging);
@@ -736,28 +726,48 @@
                 update();
             });
             buttons.appendChild(scheduleBtn);
-        } else {
-            buttons.style.display = 'none';
         }
+
+        buttons.appendChild(makeButton('⏭ Jetzt starten', 'liteTvPill', skipToNext));
 
         update();
 
-        var countdown = setInterval(function () {
-            secondsLeft--;
-            if (secondsLeft < 0 || !document.getElementById(NEXT_OVERLAY_ID)) {
-                clearInterval(countdown);
+        // No timer of its own: the watcher feeds the real remaining time in, so the
+        // countdown holds while paused and jumps along when the viewer seeks.
+        nextOverlayCountdown = function (secondsRemaining, paused) {
+            if (!document.getElementById(NEXT_OVERLAY_ID)) {
+                nextOverlayCountdown = null;
                 return;
             }
+            secondsLeft = Math.max(0, Math.ceil(secondsRemaining));
+            isPaused = !!paused;
             update();
-        }, 1000);
+        };
 
         getOsdContainer().appendChild(overlay);
         void overlay.offsetWidth;
         overlay.classList.add('liteTvVisible');
     }
 
+    // Manual "next program", from the pause panel or the end-of-item overlay. Resolves
+    // the follow-up first so the binge choice is honoured the same way the automatic
+    // hand-off does.
+    function skipToNext() {
+        if (!tuned || chainInProgress || skipInFlight) {
+            return;
+        }
+        skipInFlight = true;
+        clearNextOverlay();
+        removePausePanel();
+        prepareNext().then(function (info) {
+            if (tuned) {
+                playNext(info);
+            }
+        });
+    }
+
     function playNext(info) {
-        removeOverlay(NEXT_OVERLAY_ID);
+        clearNextOverlay();
         if (!tuned) {
             return;
         }
@@ -1122,7 +1132,7 @@
         if (e && e.target && e.target.id === 'videoOsdPage') {
             stopWatcher();
             removeOverlay(TUNE_OVERLAY_ID);
-            removeOverlay(NEXT_OVERLAY_ID);
+            clearNextOverlay();
             removePausePanel();
         }
     });

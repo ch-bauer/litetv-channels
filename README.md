@@ -19,7 +19,9 @@ comes straight from your library.
   lets you keep binging the current series instead. Untouched, the schedule wins,
   like real TV.
 - Channel viewing leaves **no traces on the account**: no Continue Watching entries,
-  no resume points, no watched flags, no Next Up progression.
+  no resume points, no watched flags, no Next Up progression. Nothing is recorded and
+  cleaned up afterwards — while a program airs on a channel its watch state is simply
+  never written, on every client, however playback was started.
 
 ## Clients
 

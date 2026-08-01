@@ -1,10 +1,8 @@
 using System.Collections.Concurrent;
 using Jellyfin.Database.Implementations.Entities;
-using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Core;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -12,25 +10,31 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.LiteTv.Sessions;
 
 /// <summary>
-/// Tracks sessions that are tuned to a LiteTV channel and keeps channel viewing from
-/// leaving traces on the account: every item the channel is about to play is registered
-/// via <see cref="Tune"/> before playback starts, which snapshots the user's item data
-/// (resume position, played flag, play count). The snapshot is restored while the item
-/// plays, when it stops and when the viewer leaves, so Continue Watching, Next Up and
-/// watched state stay untouched.
-/// Only items registered that way are touched: an item the viewer starts themselves in a
-/// session that is still marked tuned keeps its normal watch state.
-/// For sessions tuned via the PlayOn endpoint (native clients without the injected
-/// script) it additionally pushes the next scheduled item when an item plays to the end.
+/// Tracks sessions that are tuned to a LiteTV channel and keeps channel viewing off the
+/// account: every item a channel is about to play is registered through <see cref="Tune"/>
+/// before playback starts, which shields it in the <see cref="WatchStateShield"/> so none
+/// of its watch state is ever written. The shield is released when the item stops and when
+/// the viewer leaves the channel.
+/// Only registered items are covered: an item the viewer starts themselves in a session
+/// that is still marked tuned records its watch state as usual.
+/// For sessions tuned via the PlayOn endpoint (native clients without the injected script)
+/// this also pushes the next scheduled item when an item plays to the end.
 /// </summary>
 public class TunedSessionMonitor : IHostedService
 {
     private static readonly TimeSpan TunedSessionLifetime = TimeSpan.FromHours(8);
 
+    /// <summary>
+    /// How long an item stays shielded after it stopped. The client's final playback report
+    /// travels independently of the stop - it is sent while the player is torn down, after
+    /// the transcode is stopped - and regularly lands well after it.
+    /// </summary>
+    private static readonly TimeSpan ReleaseGracePeriod = TimeSpan.FromSeconds(30);
+
     private readonly ISessionManager _sessionManager;
-    private readonly IUserDataManager _userDataManager;
     private readonly IUserManager _userManager;
-    private readonly ILibraryManager _libraryManager;
+    private readonly IUserDataManager _userDataManager;
+    private readonly WatchStateShield _shield;
     private readonly ChannelPlaylistBuilder _playlistBuilder;
     private readonly ILogger<TunedSessionMonitor> _logger;
 
@@ -40,23 +44,24 @@ public class TunedSessionMonitor : IHostedService
     /// Initializes a new instance of the <see cref="TunedSessionMonitor"/> class.
     /// </summary>
     /// <param name="sessionManager">The session manager.</param>
-    /// <param name="userDataManager">The user data manager.</param>
     /// <param name="userManager">The user manager.</param>
-    /// <param name="libraryManager">The library manager.</param>
+    /// <param name="userDataManager">The user data manager, to report at startup whether the
+    /// watch-state shield is in place.</param>
+    /// <param name="shield">The watch-state shield.</param>
     /// <param name="playlistBuilder">The channel playlist builder.</param>
     /// <param name="logger">The logger.</param>
     public TunedSessionMonitor(
         ISessionManager sessionManager,
-        IUserDataManager userDataManager,
         IUserManager userManager,
-        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        WatchStateShield shield,
         ChannelPlaylistBuilder playlistBuilder,
         ILogger<TunedSessionMonitor> logger)
     {
         _sessionManager = sessionManager;
-        _userDataManager = userDataManager;
         _userManager = userManager;
-        _libraryManager = libraryManager;
+        _userDataManager = userDataManager;
+        _shield = shield;
         _playlistBuilder = playlistBuilder;
         _logger = logger;
     }
@@ -64,8 +69,21 @@ public class TunedSessionMonitor : IHostedService
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _sessionManager.PlaybackStart += OnPlaybackStart;
-        _sessionManager.PlaybackProgress += OnPlaybackProgress;
+        // The shield only works if the plugin's service registration replaced the server's
+        // user data manager. That depends on plugin registrations running after the
+        // server's own, so say plainly in the log which way it went instead of leaving it
+        // to be discovered in someone's watch history.
+        if (_userDataManager is ShieldedUserDataManager)
+        {
+            _logger.LogInformation("LiteTV: watch-state shield active, channel viewing will not be recorded.");
+        }
+        else
+        {
+            _logger.LogError(
+                "LiteTV: watch-state shield NOT active ({Type} was not wrapped), channel viewing will be recorded as normal watching.",
+                _userDataManager.GetType().Name);
+        }
+
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
         return Task.CompletedTask;
     }
@@ -73,40 +91,33 @@ public class TunedSessionMonitor : IHostedService
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _sessionManager.PlaybackStart -= OnPlaybackStart;
-        _sessionManager.PlaybackProgress -= OnPlaybackProgress;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Marks a session as tuned to a channel and, when an item is given, snapshots that
-    /// item's user data before playback starts. The injected script calls this before
-    /// every item it plays, so the snapshot captures the true pre-playback state (play
-    /// count and played flag are bumped around playback start, so snapshotting only at
-    /// PlaybackStart would already be too late).
+    /// Marks a session as tuned to a channel and shields the item it is about to play.
+    /// The injected script calls this before every item, and the server does the same
+    /// before it pushes one to a native client, so the shield is always in place before
+    /// the first playback report can arrive.
     /// </summary>
     /// <param name="sessionId">The session id.</param>
     /// <param name="channelId">The channel id.</param>
     /// <param name="followSchedule">Whether the server should push the next scheduled item
     /// when an item finishes (native clients without the injected script).</param>
-    /// <param name="itemId">The item about to play, to snapshot before playback; optional.</param>
+    /// <param name="itemId">The item about to play; optional.</param>
     public void Tune(string sessionId, Guid channelId, bool followSchedule, Guid? itemId = null)
     {
-        // Preserve an existing session (and its snapshots) across the repeated calls the
-        // script makes; only the first call establishes followSchedule.
+        // Preserve an existing session across the repeated calls the script makes; only
+        // the first call establishes followSchedule.
         var tuned = _tuned.GetOrAdd(sessionId, _ => new TunedSession(channelId, followSchedule));
         tuned.Touch();
 
         if (itemId.HasValue && itemId.Value != Guid.Empty)
         {
-            var item = _libraryManager.GetItemById(itemId.Value);
-            if (item is not null)
+            foreach (var user in GetSessionUsers(sessionId))
             {
-                foreach (var user in GetSessionUsers(sessionId))
-                {
-                    SnapshotItem(tuned, user, item);
-                }
+                _shield.Arm(sessionId, user.Id, itemId.Value);
             }
         }
 
@@ -114,30 +125,13 @@ public class TunedSessionMonitor : IHostedService
     }
 
     /// <summary>
-    /// Removes the tuned mark from a session and restores the user data of everything the
-    /// channel played in it (the viewer may have left mid-item, and the server's own
-    /// stop-save can land after the per-item restore).
+    /// Removes the tuned mark from a session and releases everything it still shields.
     /// </summary>
     /// <param name="sessionId">The session id.</param>
     public void Untune(string sessionId)
     {
-        if (_tuned.TryRemove(sessionId, out var tuned))
-        {
-            RestoreAll(tuned);
-        }
-    }
-
-    private void RestoreAll(TunedSession tuned)
-    {
-        foreach (var pair in tuned.Snapshots)
-        {
-            var user = _userManager.GetUserById(pair.Key.UserId);
-            var item = _libraryManager.GetItemById(pair.Key.ItemId);
-            if (user is not null && item is not null)
-            {
-                _ = RestoreUserDataAsync(user, item, pair.Value);
-            }
-        }
+        _tuned.TryRemove(sessionId, out _);
+        _shield.ReleaseSession(sessionId, ReleaseGracePeriod);
     }
 
     private IEnumerable<User> GetSessionUsers(string sessionId)
@@ -172,89 +166,6 @@ public class TunedSessionMonitor : IHostedService
         }
     }
 
-    private void SnapshotItem(TunedSession tuned, User user, MediaBrowser.Controller.Entities.BaseItem item)
-    {
-        var key = (user.Id, item.Id);
-        if (tuned.Snapshots.ContainsKey(key))
-        {
-            return; // keep the oldest snapshot if the item is prepared/started more than once
-        }
-
-        try
-        {
-            var data = _userDataManager.GetUserData(user, item);
-            if (data is null)
-            {
-                return;
-            }
-
-            tuned.Snapshots[key] = new UserDataSnapshot(
-                data.PlaybackPositionTicks,
-                data.Played,
-                data.PlayCount,
-                data.LastPlayedDate);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "LiteTV: could not snapshot user data for {Item}.", item.Name);
-        }
-    }
-
-    private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
-    {
-        if (e.Session is null || e.Item is null || !_tuned.TryGetValue(e.Session.Id, out var tuned))
-        {
-            return;
-        }
-
-        // No snapshot is taken here: by the time this fires the play count, played flag
-        // and last-played date have already been bumped, so a snapshot would preserve the
-        // damage instead of the original state. Everything the channel plays is registered
-        // through Tune beforehand; anything else playing in this session is the viewer's
-        // own doing and must keep its normal watch state.
-        tuned.Touch();
-    }
-
-    private void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e)
-    {
-        var item = e.Item;
-        if (e.Session is null || item is null || !_tuned.TryGetValue(e.Session.Id, out var tuned))
-        {
-            return;
-        }
-
-        // Every progress report the server just persisted put the item into
-        // Continue Watching; revert it right away so channel viewing stays
-        // invisible on the account even while it is running.
-        tuned.Touch();
-        foreach (var user in e.Users)
-        {
-            if (!tuned.Snapshots.TryGetValue((user.Id, item.Id), out var snapshot))
-            {
-                continue;
-            }
-
-            try
-            {
-                var data = _userDataManager.GetUserData(user, item);
-                if (data is null || (data.PlaybackPositionTicks == snapshot.PlaybackPositionTicks && data.Played == snapshot.Played))
-                {
-                    continue;
-                }
-
-                data.PlaybackPositionTicks = snapshot.PlaybackPositionTicks;
-                data.Played = snapshot.Played;
-                data.PlayCount = snapshot.PlayCount;
-                data.LastPlayedDate = snapshot.LastPlayedDate;
-                _userDataManager.SaveUserData(user, item, data, UserDataSaveReason.TogglePlayed, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "LiteTV: could not revert progress for {Item}.", item.Name);
-            }
-        }
-    }
-
     private void OnPlaybackStopped(object? sender, PlaybackStopEventArgs e)
     {
         var item = e.Item;
@@ -266,29 +177,14 @@ public class TunedSessionMonitor : IHostedService
         tuned.Touch();
         foreach (var user in e.Users)
         {
-            if (!tuned.Snapshots.TryGetValue((user.Id, item.Id), out var snapshot))
-            {
-                continue;
-            }
-
-            // Deferred: the server's own stop-save and any trailing progress report
-            // from the client would otherwise overwrite the restored state again,
-            // putting the item back into Continue Watching.
-            //
-            // The snapshot is kept rather than removed: the same item can be started
-            // again in this session ("Von Anfang an" replays it, a looping channel comes
-            // back around), and its pre-channel state has to survive that. It is dropped
-            // when the session is untuned.
-            _ = RestoreUserDataAsync(user, item, snapshot);
+            _shield.Release(e.Session.Id, user.Id, item.Id, ReleaseGracePeriod);
         }
 
         if (!tuned.FollowSchedule)
         {
-            // Script-driven session. The stop of the item that just ended arrives *after*
-            // the script has already registered and snapshotted the follow-up item, so
-            // dropping the session here would throw that snapshot away and leave every
-            // item after the first one unprotected. The script sends DELETE /LiteTv/Tuned
-            // when the viewer really leaves the channel.
+            // Script-driven session: it decides what plays next and untunes itself when the
+            // viewer leaves. Note that this stop arrives *after* the script has registered
+            // the follow-up, so there is nothing to conclude about the session from it.
             return;
         }
 
@@ -302,30 +198,6 @@ public class TunedSessionMonitor : IHostedService
         {
             // Nothing pushes a follow-up here, so the viewer stopped the channel.
             Untune(e.Session.Id);
-        }
-    }
-
-    private async Task RestoreUserDataAsync(User user, MediaBrowser.Controller.Entities.BaseItem item, UserDataSnapshot snapshot)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
-
-            var data = _userDataManager.GetUserData(user, item);
-            if (data is null)
-            {
-                return;
-            }
-
-            data.PlaybackPositionTicks = snapshot.PlaybackPositionTicks;
-            data.Played = snapshot.Played;
-            data.PlayCount = snapshot.PlayCount;
-            data.LastPlayedDate = snapshot.LastPlayedDate;
-            _userDataManager.SaveUserData(user, item, data, UserDataSaveReason.TogglePlayed, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "LiteTV: could not restore user data for {Item}.", item.Name);
         }
     }
 
@@ -349,8 +221,8 @@ public class TunedSessionMonitor : IHostedService
                 return;
             }
 
-            // Snapshot before the command goes out, for the same reason the script does:
-            // once playback has started the play count and played flag are already bumped.
+            // Shield before the command goes out: the client can report playback the
+            // moment it receives it.
             Tune(sessionId, channelId, followSchedule: true, now.Current.ItemId);
 
             await _sessionManager.SendPlayCommand(
@@ -376,11 +248,9 @@ public class TunedSessionMonitor : IHostedService
         var cutoff = DateTime.UtcNow - TunedSessionLifetime;
         foreach (var pair in _tuned)
         {
-            if (pair.Value.LastActivityUtc < cutoff && _tuned.TryRemove(pair.Key, out var stale))
+            if (pair.Value.LastActivityUtc < cutoff)
             {
-                // Dropping the session without restoring would strand whatever it still
-                // holds (a client that went away without a stop report) as watched.
-                RestoreAll(stale);
+                Untune(pair.Key);
             }
         }
     }
@@ -400,10 +270,6 @@ public class TunedSessionMonitor : IHostedService
 
         public DateTime LastActivityUtc { get; private set; }
 
-        public ConcurrentDictionary<(Guid UserId, Guid ItemId), UserDataSnapshot> Snapshots { get; } = new();
-
         public void Touch() => LastActivityUtc = DateTime.UtcNow;
     }
-
-    private sealed record UserDataSnapshot(long PlaybackPositionTicks, bool Played, int PlayCount, DateTime? LastPlayedDate);
 }

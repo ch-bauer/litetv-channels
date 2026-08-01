@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes watch state still leaking from the second program onwards: the stop of the item that just ended dropped the protection for the follow-up the channel had already prepared, so everything after the first program was marked watched and piled up in Continue Watching. Replaying a program ('Von Anfang an') and channels cast to another device (which never snapshotted at all) are protected too, closing the tab now leaves the channel cleanly instead of stranding the current program as watched, and a program the viewer starts themselves is no longer touched.",
+  "changelog": "Watch state is no longer recorded and cleaned up afterwards - while a program airs on a channel, its played flag, play count, resume position and last-played date are simply never written. This works below the player, so it covers every client and every way playback was started, and nothing flickers through Continue Watching or Next Up in the meantime. Programs now also play out in full instead of being cut short before the credits, the 'Als Nächstes' countdown follows the player (it holds while paused and moves along when you seek) and the hand-off waits while paused, and there is a 'next program' button on the pause panel and on the end-of-item overlay.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.8.0",
+  "version": "1.0.9.0",
   "status": "Active",
   "autoUpdate": false
 }

@@ -2,9 +2,11 @@ using Jellyfin.Plugin.LiteTv.Core;
 using Jellyfin.Plugin.LiteTv.Sessions;
 using Jellyfin.Plugin.LiteTv.Web;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.LiteTv;
 
@@ -18,7 +20,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddSingleton<ChannelPlaylistBuilder>();
 
-        // Tracks tuned sessions: watch-state snapshot/restore for all of them, and
+        serviceCollection.AddSingleton<WatchStateShield>();
+        ShieldUserData(serviceCollection);
+
+        // Tracks tuned sessions: shields what the channel plays for all of them, and
         // schedule-following pushes for sessions tuned via the PlayOn endpoint.
         serviceCollection.AddSingleton<TunedSessionMonitor>();
         serviceCollection.AddHostedService(sp => sp.GetRequiredService<TunedSessionMonitor>());
@@ -31,5 +36,53 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // even when the web directory on disk is read-only. Stands down when File
         // Transformation handles the injection.
         serviceCollection.AddSingleton<IStartupFilter, InjectionStartupFilter>();
+    }
+
+    /// <summary>
+    /// Puts <see cref="ShieldedUserDataManager"/> in front of the server's user data
+    /// manager, so watch state for an item a channel is playing is never written in the
+    /// first place. Everything that records watch state goes through that service, which
+    /// makes this the one interception point that covers every client, whether playback
+    /// was started by the injected script, by a native app or by a cast command.
+    /// It only works because the server registers its own services before it hands the
+    /// collection to the plugins, so the registration replaced here is the real one. If
+    /// that ever stops being true the existing registration is not found, nothing is
+    /// replaced, and <see cref="TunedSessionMonitor"/> reports it at startup.
+    /// </summary>
+    private static void ShieldUserData(IServiceCollection serviceCollection)
+    {
+        var registered = serviceCollection.LastOrDefault(d => d.ServiceType == typeof(IUserDataManager));
+        if (registered is null)
+        {
+            return;
+        }
+
+        Func<IServiceProvider, IUserDataManager>? resolveInner = null;
+        if (registered.ImplementationType is { } implementationType)
+        {
+            // Register the server's implementation under its own type so it is still built
+            // (and built only once) by the container, then wrap that instance.
+            serviceCollection.AddSingleton(implementationType);
+            resolveInner = sp => (IUserDataManager)sp.GetRequiredService(implementationType);
+        }
+        else if (registered.ImplementationInstance is IUserDataManager instance)
+        {
+            resolveInner = _ => instance;
+        }
+        else if (registered.ImplementationFactory is { } factory)
+        {
+            resolveInner = sp => (IUserDataManager)factory(sp);
+        }
+
+        if (resolveInner is null)
+        {
+            return;
+        }
+
+        serviceCollection.Remove(registered);
+        serviceCollection.AddSingleton<IUserDataManager>(sp => new ShieldedUserDataManager(
+            resolveInner(sp),
+            sp.GetRequiredService<WatchStateShield>(),
+            sp.GetRequiredService<ILogger<ShieldedUserDataManager>>()));
     }
 }
