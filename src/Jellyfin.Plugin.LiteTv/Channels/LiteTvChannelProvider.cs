@@ -204,9 +204,22 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
             : null;
     }
 
-    private ScheduleNow? Resolve(TvChannel channel)
+    /// <summary>
+    /// How many programs a channel folder lists beyond the one on air, so it reads as a
+    /// schedule rather than a single entry.
+    /// </summary>
+    private const int LineupLength = 9;
+
+    private ScheduleNow? Resolve(TvChannel channel, int upcomingCount = 1)
     {
-        return ScheduleResolver.Resolve(_playlistBuilder.GetEntries(channel), channel.AnchorUtc, DateTime.UtcNow, upcomingCount: 1);
+        var entries = _playlistBuilder.GetEntries(channel);
+
+        // A channel loops, so asking for more upcoming entries than it has would list the
+        // same programs again - and with them the same ids.
+        var playable = entries.Count(e => e.RuntimeTicks > 0);
+        upcomingCount = Math.Max(0, Math.Min(upcomingCount, playable - 1));
+
+        return ScheduleResolver.Resolve(entries, channel.AnchorUtc, DateTime.UtcNow, upcomingCount);
     }
 
     private static ChannelItemInfo ChannelFolder(TvChannel channel)
@@ -220,44 +233,76 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
         };
     }
 
+    /// <summary>
+    /// Lists a channel's schedule: the program on air followed by the ones after it, in
+    /// order, so the folder reads like a channel's listings rather than a single entry.
+    /// Every program is playable - the one on air joins live, a later one starts from its
+    /// beginning, which is the only sensible thing an entry for a program that has not
+    /// started yet can do.
+    /// </summary>
     private List<ChannelItemInfo> NowPlayingItems(string folderId)
     {
         var channel = ChannelFor(folderId);
-        var now = channel is null ? null : Resolve(channel);
+        var now = channel is null ? null : Resolve(channel, LineupLength);
         if (channel is null || now is null)
         {
             return new List<ChannelItemInfo>();
         }
 
-        var current = now.Current;
-        var title = current.SeriesName is null ? current.Name : current.SeriesName + ": " + current.Name;
-        var next = now.Upcoming.Count > 0 ? now.Upcoming[0].Entry : null;
-        var overview = next is null
-            ? "Jetzt: " + title
-            : "Jetzt: " + title + "\nDanach: " + (next.SeriesName is null ? next.Name : next.SeriesName + ": " + next.Name);
+        var lineup = new List<(ScheduledEntry Entry, DateTime StartUtc)> { (now.Current, now.CurrentStartedUtc) };
+        lineup.AddRange(now.Upcoming);
+
+        var items = new List<ChannelItemInfo>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < lineup.Count; i++)
+        {
+            var (entry, startUtc) = lineup[i];
+            var id = NowPlayingId(channel.Id, entry.ItemId);
+
+            // A program listed twice in one loop would otherwise appear twice under the
+            // same id, which is not something the server can hold two entries for.
+            if (!seen.Add(id))
+            {
+                continue;
+            }
+
+            items.Add(Program(id, entry, startUtc, onAir: i == 0, index: i));
+        }
+
+        return items;
+    }
+
+    private ChannelItemInfo Program(string id, ScheduledEntry entry, DateTime startUtc, bool onAir, int index)
+    {
+        var title = entry.SeriesName is null ? entry.Name : entry.SeriesName + ": " + entry.Name;
+        var startLocal = startUtc.ToLocalTime();
+        var when = onAir
+            ? "Jetzt"
+            : startLocal.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture);
 
         // Carry the media on the entry itself, not only through the callback. A client
         // reads container and stream details off the item it is about to play, and an entry
         // that says nothing about its media is one some players will not start.
-        var media = _libraryManager.GetItemById(current.ItemId) as MediaBrowser.Controller.Entities.Video;
+        var media = _libraryManager.GetItemById(entry.ItemId) as MediaBrowser.Controller.Entities.Video;
         var sources = media?.GetMediaSources(true).ToList() ?? new List<MediaSourceInfo>();
 
-        return new List<ChannelItemInfo>
+        return new ChannelItemInfo
         {
-            new()
-            {
-                Id = NowPlayingId(channel.Id, current.ItemId),
-                MediaSources = sources,
-                Name = channel.Name + " - " + title,
-                Overview = overview,
-                Type = ChannelItemType.Media,
-                ContentType = ChannelMediaContentType.Movie,
-                MediaType = ChannelMediaType.Video,
-                RunTimeTicks = current.RuntimeTicks,
-                // The media itself is resolved when playback starts, so the entry keeps
-                // pointing at whatever is on air rather than at the program listed here.
-                IsLiveStream = false
-            }
+            Id = id,
+            MediaSources = sources,
+            Name = when + " · " + title,
+            Overview = onAir
+                ? "Läuft gerade auf diesem Sender."
+                : "Auf diesem Sender ab " + startLocal.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture) + ".",
+            Type = ChannelItemType.Media,
+            ContentType = ChannelMediaContentType.Movie,
+            MediaType = ChannelMediaType.Video,
+            RunTimeTicks = entry.RuntimeTicks,
+            // Ordering hint: a schedule read alphabetically is not a schedule.
+            IndexNumber = index,
+            StartDate = startUtc,
+            EndDate = startUtc + TimeSpan.FromTicks(entry.RuntimeTicks),
+            IsLiveStream = false
         };
     }
 }
