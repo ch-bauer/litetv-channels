@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.13.0",
+        "changelog": "Channels are now published to Jellyfin itself, so they can be browsed and played on every client instead of only in the web UI: a \"TV-Sender\" entry appears in the library, with one folder per channel holding whatever is on air. Playing it joins the channel at the live position - the program's own file plays directly, nothing is streamed or transcoded by the plugin. Can be switched off in the plugin settings.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.13.0/litetv-channels_1.0.13.0.zip",
+        "checksum": "f882a6028579ac195054d8ee1928e07b",
+        "timestamp": "2026-08-01T00:00:00Z"
+      },
+      {
         "version": "1.0.12.0",
         "changelog": "Media watched outside a channel now keeps its watch state even when that same title happens to be on air: a channel only covers the device it is playing on, so starting the title deliberately somewhere else records normally. Leaving a channel also stops holding back watch state for half a minute - the program is released three seconds after its playback actually stops, so watching it properly straight afterwards is recorded right away. A client that disappears without reporting a stop no longer keeps its program covered either, since the session ending releases it.",
         "targetAbi": "10.11.0.0",
