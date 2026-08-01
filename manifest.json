@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.10.0",
+        "changelog": "Fixes channel viewing still showing up as watched even though nothing was written to the database: the server hands out one cached watch-state object per item, and everything that records playback changes that object before asking for it to be saved - so blocking the save alone left the item marked played in memory until the next server restart. While a program airs on a channel the plugin now hands out a copy, so those changes land nowhere at all.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.10.0/litetv-channels_1.0.10.0.zip",
+        "checksum": "e4e157745f930337dcc28581d1b6f9a6",
+        "timestamp": "2026-08-01T00:00:00Z"
+      },
+      {
         "version": "1.0.9.0",
         "changelog": "Watch state is no longer recorded and cleaned up afterwards - while a program airs on a channel, its played flag, play count, resume position and last-played date are simply never written. This works below the player, so it covers every client and every way playback was started, and nothing flickers through Continue Watching or Next Up in the meantime. Programs now also play out in full instead of being cut short before the credits, the 'Als Nächstes' countdown follows the player (it holds while paused and moves along when you seek) and the hand-off waits while paused, and there is a 'next program' button on the pause panel and on the end-of-item overlay.",
         "targetAbi": "10.11.0.0",
