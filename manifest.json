@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.19.0",
+        "changelog": "Fixes published channels flashing between the player and the menu without ever playing, which the previous release caused: the follow-up program was handed to the client as a queued item, but a client that starts it immediately instead of queuing it turns that into an endless loop. Channels no longer do this. A channel is also a single entry again rather than a folder of separate films to start - it switches on and joins what is on air, and the schedule is written in its description where it can be read in order and not played by accident.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.19.0/litetv-channels_1.0.19.0.zip",
+        "checksum": "fc4032f79fe2d17cb2b86e433e98a82a",
+        "timestamp": "2026-08-02T00:00:00Z"
+      },
+      {
         "version": "1.0.18.0",
         "changelog": "Channel listings show every program with the time it airs, instead of marking one of them as running now. The marker could not stay true: an entry's label is written once and never rewritten, so it stayed on a program that had long finished.",
         "targetAbi": "10.11.0.0",
