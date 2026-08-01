@@ -178,7 +178,9 @@ public class LiteTvController : ControllerBase
             return NotFound();
         }
 
-        _sessionMonitor.Tune(sessionId, channelId, followSchedule: true);
+        // The item is registered before the command goes out so its watch state is
+        // snapshotted while it is still untouched.
+        _sessionMonitor.Tune(sessionId, channelId, followSchedule: true, now.Current.ItemId);
         await _sessionManager.SendPlayCommand(
             sessionId,
             sessionId,

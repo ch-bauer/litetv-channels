@@ -13,10 +13,13 @@ namespace Jellyfin.Plugin.LiteTv.Sessions;
 
 /// <summary>
 /// Tracks sessions that are tuned to a LiteTV channel and keeps channel viewing from
-/// leaving traces on the account: for every channel item played in a tuned session the
-/// user's item data (resume position, played flag, play count) is snapshotted at playback
-/// start and restored at playback stop, so Continue Watching, Next Up and watched state
-/// stay untouched.
+/// leaving traces on the account: every item the channel is about to play is registered
+/// via <see cref="Tune"/> before playback starts, which snapshots the user's item data
+/// (resume position, played flag, play count). The snapshot is restored while the item
+/// plays, when it stops and when the viewer leaves, so Continue Watching, Next Up and
+/// watched state stay untouched.
+/// Only items registered that way are touched: an item the viewer starts themselves in a
+/// session that is still marked tuned keeps its normal watch state.
 /// For sessions tuned via the PlayOn endpoint (native clients without the injected
 /// script) it additionally pushes the next scheduled item when an item plays to the end.
 /// </summary>
@@ -111,17 +114,21 @@ public class TunedSessionMonitor : IHostedService
     }
 
     /// <summary>
-    /// Removes the tuned mark from a session and restores any user data still held (e.g.
-    /// the viewer left mid-item, so no stop event cleared its snapshot).
+    /// Removes the tuned mark from a session and restores the user data of everything the
+    /// channel played in it (the viewer may have left mid-item, and the server's own
+    /// stop-save can land after the per-item restore).
     /// </summary>
     /// <param name="sessionId">The session id.</param>
     public void Untune(string sessionId)
     {
-        if (!_tuned.TryRemove(sessionId, out var tuned))
+        if (_tuned.TryRemove(sessionId, out var tuned))
         {
-            return;
+            RestoreAll(tuned);
         }
+    }
 
+    private void RestoreAll(TunedSession tuned)
+    {
         foreach (var pair in tuned.Snapshots)
         {
             var user = _userManager.GetUserById(pair.Key.UserId);
@@ -195,20 +202,17 @@ public class TunedSessionMonitor : IHostedService
 
     private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
     {
-        var item = e.Item;
-        if (e.Session is null || item is null || !_tuned.TryGetValue(e.Session.Id, out var tuned))
+        if (e.Session is null || e.Item is null || !_tuned.TryGetValue(e.Session.Id, out var tuned))
         {
             return;
         }
 
-        // Fallback snapshot: normally the script pre-snapshots via Tune before the item
-        // plays, so this keeps the earlier (pre-playback) snapshot; it only takes a fresh
-        // one for anything that reached playback without being prepared.
+        // No snapshot is taken here: by the time this fires the play count, played flag
+        // and last-played date have already been bumped, so a snapshot would preserve the
+        // damage instead of the original state. Everything the channel plays is registered
+        // through Tune beforehand; anything else playing in this session is the viewer's
+        // own doing and must keep its normal watch state.
         tuned.Touch();
-        foreach (var user in e.Users)
-        {
-            SnapshotItem(tuned, user, item);
-        }
     }
 
     private void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e)
@@ -262,7 +266,7 @@ public class TunedSessionMonitor : IHostedService
         tuned.Touch();
         foreach (var user in e.Users)
         {
-            if (!tuned.Snapshots.TryRemove((user.Id, item.Id), out var snapshot))
+            if (!tuned.Snapshots.TryGetValue((user.Id, item.Id), out var snapshot))
             {
                 continue;
             }
@@ -270,18 +274,33 @@ public class TunedSessionMonitor : IHostedService
             // Deferred: the server's own stop-save and any trailing progress report
             // from the client would otherwise overwrite the restored state again,
             // putting the item back into Continue Watching.
+            //
+            // The snapshot is kept rather than removed: the same item can be started
+            // again in this session ("Von Anfang an" replays it, a looping channel comes
+            // back around), and its pre-channel state has to survive that. It is dropped
+            // when the session is untuned.
             _ = RestoreUserDataAsync(user, item, snapshot);
         }
 
-        if (tuned.FollowSchedule && e.PlayedToCompletion)
+        if (!tuned.FollowSchedule)
+        {
+            // Script-driven session. The stop of the item that just ended arrives *after*
+            // the script has already registered and snapshotted the follow-up item, so
+            // dropping the session here would throw that snapshot away and leave every
+            // item after the first one unprotected. The script sends DELETE /LiteTv/Tuned
+            // when the viewer really leaves the channel.
+            return;
+        }
+
+        if (e.PlayedToCompletion)
         {
             // Native-mode session finished an item: push whatever the schedule says is
             // on now (at this moment that is the follow-up item near offset zero).
             _ = PushCurrentAsync(e.Session.Id, tuned.ChannelId);
         }
-        else if (!e.PlayedToCompletion)
+        else
         {
-            // The user stopped mid-item: treat as switching the channel off.
+            // Nothing pushes a follow-up here, so the viewer stopped the channel.
             Untune(e.Session.Id);
         }
     }
@@ -330,6 +349,10 @@ public class TunedSessionMonitor : IHostedService
                 return;
             }
 
+            // Snapshot before the command goes out, for the same reason the script does:
+            // once playback has started the play count and played flag are already bumped.
+            Tune(sessionId, channelId, followSchedule: true, now.Current.ItemId);
+
             await _sessionManager.SendPlayCommand(
                 sessionId,
                 sessionId,
@@ -353,9 +376,11 @@ public class TunedSessionMonitor : IHostedService
         var cutoff = DateTime.UtcNow - TunedSessionLifetime;
         foreach (var pair in _tuned)
         {
-            if (pair.Value.LastActivityUtc < cutoff)
+            if (pair.Value.LastActivityUtc < cutoff && _tuned.TryRemove(pair.Key, out var stale))
             {
-                _tuned.TryRemove(pair.Key, out _);
+                // Dropping the session without restoring would strand whatever it still
+                // holds (a client that went away without a stop report) as watched.
+                RestoreAll(stale);
             }
         }
     }

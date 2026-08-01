@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Channels can interleave their sources in blocks: set 'Episodes per block' (e.g. 2) so two series air alternating, S1E1, S1E2, S2E1, S2E2, ... (0 keeps the marathon behaviour). Watch state is now fully protected: each item's played flag, play count and resume position are snapshotted before playback and restored on stop and on leaving, so channel viewing never marks anything watched. Returning to the home page now also leaves the channel cleanly.",
+  "changelog": "Fixes watch state still leaking from the second program onwards: the stop of the item that just ended dropped the protection for the follow-up the channel had already prepared, so everything after the first program was marked watched and piled up in Continue Watching. Replaying a program ('Von Anfang an') and channels cast to another device (which never snapshotted at all) are protected too, closing the tab now leaves the channel cleanly instead of stranding the current program as watched, and a program the viewer starts themselves is no longer touched.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-07-21T00:00:00.000Z",
-  "version": "1.0.7.0",
+  "timestamp": "2026-08-01T00:00:00.000Z",
+  "version": "1.0.8.0",
   "status": "Active",
   "autoUpdate": false
 }

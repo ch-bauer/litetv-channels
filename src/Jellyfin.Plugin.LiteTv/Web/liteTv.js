@@ -260,6 +260,28 @@
         }
     }
 
+    // Closing the tab or navigating away skips untune(), which would leave the item that
+    // was on air holding the server's snapshot until the tuned session expires - i.e.
+    // marked watched for hours. A keepalive request still goes out during unload.
+    window.addEventListener('pagehide', function () {
+        if (!tuned || !tuned.sessionId) {
+            return;
+        }
+        try {
+            var headers = {};
+            if (typeof window.ApiClient.setRequestHeaders === 'function') {
+                window.ApiClient.setRequestHeaders(headers);
+            }
+            window.fetch(window.ApiClient.getUrl('LiteTv/Tuned?sessionId=' + encodeURIComponent(tuned.sessionId)), {
+                method: 'DELETE',
+                headers: headers,
+                keepalive: true
+            });
+        } catch (e) {
+            /* nothing left to do while the page is going away */
+        }
+    });
+
     // ---------------------------------------------------------------- overlays
 
     function getOsdContainer() {
