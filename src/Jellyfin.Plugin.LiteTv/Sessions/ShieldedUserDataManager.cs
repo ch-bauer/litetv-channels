@@ -1,3 +1,4 @@
+using System.Reflection;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -19,6 +20,11 @@ namespace Jellyfin.Plugin.LiteTv.Sessions;
 /// </summary>
 internal sealed class ShieldedUserDataManager : IUserDataManager
 {
+    private static readonly PropertyInfo[] CopyableProperties = typeof(UserItemData)
+        .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0)
+        .ToArray();
+
     private readonly IUserDataManager _inner;
     private readonly WatchStateShield _shield;
     private readonly ILogger<ShieldedUserDataManager> _logger;
@@ -65,7 +71,22 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     }
 
     /// <inheritdoc />
-    public UserItemData? GetUserData(User user, BaseItem item) => _inner.GetUserData(user, item);
+    public UserItemData? GetUserData(User user, BaseItem item)
+    {
+        var data = _inner.GetUserData(user, item);
+        if (data is null || !_shield.IsShielded(user.Id, item.Id))
+        {
+            return data;
+        }
+
+        // Hand out a copy. The server keeps one cached UserItemData instance per user and
+        // item and returns that very instance here, while everything that records watch
+        // state works the same way: read it, change it, then ask for it to be saved.
+        // Dropping only the save would leave the item showing as played anyway, because
+        // the cached instance - the one every other read goes through - was already
+        // changed. Against a copy those changes land nowhere.
+        return Copy(data);
+    }
 
     /// <inheritdoc />
     public UserItemDataDto? GetUserDataDto(BaseItem item, User user) => _inner.GetUserDataDto(item, user);
@@ -77,4 +98,20 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     /// <inheritdoc />
     public bool UpdatePlayState(BaseItem item, UserItemData data, long? reportedPositionTicks)
         => _inner.UpdatePlayState(item, data, reportedPositionTicks);
+
+    /// <summary>
+    /// Copies every value across by reflection rather than field by field, so a property
+    /// added to <see cref="UserItemData"/> in a later server release is carried over
+    /// instead of silently reading back as its default.
+    /// </summary>
+    private static UserItemData Copy(UserItemData source)
+    {
+        var copy = new UserItemData { Key = source.Key };
+        foreach (var property in CopyableProperties)
+        {
+            property.SetValue(copy, property.GetValue(source));
+        }
+
+        return copy;
+    }
 }
