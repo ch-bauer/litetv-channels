@@ -37,7 +37,7 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     }
 
     /// <inheritdoc />
-    public event EventHandler<UserDataSaveEventArgs> UserDataSaved
+    public event EventHandler<UserDataSaveEventArgs>? UserDataSaved
     {
         add => _inner.UserDataSaved += value;
         remove => _inner.UserDataSaved -= value;
@@ -65,13 +65,13 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     }
 
     /// <inheritdoc />
-    public UserItemData GetUserData(User user, BaseItem item) => _inner.GetUserData(user, item);
+    public UserItemData? GetUserData(User user, BaseItem item) => _inner.GetUserData(user, item);
 
     /// <inheritdoc />
-    public UserItemDataDto GetUserDataDto(BaseItem item, User user) => _inner.GetUserDataDto(item, user);
+    public UserItemDataDto? GetUserDataDto(BaseItem item, User user) => _inner.GetUserDataDto(item, user);
 
     /// <inheritdoc />
-    public UserItemDataDto GetUserDataDto(BaseItem item, BaseItemDto? itemDto, User user, DtoOptions options)
+    public UserItemDataDto? GetUserDataDto(BaseItem item, BaseItemDto? itemDto, User user, DtoOptions options)
         => _inner.GetUserDataDto(item, itemDto, user, options);
 
     /// <inheritdoc />
