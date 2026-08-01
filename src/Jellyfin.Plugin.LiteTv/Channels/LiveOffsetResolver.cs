@@ -70,6 +70,34 @@ public sealed class LiveOffsetResolver
     }
 
     /// <summary>
+    /// Gets the program a channel plays after the given one. Read off the channel's own
+    /// order rather than the clock, so it stays right for a viewer who is ahead of the
+    /// schedule after skipping through a program.
+    /// </summary>
+    /// <param name="channelId">The LiteTV channel id.</param>
+    /// <param name="programId">The program currently playing.</param>
+    /// <returns>The next program, or null when the channel has only this one.</returns>
+    public Guid? ProgramAfter(Guid channelId, Guid programId)
+    {
+        var channel = Plugin.Instance?.Configuration.Channels
+            .FirstOrDefault(c => c.Id == channelId && c.Enabled);
+        var builder = _serviceProvider.GetService<ChannelPlaylistBuilder>();
+        if (channel is null || builder is null)
+        {
+            return null;
+        }
+
+        var entries = builder.GetEntries(channel).Where(e => e.RuntimeTicks > 0).ToList();
+        if (entries.Count < 2)
+        {
+            return null;
+        }
+
+        var index = entries.FindIndex(e => e.ItemId == programId);
+        return index < 0 ? null : entries[(index + 1) % entries.Count].ItemId;
+    }
+
+    /// <summary>
     /// Gets the LiteTV channel an item belongs to, when it is one of the published channel
     /// items. Cheap: it reads the item's own identifiers and touches no schedule.
     /// </summary>

@@ -54,6 +54,9 @@ public class TunedSessionMonitor : IHostedService
 
     private readonly ConcurrentDictionary<string, TunedSession> _tuned = new(StringComparer.Ordinal);
 
+    /// <summary>Which channel entry a session already has a follow-up queued behind.</summary>
+    private readonly ConcurrentDictionary<string, Guid> _queuedAfter = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Initializes a new instance of the <see cref="TunedSessionMonitor"/> class.
     /// </summary>
@@ -104,6 +107,7 @@ public class TunedSessionMonitor : IHostedService
                 _userDataManager.GetType().Name);
         }
 
+        _sessionManager.PlaybackStart += OnPlaybackStart;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
         _sessionManager.SessionEnded += OnSessionEnded;
         return Task.CompletedTask;
@@ -112,9 +116,66 @@ public class TunedSessionMonitor : IHostedService
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken)
     {
+        _sessionManager.PlaybackStart -= OnPlaybackStart;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
         _sessionManager.SessionEnded -= OnSessionEnded;
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// A published channel starting: the program after it is put into the client's own
+    /// queue straight away, so the channel rolls on from there without the server having to
+    /// step in. Reacting to the end instead is what made the hand-off visible - by the time
+    /// a stop is reported the app has already dropped back to its menu.
+    /// </summary>
+    private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
+    {
+        var item = e.Item;
+        if (e.Session is null || item is null)
+        {
+            return;
+        }
+
+        if (_liveOffset.ChannelIdFor(item) is { } channelId)
+        {
+            _ = QueueFollowUpAsync(e.Session.Id, item, channelId);
+        }
+    }
+
+    private async Task QueueFollowUpAsync(string sessionId, BaseItem playing, Guid channelId)
+    {
+        try
+        {
+            var programId = LiteTvChannelProvider.ProgramIdFromItemId(playing.ExternalId ?? string.Empty);
+            if (programId is null || _liveOffset.ProgramAfter(channelId, programId.Value) is not { } nextProgram)
+            {
+                return;
+            }
+
+            var next = await FindEntryAsync(playing, channelId, nextProgram).ConfigureAwait(false);
+            if (next is null)
+            {
+                return;
+            }
+
+            await _sessionManager.SendPlayCommand(
+                sessionId,
+                sessionId,
+                new PlayRequest
+                {
+                    ItemIds = new[] { next.Id },
+                    PlayCommand = PlayCommand.PlayNext
+                },
+                CancellationToken.None).ConfigureAwait(false);
+
+            _queuedAfter[sessionId] = playing.Id;
+            _logger.LogDebug("LiteTV: queued {Next} to follow on session {SessionId}.", next.Name, sessionId);
+        }
+        catch (Exception ex)
+        {
+            // Not fatal: the stop handler still pushes the follow-up, just less smoothly.
+            _logger.LogDebug(ex, "LiteTV: could not queue the follow-up on session {SessionId}.", sessionId);
+        }
     }
 
     /// <summary>
@@ -125,7 +186,13 @@ public class TunedSessionMonitor : IHostedService
     private void OnSessionEnded(object? sender, SessionEventArgs e)
     {
         var sessionId = e.SessionInfo?.Id;
-        if (!string.IsNullOrEmpty(sessionId) && _tuned.TryRemove(sessionId, out _))
+        if (string.IsNullOrEmpty(sessionId))
+        {
+            return;
+        }
+
+        _queuedAfter.TryRemove(sessionId, out _);
+        if (_tuned.TryRemove(sessionId, out _))
         {
             _shield.ReleaseSession(sessionId, ReleaseGracePeriod);
         }
@@ -249,9 +316,10 @@ public class TunedSessionMonitor : IHostedService
         // its media resolves to whatever is on air by then.
         if (_liveOffset.ChannelIdFor(item) is { } publishedChannelId)
         {
+            var wasQueued = _queuedAfter.TryRemove(e.Session.Id, out var queuedAfter) && queuedAfter == item.Id;
             if (e.PlayedToCompletion)
             {
-                _ = ContinueChannelAsync(e.Session.Id, item, publishedChannelId);
+                _ = ContinueChannelAsync(e.Session.Id, item, publishedChannelId, wasQueued);
             }
 
             return;
@@ -306,12 +374,18 @@ public class TunedSessionMonitor : IHostedService
     /// program that just finished is followed by sending the channel item again, positioned
     /// where the schedule now stands.
     /// </summary>
-    private async Task ContinueChannelAsync(string sessionId, BaseItem finished, Guid channelId)
+    private async Task ContinueChannelAsync(string sessionId, BaseItem finished, Guid channelId, bool wasQueued)
     {
         try
         {
-            // Let the client finish tearing the finished program down first.
-            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            // Let the client finish tearing the finished program down first - and where the
+            // follow-up was queued, long enough to see whether it picked it up by itself.
+            await Task.Delay(wasQueued ? TimeSpan.FromSeconds(6) : TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+
+            if (wasQueued && FindSession(sessionId)?.NowPlayingItem is not null)
+            {
+                return; // the client rolled on from its own queue, which is the smooth path
+            }
 
             var now = _liveOffset.Resolve(channelId);
             if (now is null)
@@ -319,7 +393,7 @@ public class TunedSessionMonitor : IHostedService
                 return; // the channel has nothing left to air
             }
 
-            var next = await FindOnAirItemAsync(finished, channelId, now.Current.ItemId).ConfigureAwait(false);
+            var next = await FindEntryAsync(finished, channelId, now.Current.ItemId).ConfigureAwait(false);
             if (next is null)
             {
                 _logger.LogWarning("LiteTV: could not find the follow-up entry for {Channel} to continue with.", channelId);
@@ -344,11 +418,11 @@ public class TunedSessionMonitor : IHostedService
     }
 
     /// <summary>
-    /// Gets the entry standing for what the channel is airing now, asking the channel
-    /// manager for the folder's contents so the entry for the new program is built and
-    /// stored first - until that happens it does not exist as something playable.
+    /// Gets the entry standing for one of a channel's programs, asking the channel manager
+    /// for the folder's contents so the entry is built and stored first - until that happens
+    /// it does not exist as something playable.
     /// </summary>
-    private async Task<BaseItem?> FindOnAirItemAsync(BaseItem finished, Guid channelId, Guid programId)
+    private async Task<BaseItem?> FindEntryAsync(BaseItem sibling, Guid channelId, Guid programId)
     {
         var wanted = LiteTvChannelProvider.NowPlayingId(channelId, programId);
 
@@ -356,8 +430,8 @@ public class TunedSessionMonitor : IHostedService
         // makes the channel manager index an empty channel list and throw.
         var query = new InternalItemsQuery
         {
-            ParentId = finished.ParentId,
-            ChannelIds = new[] { finished.ChannelId }
+            ParentId = sibling.ParentId,
+            ChannelIds = new[] { sibling.ChannelId }
         };
 
         var result = await _channelManager
