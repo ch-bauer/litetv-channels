@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.8.0",
+        "changelog": "Fixes watch state still leaking from the second program onwards: the stop of the item that just ended dropped the protection for the follow-up the channel had already prepared, so everything after the first program was marked watched and piled up in Continue Watching. Replaying a program ('Von Anfang an') and channels cast to another device (which never snapshotted at all) are protected too, closing the tab now leaves the channel cleanly instead of stranding the current program as watched, and a program the viewer starts themselves is no longer touched.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.8.0/litetv-channels_1.0.8.0.zip",
+        "checksum": "8ab5cfefb564c43f0779bb7998e48eb5",
+        "timestamp": "2026-08-01T00:00:00Z"
+      },
+      {
         "version": "1.0.7.0",
         "changelog": "Channels can interleave their sources in blocks: set 'Episodes per block' (e.g. 2) so two series air alternating, S1E1, S1E2, S2E1, S2E2, ... (0 keeps the marathon behaviour). Watch state is now fully protected: each item's played flag, play count and resume position are snapshotted before playback and restored on stop and on leaving, so channel viewing never marks anything watched. Returning to the home page now also leaves the channel cleanly.",
         "targetAbi": "10.11.0.0",
