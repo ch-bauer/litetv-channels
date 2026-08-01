@@ -236,11 +236,18 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
             ? "Jetzt: " + title
             : "Jetzt: " + title + "\nDanach: " + (next.SeriesName is null ? next.Name : next.SeriesName + ": " + next.Name);
 
+        // Carry the media on the entry itself, not only through the callback. A client
+        // reads container and stream details off the item it is about to play, and an entry
+        // that says nothing about its media is one some players will not start.
+        var media = _libraryManager.GetItemById(current.ItemId) as MediaBrowser.Controller.Entities.Video;
+        var sources = media?.GetMediaSources(true).ToList() ?? new List<MediaSourceInfo>();
+
         return new List<ChannelItemInfo>
         {
             new()
             {
                 Id = NowPlayingId(channel.Id, current.ItemId),
+                MediaSources = sources,
                 Name = channel.Name + " - " + title,
                 Overview = overview,
                 Type = ChannelItemType.Media,

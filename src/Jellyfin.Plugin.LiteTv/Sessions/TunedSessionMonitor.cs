@@ -351,7 +351,14 @@ public class TunedSessionMonitor : IHostedService
     private async Task<BaseItem?> FindOnAirItemAsync(BaseItem finished, Guid channelId, Guid programId)
     {
         var wanted = LiteTvChannelProvider.NowPlayingId(channelId, programId);
-        var query = new InternalItemsQuery { ParentId = finished.ParentId };
+
+        // The channel has to be named as well as the folder: asking for the folder alone
+        // makes the channel manager index an empty channel list and throw.
+        var query = new InternalItemsQuery
+        {
+            ParentId = finished.ParentId,
+            ChannelIds = new[] { finished.ChannelId }
+        };
 
         var result = await _channelManager
             .GetChannelItemsInternal(query, new Progress<double>(), CancellationToken.None)

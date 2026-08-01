@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Published channels keep running on their own: when a program ends, the next one is handed to the client, so a channel started from a TV app carries on like the web UI does. Channels also no longer collect a resume position of their own, which was putting every channel into Continue Watching and leaving it there. Fixes published channels playing the program that was on when they were first opened: the server resolves an item's media only once, so each program now gets its own entry.",
+  "changelog": "Fixes published channels stopping at the end of a program on TV apps: looking up the follow-up entry asked the channel manager for a folder without naming its channel, which threw. Channel entries also carry their media details now - container, streams, the lot - instead of only resolving them when playback starts, since a player that is told nothing about the media may refuse to start it.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.14.0",
+  "version": "1.0.15.0",
   "status": "Active",
   "autoUpdate": false
 }
