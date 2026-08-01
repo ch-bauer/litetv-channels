@@ -69,9 +69,9 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     /// <inheritdoc />
     public void SaveUserData(User user, BaseItem item, UserItemData userData, UserDataSaveReason reason, CancellationToken cancellationToken)
     {
-        if (IsChannelPlayback(user.Id, item.Id))
+        if (MustNotRecord(user.Id, item))
         {
-            _logger.LogDebug("LiteTV: dropped a {Reason} write for {Item}, it is airing on a channel.", reason, item.Name);
+            _logger.LogDebug("LiteTV: dropped a {Reason} write for {Item}, it belongs to a channel.", reason, item.Name);
             return;
         }
 
@@ -91,7 +91,7 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     public UserItemData? GetUserData(User user, BaseItem item)
     {
         var data = _inner.GetUserData(user, item);
-        if (data is null || !IsChannelPlayback(user.Id, item.Id))
+        if (data is null || !MustNotRecord(user.Id, item))
         {
             return data;
         }
@@ -145,6 +145,19 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     /// <inheritdoc />
     public bool UpdatePlayState(BaseItem item, UserItemData data, long? reportedPositionTicks)
         => _inner.UpdatePlayState(item, data, reportedPositionTicks);
+
+    /// <summary>
+    /// Whether the item's watch state must not be recorded at all: either a program a
+    /// channel is airing, or one of the published channel items themselves.
+    /// A channel item is never recorded because it is not a thing anyone watches to the
+    /// end - it is the channel. Left to itself it would collect a resume position from
+    /// every viewing and sit in Continue Watching for good, and the position it is
+    /// reported with is the live one anyway, which is computed rather than remembered.
+    /// </summary>
+    private bool MustNotRecord(Guid userId, BaseItem item)
+    {
+        return _liveOffset.ChannelIdFor(item) is not null || IsChannelPlayback(userId, item.Id);
+    }
 
     /// <summary>
     /// Decides whether this write belongs to a channel playing the item, as opposed to the

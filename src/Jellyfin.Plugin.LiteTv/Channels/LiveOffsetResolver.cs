@@ -32,31 +32,56 @@ public sealed class LiveOffsetResolver
     /// <returns>The offset in ticks, or null when the item is not one of ours.</returns>
     public long? OffsetTicksFor(BaseItem item)
     {
-        if (item.ChannelId.Equals(Guid.Empty) || string.IsNullOrEmpty(item.ExternalId))
-        {
-            return null;
-        }
-
-        var channelId = LiteTvChannelProvider.ChannelIdFromItemId(item.ExternalId);
+        var channelId = ChannelIdFor(item);
         if (channelId is null)
         {
             return null;
         }
 
+        var now = Resolve(channelId.Value);
+        if (now is null)
+        {
+            return null;
+        }
+
+        // Only while the entry still names what is on air. A client holding an older
+        // listing would otherwise be told to resume a finished program at the position the
+        // channel has since moved on to.
+        var programId = LiteTvChannelProvider.ProgramIdFromItemId(item.ExternalId!);
+        return programId == now.Current.ItemId ? now.OffsetTicks : null;
+    }
+
+    /// <summary>
+    /// Gets what a channel is airing right now and how far into it.
+    /// </summary>
+    /// <param name="channelId">The LiteTV channel id.</param>
+    /// <returns>The resolved position, or null when the channel has nothing to air.</returns>
+    public ScheduleNow? Resolve(Guid channelId)
+    {
         var channel = Plugin.Instance?.Configuration.Channels
-            .FirstOrDefault(c => c.Id == channelId.Value && c.Enabled);
-        if (channel is null)
-        {
-            return null;
-        }
-
+            .FirstOrDefault(c => c.Id == channelId && c.Enabled);
         var builder = _serviceProvider.GetService<ChannelPlaylistBuilder>();
-        if (builder is null)
+        if (channel is null || builder is null)
         {
             return null;
         }
 
-        var now = ScheduleResolver.Resolve(builder.GetEntries(channel), channel.AnchorUtc, DateTime.UtcNow);
-        return now?.OffsetTicks;
+        return ScheduleResolver.Resolve(builder.GetEntries(channel), channel.AnchorUtc, DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Gets the LiteTV channel an item belongs to, when it is one of the published channel
+    /// items. Cheap: it reads the item's own identifiers and touches no schedule.
+    /// </summary>
+    /// <param name="item">Any library item.</param>
+    /// <returns>The channel id, or null when the item is not one of ours.</returns>
+    public Guid? ChannelIdFor(BaseItem item)
+    {
+        if (item.ChannelId.Equals(Guid.Empty) || string.IsNullOrEmpty(item.ExternalId))
+        {
+            return null;
+        }
+
+        return LiteTvChannelProvider.ChannelIdFromItemId(item.ExternalId);
     }
 }

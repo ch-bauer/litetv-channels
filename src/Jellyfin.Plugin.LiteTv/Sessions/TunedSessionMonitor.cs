@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Plugin.LiteTv.Channels;
 using Jellyfin.Plugin.LiteTv.Core;
+using MediaBrowser.Controller.Channels;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
@@ -44,6 +47,8 @@ public class TunedSessionMonitor : IHostedService
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly WatchStateShield _shield;
+    private readonly LiveOffsetResolver _liveOffset;
+    private readonly IChannelManager _channelManager;
     private readonly ChannelPlaylistBuilder _playlistBuilder;
     private readonly ILogger<TunedSessionMonitor> _logger;
 
@@ -57,6 +62,8 @@ public class TunedSessionMonitor : IHostedService
     /// <param name="userDataManager">The user data manager, to report at startup whether the
     /// watch-state shield is in place.</param>
     /// <param name="shield">The watch-state shield.</param>
+    /// <param name="liveOffset">Resolves published channel items and their live position.</param>
+    /// <param name="channelManager">Used to build the entry for the program coming up.</param>
     /// <param name="playlistBuilder">The channel playlist builder.</param>
     /// <param name="logger">The logger.</param>
     public TunedSessionMonitor(
@@ -64,6 +71,8 @@ public class TunedSessionMonitor : IHostedService
         IUserManager userManager,
         IUserDataManager userDataManager,
         WatchStateShield shield,
+        LiveOffsetResolver liveOffset,
+        IChannelManager channelManager,
         ChannelPlaylistBuilder playlistBuilder,
         ILogger<TunedSessionMonitor> logger)
     {
@@ -71,6 +80,8 @@ public class TunedSessionMonitor : IHostedService
         _userManager = userManager;
         _userDataManager = userDataManager;
         _shield = shield;
+        _liveOffset = liveOffset;
+        _channelManager = channelManager;
         _playlistBuilder = playlistBuilder;
         _logger = logger;
     }
@@ -227,7 +238,26 @@ public class TunedSessionMonitor : IHostedService
     private void OnPlaybackStopped(object? sender, PlaybackStopEventArgs e)
     {
         var item = e.Item;
-        if (e.Session is null || item is null || !_tuned.TryGetValue(e.Session.Id, out var tuned))
+        if (e.Session is null || item is null)
+        {
+            return;
+        }
+
+        // A published channel item that ran to the end: the viewer is on a channel in an
+        // app the injected script never reaches, so the schedule only keeps running if the
+        // server hands them the next program. Playing the same item again is all it takes -
+        // its media resolves to whatever is on air by then.
+        if (_liveOffset.ChannelIdFor(item) is { } publishedChannelId)
+        {
+            if (e.PlayedToCompletion)
+            {
+                _ = ContinueChannelAsync(e.Session.Id, item, publishedChannelId);
+            }
+
+            return;
+        }
+
+        if (!_tuned.TryGetValue(e.Session.Id, out var tuned))
         {
             return;
         }
@@ -269,6 +299,65 @@ public class TunedSessionMonitor : IHostedService
             // Nothing pushes a follow-up here, so the viewer stopped the channel.
             Untune(e.Session.Id);
         }
+    }
+
+    /// <summary>
+    /// Keeps a published channel running on a client the injected script cannot reach: the
+    /// program that just finished is followed by sending the channel item again, positioned
+    /// where the schedule now stands.
+    /// </summary>
+    private async Task ContinueChannelAsync(string sessionId, BaseItem finished, Guid channelId)
+    {
+        try
+        {
+            // Let the client finish tearing the finished program down first.
+            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+
+            var now = _liveOffset.Resolve(channelId);
+            if (now is null)
+            {
+                return; // the channel has nothing left to air
+            }
+
+            var next = await FindOnAirItemAsync(finished, channelId, now.Current.ItemId).ConfigureAwait(false);
+            if (next is null)
+            {
+                _logger.LogWarning("LiteTV: could not find the follow-up entry for {Channel} to continue with.", channelId);
+                return;
+            }
+
+            await _sessionManager.SendPlayCommand(
+                sessionId,
+                sessionId,
+                new PlayRequest
+                {
+                    ItemIds = new[] { next.Id },
+                    StartPositionTicks = now.OffsetTicks,
+                    PlayCommand = PlayCommand.PlayNow
+                },
+                CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LiteTV: could not continue the channel on session {SessionId}.", sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Gets the entry standing for what the channel is airing now, asking the channel
+    /// manager for the folder's contents so the entry for the new program is built and
+    /// stored first - until that happens it does not exist as something playable.
+    /// </summary>
+    private async Task<BaseItem?> FindOnAirItemAsync(BaseItem finished, Guid channelId, Guid programId)
+    {
+        var wanted = LiteTvChannelProvider.NowPlayingId(channelId, programId);
+        var query = new InternalItemsQuery { ParentId = finished.ParentId };
+
+        var result = await _channelManager
+            .GetChannelItemsInternal(query, new Progress<double>(), CancellationToken.None)
+            .ConfigureAwait(false);
+
+        return result.Items.FirstOrDefault(i => string.Equals(i.ExternalId, wanted, StringComparison.Ordinal));
     }
 
     private async Task PushCurrentAsync(string sessionId, Guid channelId)

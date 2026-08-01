@@ -121,23 +121,21 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     /// <returns>The current program's media sources.</returns>
     public Task<IEnumerable<MediaSourceInfo>> GetChannelItemMediaInfo(string id, CancellationToken cancellationToken)
     {
-        var channel = ChannelFor(id);
-        var now = channel is null ? null : Resolve(channel);
-        if (now is null)
+        // The program is taken from the id rather than from the clock: the server caches
+        // what this returns for the rest of its run, so the answer has to stay true.
+        var programId = ProgramIdFromItemId(id);
+        if (programId is null)
         {
             return Task.FromResult(Enumerable.Empty<MediaSourceInfo>());
         }
 
-        var item = _libraryManager.GetItemById(now.Current.ItemId);
-        if (item is null)
+        if (_libraryManager.GetItemById(programId.Value) is not MediaBrowser.Controller.Entities.Video video)
         {
-            _logger.LogWarning("LiteTV: {Item} is on air but no longer in the library.", now.Current.Name);
+            _logger.LogWarning("LiteTV: the program behind channel item {Id} is no longer in the library.", id);
             return Task.FromResult(Enumerable.Empty<MediaSourceInfo>());
         }
 
-        return Task.FromResult(_libraryManager.GetItemById(item.Id) is MediaBrowser.Controller.Entities.Video video
-            ? video.GetMediaSources(true).AsEnumerable()
-            : Enumerable.Empty<MediaSourceInfo>());
+        return Task.FromResult(video.GetMediaSources(true).AsEnumerable());
     }
 
     /// <inheritdoc />
@@ -150,26 +148,40 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     public IEnumerable<ImageType> GetSupportedChannelImages() => Array.Empty<ImageType>();
 
     /// <summary>
-    /// Builds the id of a channel's on-air item. It deliberately carries no program, so the
-    /// entry a client has in its list keeps working as the schedule moves on.
+    /// Builds the id of a channel's on-air item, naming both the channel and the program.
+    /// The program has to be part of it: the server resolves an item's media once and then
+    /// keeps that answer for the rest of its run, so an id that outlived the program would
+    /// keep playing the program it was first resolved for.
     /// </summary>
     /// <param name="channelId">The LiteTV channel id.</param>
+    /// <param name="programId">The library item on air.</param>
     /// <returns>The channel item id.</returns>
-    internal static string NowPlayingId(Guid channelId) => "now_" + channelId.ToString("N");
+    internal static string NowPlayingId(Guid channelId, Guid programId)
+        => "now_" + channelId.ToString("N") + "_" + programId.ToString("N");
 
     /// <summary>
     /// Reads the channel back out of an on-air item id.
     /// </summary>
     /// <param name="channelItemId">The channel item id.</param>
     /// <returns>The LiteTV channel id, or null when the id is not one of ours.</returns>
-    internal static Guid? ChannelIdFromItemId(string channelItemId)
+    internal static Guid? ChannelIdFromItemId(string channelItemId) => IdPart(channelItemId, 0);
+
+    /// <summary>
+    /// Reads the program back out of an on-air item id.
+    /// </summary>
+    /// <param name="channelItemId">The channel item id.</param>
+    /// <returns>The library item the entry was created for, or null when the id is not ours.</returns>
+    internal static Guid? ProgramIdFromItemId(string channelItemId) => IdPart(channelItemId, 1);
+
+    private static Guid? IdPart(string channelItemId, int index)
     {
         if (!channelItemId.StartsWith("now_", StringComparison.Ordinal))
         {
             return null;
         }
 
-        return Guid.TryParse(channelItemId[4..], out var id) ? id : null;
+        var parts = channelItemId[4..].Split('_');
+        return parts.Length > index && Guid.TryParse(parts[index], out var id) ? id : null;
     }
 
     private static IEnumerable<TvChannel> EnabledChannels()
@@ -228,7 +240,7 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
         {
             new()
             {
-                Id = NowPlayingId(channel.Id),
+                Id = NowPlayingId(channel.Id, current.ItemId),
                 Name = channel.Name + " - " + title,
                 Overview = overview,
                 Type = ChannelItemType.Media,
