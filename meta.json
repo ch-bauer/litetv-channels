@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Channel listings show every program with the time it airs, instead of marking one of them as running now. The marker could not stay true: an entry's label is written once and never rewritten, so it stayed on a program that had long finished.",
+  "changelog": "Fixes published channels flashing between the player and the menu without ever playing, which the previous release caused: the follow-up program was handed to the client as a queued item, but a client that starts it immediately instead of queuing it turns that into an endless loop. Channels no longer do this. A channel is also a single entry again rather than a folder of separate films to start - it switches on and joins what is on air, and the schedule is written in its description where it can be read in order and not played by accident.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.18.0",
+  "version": "1.0.19.0",
   "status": "Active",
   "autoUpdate": false
 }
