@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.16.0",
+        "changelog": "A published channel now lists its schedule instead of just the one program on air: opening a channel shows what is running and what follows, in order, with start times. Every entry is playable - the one on air joins live, a later one starts from its beginning.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.16.0/litetv-channels_1.0.16.0.zip",
+        "checksum": "9428a170486e435cc617ca90491412bd",
+        "timestamp": "2026-08-01T00:00:00Z"
+      },
+      {
         "version": "1.0.15.0",
         "changelog": "Fixes published channels stopping at the end of a program on TV apps: looking up the follow-up entry asked the channel manager for a folder without naming its channel, which threw. Channel entries also carry their media details now - container, streams, the lot - instead of only resolving them when playback starts, since a player that is told nothing about the media may refuse to start it.",
         "targetAbi": "10.11.0.0",
