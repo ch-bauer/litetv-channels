@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.11.0",
+        "changelog": "Fixes registration with the File Transformation plugin, which had been failing on every startup: the plugin shipped its own copy of Newtonsoft.Json, so the payload it built was a different type than the one File Transformation expected, despite the identical name. The payload is now built through that plugin's own type and the duplicate library is no longer shipped at all. Script injection previously fell back to request-time middleware, which kept working, so this only restores the preferred path.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.11.0/litetv-channels_1.0.11.0.zip",
+        "checksum": "da0046336ad379ad8db5392bf78ccfd7",
+        "timestamp": "2026-08-01T00:00:00Z"
+      },
+      {
         "version": "1.0.10.0",
         "changelog": "Fixes channel viewing still showing up as watched even though nothing was written to the database: the server hands out one cached watch-state object per item, and everything that records playback changes that object before asking for it to be saved - so blocking the save alone left the item marked played in memory until the next server restart. While a program airs on a channel the plugin now hands out a copy, so those changes land nowhere at all.",
         "targetAbi": "10.11.0.0",
