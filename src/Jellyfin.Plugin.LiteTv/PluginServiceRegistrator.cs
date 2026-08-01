@@ -5,6 +5,7 @@ using MediaBrowser.Controller;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -21,6 +22,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ChannelPlaylistBuilder>();
 
         serviceCollection.AddSingleton<WatchStateShield>();
+        // The shield needs to know which client a watch-state write came from; registering
+        // the accessor is a no-op when the server already did.
+        serviceCollection.AddHttpContextAccessor();
         ShieldUserData(serviceCollection);
 
         // Tracks tuned sessions: shields what the channel plays for all of them, and
@@ -83,6 +87,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IUserDataManager>(sp => new ShieldedUserDataManager(
             resolveInner(sp),
             sp.GetRequiredService<WatchStateShield>(),
+            sp.GetRequiredService<IHttpContextAccessor>(),
             sp.GetRequiredService<ILogger<ShieldedUserDataManager>>()));
     }
 }

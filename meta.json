@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes registration with the File Transformation plugin, which had been failing on every startup: the plugin shipped its own copy of Newtonsoft.Json, so the payload it built was a different type than the one File Transformation expected, despite the identical name. The payload is now built through that plugin's own type and the duplicate library is no longer shipped at all. Script injection previously fell back to request-time middleware, which kept working, so this only restores the preferred path.",
+  "changelog": "Media watched outside a channel now keeps its watch state even when that same title happens to be on air: a channel only covers the device it is playing on, so starting the title deliberately somewhere else records normally. Leaving a channel also stops holding back watch state for half a minute - the program is released three seconds after its playback actually stops, so watching it properly straight afterwards is recorded right away. A client that disappears without reporting a stop no longer keeps its program covered either, since the session ending releases it.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.11.0",
+  "version": "1.0.12.0",
   "status": "Active",
   "autoUpdate": false
 }

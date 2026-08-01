@@ -5,6 +5,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.LiteTv.Sessions;
@@ -20,6 +21,9 @@ namespace Jellyfin.Plugin.LiteTv.Sessions;
 /// </summary>
 internal sealed class ShieldedUserDataManager : IUserDataManager
 {
+    /// <summary>Jellyfin accepts its authorization payload under either name.</summary>
+    private static readonly string[] AuthorizationHeaders = ["Authorization", "X-Emby-Authorization"];
+
     private static readonly PropertyInfo[] CopyableProperties = typeof(UserItemData)
         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
         .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0)
@@ -27,6 +31,7 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
 
     private readonly IUserDataManager _inner;
     private readonly WatchStateShield _shield;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<ShieldedUserDataManager> _logger;
 
     /// <summary>
@@ -34,11 +39,18 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     /// </summary>
     /// <param name="inner">The server's user data manager.</param>
     /// <param name="shield">The set of items currently airing on a channel.</param>
+    /// <param name="httpContextAccessor">Accessor for the request a save belongs to, used to
+    /// tell the channel's own playback apart from the same title watched elsewhere.</param>
     /// <param name="logger">The logger.</param>
-    public ShieldedUserDataManager(IUserDataManager inner, WatchStateShield shield, ILogger<ShieldedUserDataManager> logger)
+    public ShieldedUserDataManager(
+        IUserDataManager inner,
+        WatchStateShield shield,
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<ShieldedUserDataManager> logger)
     {
         _inner = inner;
         _shield = shield;
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
 
@@ -52,7 +64,7 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     /// <inheritdoc />
     public void SaveUserData(User user, BaseItem item, UserItemData userData, UserDataSaveReason reason, CancellationToken cancellationToken)
     {
-        if (_shield.IsShielded(user.Id, item.Id))
+        if (IsChannelPlayback(user.Id, item.Id))
         {
             _logger.LogDebug("LiteTV: dropped a {Reason} write for {Item}, it is airing on a channel.", reason, item.Name);
             return;
@@ -74,7 +86,7 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     public UserItemData? GetUserData(User user, BaseItem item)
     {
         var data = _inner.GetUserData(user, item);
-        if (data is null || !_shield.IsShielded(user.Id, item.Id))
+        if (data is null || !IsChannelPlayback(user.Id, item.Id))
         {
             return data;
         }
@@ -98,6 +110,79 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
     /// <inheritdoc />
     public bool UpdatePlayState(BaseItem item, UserItemData data, long? reportedPositionTicks)
         => _inner.UpdatePlayState(item, data, reportedPositionTicks);
+
+    /// <summary>
+    /// Decides whether this write belongs to a channel playing the item, as opposed to the
+    /// same title being watched deliberately somewhere else while it happens to be on air -
+    /// which has to keep its watch state like any other viewing.
+    /// The two are told apart by the device the request came from: a save carries no session
+    /// of its own, but the client that reported it identifies its device in the
+    /// authorization header. A request that cannot be attributed to a device is treated as
+    /// the channel's, so an unrecognised caller cannot write channel viewing to the account.
+    /// </summary>
+    private bool IsChannelPlayback(Guid userId, Guid itemId)
+    {
+        // Checked first: for everything not currently airing this is a single dictionary
+        // miss, and that is the overwhelming majority of the server's user data writes.
+        if (!_shield.TryGetShieldedDevices(userId, itemId, out var deviceIds))
+        {
+            return false;
+        }
+
+        if (deviceIds.Count == 0)
+        {
+            return true; // shielded everywhere: the airing device is not known
+        }
+
+        var requestDevice = RequestDeviceId();
+        return requestDevice is null || deviceIds.Contains(requestDevice, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Reads the device id out of the request's authorization header, the same field the
+    /// server itself identifies a client's session by.
+    /// </summary>
+    private string? RequestDeviceId()
+    {
+        var request = _httpContextAccessor.HttpContext?.Request;
+        if (request is null)
+        {
+            return null;
+        }
+
+        foreach (var header in AuthorizationHeaders)
+        {
+            if (request.Headers.TryGetValue(header, out var values)
+                && ReadDeviceId(values.ToString()) is { } deviceId)
+            {
+                return deviceId;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ReadDeviceId(string authorization)
+    {
+        // MediaBrowser Client="...", Device="...", DeviceId="...", Version="...", Token="..."
+        const string Field = "DeviceId=";
+        var start = authorization.IndexOf(Field, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        var value = authorization.AsSpan(start + Field.Length).TrimStart();
+        var quoted = value.Length > 0 && value[0] == '"';
+        if (quoted)
+        {
+            value = value[1..];
+        }
+
+        var end = value.IndexOf(quoted ? '"' : ',');
+        var deviceId = (end < 0 ? value : value[..end]).Trim().ToString();
+        return string.IsNullOrEmpty(deviceId) ? null : deviceId;
+    }
 
     /// <summary>
     /// Copies every value across by reflection rather than field by field, so a property

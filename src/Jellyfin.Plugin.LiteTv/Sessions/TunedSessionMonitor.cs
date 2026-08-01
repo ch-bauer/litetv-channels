@@ -25,11 +25,20 @@ public class TunedSessionMonitor : IHostedService
     private static readonly TimeSpan TunedSessionLifetime = TimeSpan.FromHours(8);
 
     /// <summary>
-    /// How long an item stays shielded after it stopped. The client's final playback report
-    /// travels independently of the stop - it is sent while the player is torn down, after
-    /// the transcode is stopped - and regularly lands well after it.
+    /// How long an item stays shielded after its playback stopped. Only trailing reports the
+    /// client had already sent are still on their way at that point, so this is short: the
+    /// viewer may well want to watch that same program properly straight after leaving the
+    /// channel, and until this elapses that would not be recorded.
     /// </summary>
-    private static readonly TimeSpan ReleaseGracePeriod = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ReleaseGracePeriod = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// How long a session that has been left keeps its shields when no stop ever arrives for
+    /// what it was playing. Leaving is reported before the client tears its player down, so
+    /// the stop normally follows within a moment and releases the item on its own; this only
+    /// catches a client that went away without saying anything.
+    /// </summary>
+    private static readonly TimeSpan LeftChannelTimeout = TimeSpan.FromSeconds(60);
 
     private readonly ISessionManager _sessionManager;
     private readonly IUserManager _userManager;
@@ -85,6 +94,7 @@ public class TunedSessionMonitor : IHostedService
         }
 
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
+        _sessionManager.SessionEnded += OnSessionEnded;
         return Task.CompletedTask;
     }
 
@@ -92,7 +102,22 @@ public class TunedSessionMonitor : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
+        _sessionManager.SessionEnded -= OnSessionEnded;
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// A client that disappears - tab killed, app force-quit, network gone - never reports a
+    /// stop, so nothing would release what it was airing until the safety cap hours later.
+    /// The session going away is the server noticing on its behalf.
+    /// </summary>
+    private void OnSessionEnded(object? sender, SessionEventArgs e)
+    {
+        var sessionId = e.SessionInfo?.Id;
+        if (!string.IsNullOrEmpty(sessionId) && _tuned.TryRemove(sessionId, out _))
+        {
+            _shield.ReleaseSession(sessionId, ReleaseGracePeriod);
+        }
     }
 
     /// <summary>
@@ -112,12 +137,16 @@ public class TunedSessionMonitor : IHostedService
         // the first call establishes followSchedule.
         var tuned = _tuned.GetOrAdd(sessionId, _ => new TunedSession(channelId, followSchedule));
         tuned.Touch();
+        tuned.MarkTuned();
 
         if (itemId.HasValue && itemId.Value != Guid.Empty)
         {
-            foreach (var user in GetSessionUsers(sessionId))
+            var session = FindSession(sessionId);
+            foreach (var userId in GetSessionUserIds(session))
             {
-                _shield.Arm(sessionId, user.Id, itemId.Value);
+                // The device is what tells this playback apart from the same title watched
+                // deliberately elsewhere, which must keep its watch state.
+                _shield.Arm(sessionId, session?.DeviceId, userId, itemId.Value);
             }
         }
 
@@ -125,43 +154,72 @@ public class TunedSessionMonitor : IHostedService
     }
 
     /// <summary>
-    /// Removes the tuned mark from a session and releases everything it still shields.
+    /// Ends channel viewing in a session.
+    /// Anything whose playback has already stopped is released by that stop, so usually
+    /// nothing is left here. What can be left is the program still on air: leaving is
+    /// reported before the client tears its player down, so its stop is still to come and
+    /// releasing right now would let the final report through - that is what used to leave
+    /// the program the viewer just left sitting in Continue Watching. The session is
+    /// therefore kept just long enough to catch that stop, and force-released if none comes.
     /// </summary>
     /// <param name="sessionId">The session id.</param>
     public void Untune(string sessionId)
     {
-        _tuned.TryRemove(sessionId, out _);
+        if (!_tuned.TryGetValue(sessionId, out var tuned))
+        {
+            _shield.ReleaseSession(sessionId, ReleaseGracePeriod);
+            return;
+        }
+
+        tuned.MarkLeft();
+        _ = ReleaseWhenPlaybackEndedAsync(sessionId, tuned);
+    }
+
+    private async Task ReleaseWhenPlaybackEndedAsync(string sessionId, TunedSession tuned)
+    {
+        await Task.Delay(LeftChannelTimeout).ConfigureAwait(false);
+
+        if (!tuned.HasLeft)
+        {
+            return; // tuned in again in the meantime
+        }
+
+        if (_tuned.TryGetValue(sessionId, out var current) && ReferenceEquals(current, tuned))
+        {
+            _tuned.TryRemove(new KeyValuePair<string, TunedSession>(sessionId, tuned));
+        }
+
         _shield.ReleaseSession(sessionId, ReleaseGracePeriod);
     }
 
-    private IEnumerable<User> GetSessionUsers(string sessionId)
+    private SessionInfo? FindSession(string sessionId)
     {
-        var session = _sessionManager.Sessions
+        return _sessionManager.Sessions
             .FirstOrDefault(s => string.Equals(s.Id, sessionId, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The users a session reports playback for: whoever is signed in, plus any guests
+    /// watching along, since the server records the item for each of them.
+    /// </summary>
+    private IEnumerable<Guid> GetSessionUserIds(SessionInfo? session)
+    {
         if (session is null)
         {
             yield break;
         }
 
         var seen = new HashSet<Guid>();
-        if (session.UserId != Guid.Empty && seen.Add(session.UserId))
+        if (session.UserId != Guid.Empty && seen.Add(session.UserId) && _userManager.GetUserById(session.UserId) is not null)
         {
-            var user = _userManager.GetUserById(session.UserId);
-            if (user is not null)
-            {
-                yield return user;
-            }
+            yield return session.UserId;
         }
 
         foreach (var additional in session.AdditionalUsers)
         {
-            if (seen.Add(additional.UserId))
+            if (seen.Add(additional.UserId) && _userManager.GetUserById(additional.UserId) is not null)
             {
-                var user = _userManager.GetUserById(additional.UserId);
-                if (user is not null)
-                {
-                    yield return user;
-                }
+                yield return additional.UserId;
             }
         }
     }
@@ -178,6 +236,18 @@ public class TunedSessionMonitor : IHostedService
         foreach (var user in e.Users)
         {
             _shield.Release(e.Session.Id, user.Id, item.Id, ReleaseGracePeriod);
+        }
+
+        if (tuned.HasLeft)
+        {
+            // This is the stop the session was being kept alive for: the viewer left the
+            // channel and their player has now torn down. Nothing follows it.
+            if (_tuned.TryGetValue(e.Session.Id, out var current) && ReferenceEquals(current, tuned))
+            {
+                _tuned.TryRemove(new KeyValuePair<string, TunedSession>(e.Session.Id, tuned));
+            }
+
+            return;
         }
 
         if (!tuned.FollowSchedule)
@@ -248,9 +318,11 @@ public class TunedSessionMonitor : IHostedService
         var cutoff = DateTime.UtcNow - TunedSessionLifetime;
         foreach (var pair in _tuned)
         {
-            if (pair.Value.LastActivityUtc < cutoff)
+            if (pair.Value.LastActivityUtc < cutoff && _tuned.TryRemove(pair.Key, out _))
             {
-                Untune(pair.Key);
+                // Nothing has played in this session for hours, so there is no stop left to
+                // wait for: release straight away rather than going through Untune.
+                _shield.ReleaseSession(pair.Key, TimeSpan.Zero);
             }
         }
     }
@@ -270,6 +342,16 @@ public class TunedSessionMonitor : IHostedService
 
         public DateTime LastActivityUtc { get; private set; }
 
+        /// <summary>
+        /// Gets a value indicating whether the viewer has left and the session is only still
+        /// around to catch the stop of the program that was on air.
+        /// </summary>
+        public bool HasLeft { get; private set; }
+
         public void Touch() => LastActivityUtc = DateTime.UtcNow;
+
+        public void MarkLeft() => HasLeft = true;
+
+        public void MarkTuned() => HasLeft = false;
     }
 }
