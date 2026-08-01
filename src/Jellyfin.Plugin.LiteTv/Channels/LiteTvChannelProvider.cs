@@ -266,19 +266,24 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
                 continue;
             }
 
-            items.Add(Program(id, entry, startUtc, onAir: i == 0, index: i));
+            items.Add(Program(id, entry, startUtc, index: i));
         }
 
         return items;
     }
 
-    private ChannelItemInfo Program(string id, ScheduledEntry entry, DateTime startUtc, bool onAir, int index)
+    /// <summary>
+    /// Describes one program in the lineup.
+    /// Note that everything written here is fixed when the entry is first created: the
+    /// server does not rewrite an existing entry's name when the listing is fetched again.
+    /// So the label says when the program airs, never whether it is airing - a "now" marker
+    /// would still be sitting on the program that has since finished.
+    /// </summary>
+    private ChannelItemInfo Program(string id, ScheduledEntry entry, DateTime startUtc, int index)
     {
         var title = entry.SeriesName is null ? entry.Name : entry.SeriesName + ": " + entry.Name;
         var startLocal = startUtc.ToLocalTime();
-        var when = onAir
-            ? "Jetzt"
-            : startLocal.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture);
+        var when = startLocal.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture);
 
         // Carry the media on the entry itself, not only through the callback. A client
         // reads container and stream details off the item it is about to play, and an entry
@@ -291,9 +296,7 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
             Id = id,
             MediaSources = sources,
             Name = when + " · " + title,
-            Overview = onAir
-                ? "Läuft gerade auf diesem Sender."
-                : "Auf diesem Sender ab " + startLocal.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture) + ".",
+            Overview = "Auf diesem Sender ab " + when + ".",
             Type = ChannelItemType.Media,
             ContentType = ChannelMediaContentType.Movie,
             MediaType = ChannelMediaType.Video,
