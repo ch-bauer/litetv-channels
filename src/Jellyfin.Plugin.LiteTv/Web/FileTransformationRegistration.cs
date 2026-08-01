@@ -1,8 +1,8 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 
 namespace Jellyfin.Plugin.LiteTv.Web;
 
@@ -60,14 +60,12 @@ public class FileTransformationRegistration : IHostedService
                 return Task.CompletedTask;
             }
 
-            var payload = new JObject
+            var payload = BuildPayload(registerMethod);
+            if (payload is null)
             {
-                { "id", TransformationId },
-                { "fileNamePattern", "index.html" },
-                { "callbackAssembly", GetType().Assembly.FullName },
-                { "callbackClass", typeof(ScriptInjector).FullName },
-                { "callbackMethod", nameof(ScriptInjector.TransformIndexHtml) }
-            };
+                _logger.LogWarning("File Transformation plugin expects a registration payload LiteTV cannot build; falling back to middleware injection.");
+                return Task.CompletedTask;
+            }
 
             registerMethod.Invoke(null, [payload]);
             Registered = true;
@@ -79,6 +77,49 @@ public class FileTransformationRegistration : IHostedService
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Builds the registration payload as an instance of the exact type the File
+    /// Transformation plugin's method takes, by handing the JSON to that type's own
+    /// Parse method.
+    /// Constructing a JObject here instead would be a different type that merely shares
+    /// the name: each plugin loads Newtonsoft.Json from its own directory, and passing
+    /// ours across was rejected with "Object of type 'Newtonsoft.Json.Linq.JObject'
+    /// cannot be converted to type 'Newtonsoft.Json.Linq.JObject'". Going through the
+    /// target's own type also means this plugin needs no Newtonsoft dependency at all.
+    /// </summary>
+    /// <param name="registerMethod">The plugin's registration method.</param>
+    /// <returns>The payload, or <c>null</c> when its type cannot be built this way.</returns>
+    private object? BuildPayload(MethodInfo registerMethod)
+    {
+        var parameters = registerMethod.GetParameters();
+        if (parameters.Length != 1)
+        {
+            return null;
+        }
+
+        var parse = parameters[0].ParameterType.GetMethod(
+            "Parse",
+            BindingFlags.Public | BindingFlags.Static,
+            null,
+            [typeof(string)],
+            null);
+        if (parse is null)
+        {
+            return null;
+        }
+
+        var json = JsonSerializer.Serialize(new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["id"] = TransformationId,
+            ["fileNamePattern"] = "index.html",
+            ["callbackAssembly"] = GetType().Assembly.FullName,
+            ["callbackClass"] = typeof(ScriptInjector).FullName,
+            ["callbackMethod"] = nameof(ScriptInjector.TransformIndexHtml)
+        });
+
+        return parse.Invoke(null, [json]);
     }
 
     /// <inheritdoc />
