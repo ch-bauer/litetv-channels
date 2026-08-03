@@ -36,6 +36,25 @@
     var lastHomeRowGuide = null;
     var interstitialTimer = null;
 
+    // The UI options, fetched once. They come off the same endpoint as the guide, but the
+    // guide's contents move with the clock and these do not, so they are kept apart: the
+    // home row asks fresh every time, everything else asks this.
+    var flagsPromise = null;
+
+    function getFlags() {
+        if (!flagsPromise) {
+            flagsPromise = apiGet('LiteTv/Channels').then(function (guide) {
+                return {
+                    enabled: !!guide.EnableWebUi,
+                    hideNativeLiveTv: !!guide.HideNativeLiveTvSections
+                };
+            }).catch(function () {
+                return { enabled: false, hideNativeLiveTv: false };
+            });
+        }
+        return flagsPromise;
+    }
+
     function apiGet(path) {
         return window.ApiClient.fetch({ url: window.ApiClient.getUrl(path), type: 'GET', dataType: 'json' });
     }
@@ -61,6 +80,52 @@
         } catch (e) {
             return '';
         }
+    }
+
+    // The artwork for a programme. The server names an image only where one actually
+    // exists - on the item itself or on its series - so nothing here has to guess, and a
+    // programme whose library entry has no picture simply gets none instead of a broken
+    // rectangle. 'poster' is the portrait cover, 'wide' the landscape one.
+    function programImage(program, shape, maxWidth) {
+        if (!program) {
+            return null;
+        }
+        var id = shape === 'poster' ? program.PosterItemId : program.BackdropItemId;
+        var type = shape === 'poster' ? program.PosterType : program.BackdropType;
+        if (!id || !type) {
+            return null;
+        }
+        try {
+            return window.ApiClient.getUrl('Items/' + id + '/Images/' + type, {
+                maxWidth: maxWidth || 480,
+                quality: 85
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Draws a programme's artwork into a container, and leaves the container alone when
+    // there is none - an empty frame says less than no frame at all.
+    function addImage(host, program, shape, maxWidth, className) {
+        var url = programImage(program, shape, maxWidth);
+        if (!url) {
+            return null;
+        }
+        var img = document.createElement('img');
+        img.className = className;
+        img.src = url;
+        img.loading = 'lazy';
+        img.alt = '';
+        // A picture the server offered but the client cannot fetch must not leave a
+        // broken-image glyph sitting in the middle of the overlay.
+        img.addEventListener('error', function () {
+            if (img.parentNode) {
+                img.parentNode.removeChild(img);
+            }
+        });
+        host.appendChild(img);
+        return img;
     }
 
     // Keeps overlay button interactions from reaching the video OSD underneath
@@ -95,6 +160,9 @@
             /* ---- suppress Jellyfin's own Next Up while a channel is tuned ---- */
             'body.' + TUNED_BODY_CLASS + ' .upNextContainer,' +
             'body.' + TUNED_BODY_CLASS + ' .upNextDialog { display: none !important; }' +
+
+            /* ---- Jellyfin's own Live TV home rows, when the setting asks for it ---- */
+            '.liteTvHiddenSection { display: none !important; }' +
 
             /* ---------------------------------------------------- home row ---- */
             '#' + HOME_ROW_ID + ' { padding: 0 3.3%; margin-bottom: 1.2em; }' +
@@ -180,6 +248,9 @@
             '#' + GUIDE_ID + ' .liteTvProgOn:hover { background: rgba(0,164,220,0.42); }' +
             '#' + GUIDE_ID + ' .liteTvProgFill { background: repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 0.5em, rgba(255,255,255,0.02) 0.5em 1em); opacity: 0.85; }' +
             '#' + GUIDE_ID + ' .liteTvProgDark { background: rgba(255,255,255,0.02); opacity: 0.55; }' +
+            '#' + GUIDE_ID + ' .liteTvProg { display: flex; align-items: stretch; gap: 0.5em; }' +
+            '#' + GUIDE_ID + ' .liteTvProgArt { flex: 0 0 auto; width: auto; height: 100%; border-radius: 0.2em; object-fit: cover; }' +
+            '#' + GUIDE_ID + ' .liteTvProgText { min-width: 0; align-self: center; }' +
             '#' + GUIDE_ID + ' .liteTvProgTitle { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
             '#' + GUIDE_ID + ' .liteTvProgTime { opacity: 0.7; font-size: 0.9em; font-variant-numeric: tabular-nums; }' +
             '#' + GUIDE_ID + ' .liteTvNowLine { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff4d4f; z-index: 1; pointer-events: none; }' +
@@ -220,6 +291,12 @@
             '  padding: 1.05em 1.25em 1.15em; min-width: 19em; max-width: 26em; text-align: left;' +
             '  box-shadow: 0 0.6em 2.2em rgba(0,0,0,0.55);' +
             '}' +
+            /* A card with artwork puts the picture beside the words, and keeps the words the */
+            /* same width they had without it so nothing reflows when a poster is missing. */
+            '.liteTvNextCard.liteTvWithArt { display: flex; gap: 1em; align-items: flex-start; max-width: 34em; }' +
+            '.liteTvWithArt .liteTvCardText { min-width: 17em; flex: 1 1 auto; }' +
+            '.liteTvWithArt .liteTvArtSlot:empty { display: none; }' +
+            '.liteTvArt { display: block; width: 7.5em; border-radius: 0.55em; box-shadow: 0 0.3em 1em rgba(0,0,0,0.5); }' +
             '.liteTvEyebrow { font-size: 0.7em; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.65; margin-bottom: 0.45em; }' +
             '.liteTvNextName { font-size: 1.18em; font-weight: 700; line-height: 1.3; margin-bottom: 0.2em; }' +
             '.liteTvCountdownText { font-size: 0.85em; opacity: 0.7; margin-bottom: 0.9em; font-variant-numeric: tabular-nums; }' +
@@ -240,6 +317,10 @@
             '  width: 100%; aspect-ratio: 16 / 9; border-radius: 0.7em; margin-bottom: 1.1em;' +
             '  background: #000; box-shadow: 0 0.6em 2.2em rgba(0,0,0,0.6);' +
             '}' +
+            '#' + INTERSTITIAL_ID + ' .liteTvInterStill {' +
+            '  width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 0.7em;' +
+            '  margin-bottom: 1.1em; box-shadow: 0 0.6em 2.2em rgba(0,0,0,0.6);' +
+            '}' +
 
             /* -------------------------------------------------- pause panel ---- */
             '#' + PAUSE_PANEL_ID + ' { pointer-events: auto; font-size: clamp(11px, 1.1vw, 17px); }' +
@@ -247,6 +328,7 @@
             /* Inside Jellyfin Enhanced's pause screen everything is absolutely positioned; */
             /* top-right is free (logo/details/plot live on the left, the disc sits mid-right). */
             '#pause-screen-content #' + PAUSE_PANEL_ID + ' { position: absolute; right: 5vw; top: 7vh; margin: 0; z-index: 5; }' +
+            '#' + PAUSE_PANEL_ID + ' .liteTvPauseChannel { font-size: 0.9em; opacity: 0.75; margin-bottom: 0.25em; }' +
             '#' + PAUSE_PANEL_ID + ' .liteTvPauseMeta { font-size: 0.9em; opacity: 0.85; line-height: 1.55; margin-bottom: 0.95em; }' +
             '#' + PAUSE_PANEL_ID + ' .liteTvPauseMeta .liteTvEpgTime { color: #4dd0ff; margin-right: 0.4em; font-variant-numeric: tabular-nums; }';
         document.head.appendChild(style);
@@ -313,6 +395,62 @@
         });
     }
 
+    // ------------------------------------------------- adopting channel playback
+
+    // A channel can also be switched on from the "TV-Sender" entry in the library, which is
+    // how every client that the injected UI never reaches does it. On the web that leaves the
+    // viewer with the bare channel item: its metadata is the schedule text, it has no film to
+    // show for itself, and the schedule is driven from the server, which cannot tell a seek
+    // from the end of a programme. So the web client takes it over - it joins the same
+    // channel at the same position through its own path, and everything the channel row
+    // offers comes with it: the artwork and plot of what is actually on, the overlays, the
+    // pause panel, and a hand-off that happens here rather than being pushed from outside.
+    var adoptInFlight = false;
+
+    function adoptChannelPlayback() {
+        if (tuned || chainInProgress || adoptInFlight) {
+            return;
+        }
+        adoptInFlight = true;
+
+        var attempts = 0;
+        function done() {
+            adoptInFlight = false;
+        }
+
+        function look() {
+            attempts++;
+            getOwnSession().then(function (session) {
+                var playing = session && session.NowPlayingItem;
+                if (!playing) {
+                    // The session takes a moment to report what it started playing.
+                    if (attempts < 6 && !tuned) {
+                        setTimeout(look, 700);
+                    } else {
+                        done();
+                    }
+                    return;
+                }
+                // 404 for everything that is not one of ours, which is the common case.
+                apiGet('LiteTv/Playing/' + playing.Id).then(function (info) {
+                    done();
+                    if (!info || !info.ChannelId || tuned) {
+                        return;
+                    }
+                    tuneIn(info.ChannelId).then(function () {
+                        // The OSD is already up, so no 'viewshow' will follow to start the
+                        // watcher the way tuning in from the channel row does.
+                        if (tuned) {
+                            startWatcher();
+                        }
+                    });
+                }).catch(done);
+            }).catch(done);
+        }
+
+        look();
+    }
+
     // ---------------------------------------------------------- interstitials
 
     // A slot that leaves time over before the next programme is what a real channel fills
@@ -357,6 +495,9 @@
             frame.src = 'https://www.youtube.com/embed/' + videoId
                 + '?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=0';
             card.appendChild(frame);
+        } else {
+            // No trailer to run: the still of what is coming up is better than a black gap.
+            addImage(card, now.NextProgram, 'wide', 960, 'liteTvInterStill');
         }
 
         var eyebrow = document.createElement('div');
@@ -528,28 +669,44 @@
         ensureStyle();
         panel = document.createElement('div');
         panel.id = PAUSE_PANEL_ID;
-        panel.className = 'liteTvNextCard' + (jeContent ? '' : ' liteTvPauseFloating');
+        panel.className = 'liteTvNextCard liteTvWithArt' + (jeContent ? '' : ' liteTvPauseFloating');
         ['click', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend'].forEach(function (evt) {
             panel.addEventListener(evt, function (e) { e.stopPropagation(); });
         });
 
+        // The poster of what is on air. A pause screen that names a channel and nothing else
+        // is a caption; this is what makes it a picture of what you stopped in the middle of.
+        var art = document.createElement('div');
+        art.className = 'liteTvArtSlot';
+        panel.appendChild(art);
+
+        var text = document.createElement('div');
+        text.className = 'liteTvCardText';
+        panel.appendChild(text);
+
         var eyebrow = document.createElement('div');
         eyebrow.className = 'liteTvEyebrow';
         eyebrow.textContent = 'Du siehst gerade';
-        panel.appendChild(eyebrow);
+        text.appendChild(eyebrow);
+
+        var channelLine = document.createElement('div');
+        channelLine.className = 'liteTvPauseChannel';
+        channelLine.textContent = '📺 ' + (tuned.channelName || 'TV-Sender');
+        text.appendChild(channelLine);
 
         var name = document.createElement('div');
         name.className = 'liteTvNextName';
-        name.textContent = '📺 ' + (tuned.channelName || 'TV-Sender');
-        panel.appendChild(name);
+        // Until the EPG answers, the channel is the most that can honestly be said.
+        name.textContent = tuned.currentName || (tuned.channelName || 'TV-Sender');
+        text.appendChild(name);
 
         var meta = document.createElement('div');
         meta.className = 'liteTvPauseMeta';
-        panel.appendChild(meta);
+        text.appendChild(meta);
 
         var buttons = document.createElement('div');
         buttons.className = 'liteTvNextButtons';
-        panel.appendChild(buttons);
+        text.appendChild(buttons);
 
         var bingeBtn = null;
         var scheduleBtn = makeButton('Programm folgen', 'liteTvPill', function () {
@@ -621,7 +778,15 @@
             }
             var current = now.Current && now.Current.ItemId === tuned.currentItemId ? now.Current : null;
             if (current) {
-                line('Jetzt', (current.SeriesName ? current.SeriesName + ': ' : '') + current.Name);
+                var title = (current.SeriesName ? current.SeriesName + ': ' : '') + current.Name;
+                name.textContent = title;
+                tuned.currentName = title;
+                art.innerHTML = '';
+                addImage(art, current, 'poster', 260, 'liteTvArt');
+                line('Jetzt', formatTime(current.StartUtc) + '–' + formatTime(current.EndUtc));
+            }
+            if (now.BlockName) {
+                line('Sendung', now.BlockName);
             }
             if (next.program) {
                 line('Danach', (next.program.SeriesName ? next.program.SeriesName + ': ' : '') + next.program.Name);
@@ -803,32 +968,42 @@
         overlay.id = NEXT_OVERLAY_ID;
 
         var card = document.createElement('div');
-        card.className = 'liteTvNextCard';
+        card.className = 'liteTvNextCard liteTvWithArt';
         overlay.appendChild(card);
+
+        // The poster of whatever is actually going to run, so the card is recognisable
+        // before it is read. It follows the schedule/binge choice below.
+        var art = document.createElement('div');
+        art.className = 'liteTvArtSlot';
+        card.appendChild(art);
+
+        var text = document.createElement('div');
+        text.className = 'liteTvCardText';
+        card.appendChild(text);
 
         var eyebrow = document.createElement('div');
         eyebrow.className = 'liteTvEyebrow';
         eyebrow.textContent = 'Als Nächstes';
-        card.appendChild(eyebrow);
+        text.appendChild(eyebrow);
 
         var name = document.createElement('div');
         name.className = 'liteTvNextName';
-        card.appendChild(name);
+        text.appendChild(name);
 
         var countdownText = document.createElement('div');
         countdownText.className = 'liteTvCountdownText';
-        card.appendChild(countdownText);
+        text.appendChild(countdownText);
 
         var buttons = document.createElement('div');
         buttons.className = 'liteTvNextButtons';
-        card.appendChild(buttons);
+        text.appendChild(buttons);
 
         var bar = document.createElement('div');
         bar.className = 'liteTvCountdownBar';
         var barFill = document.createElement('div');
         barFill.style.width = '100%';
         bar.appendChild(barFill);
-        card.appendChild(bar);
+        text.appendChild(bar);
 
         var totalSeconds = Math.max(1, Math.ceil(countdownSeconds));
         var secondsLeft = totalSeconds;
@@ -853,6 +1028,17 @@
         function update() {
             var binging = tuned && tuned.mode === 'binge' && info.binge;
             name.textContent = binging ? info.binge.Name : scheduleName();
+            art.innerHTML = '';
+            // The next episode comes from the library rather than from the schedule, so it
+            // is described the same way here: its own cover, the series' where it has none.
+            addImage(
+                art,
+                binging
+                    ? { PosterItemId: info.binge.Id, PosterType: 'Primary' }
+                    : info.schedule,
+                'poster',
+                220,
+                'liteTvArt');
             countdownText.textContent = isPaused
                 ? 'startet, sobald du fortsetzt'
                 : (secondsLeft > 0 ? 'startet in ' + secondsLeft + ' Sekunden' : 'startet gleich');
@@ -961,23 +1147,12 @@
 
     // ------------------------------------------------------------------ guide
 
-    function cardImageUrl(program) {
-        if (!program) {
-            return null;
-        }
-        var id = program.SeriesId || program.ItemId;
-        try {
-            return window.ApiClient.getUrl('Items/' + id + '/Images/Backdrop/0', { maxWidth: 640, quality: 80 });
-        } catch (e) {
-            return null;
-        }
-    }
-
     function buildChannelCard(channel) {
         var card = document.createElement('div');
         card.className = 'liteTvCard';
 
-        var imageUrl = cardImageUrl(channel.Now);
+        // Between programmes the card shows what is coming, so that is what it wears.
+        var imageUrl = programImage(channel.Now || channel.Next, 'wide', 640);
         if (imageUrl) {
             card.style.backgroundImage = 'url("' + imageUrl + '")';
         }
@@ -1108,6 +1283,72 @@
         });
     }
 
+    // ------------------------------------------ hiding Jellyfin's own Live TV rows
+
+    // With the channel row on the home screen, the server's own "Live TV" and "On Now" rows
+    // are the same channels a second time, listed the way Live TV lists them. Hiding them is
+    // a setting rather than a given, because they are only redundant once the row is there.
+    //
+    // A row is recognised two ways, because neither is enough on its own: by what it holds
+    // (Live TV rows are the only home rows built from programmes and channels) and by its
+    // heading, which catches a row whose cards have not rendered yet. The heading is
+    // translated, so the list is the languages this plugin speaks; the structural test is
+    // what covers the rest.
+    var NATIVE_LIVE_TV_HEADINGS = [
+        'live tv', 'live-tv', 'livetv',
+        'on now', 'gerade läuft', 'läuft gerade', 'jetzt im tv'
+    ];
+
+    function isNativeLiveTvSection(section) {
+        if (section.id === HOME_ROW_ID || section.classList.contains('liteTvHiddenSection')) {
+            return false;
+        }
+        // Programmes and channels are cards no other home row is built from. Recordings are
+        // left alone deliberately: they are things the viewer made, not the two rows this
+        // setting is about.
+        if (section.querySelector('[data-type="Program"], [data-type="TvChannel"]')) {
+            return true;
+        }
+        var heading = section.querySelector('.sectionTitle');
+        var text = heading ? (heading.textContent || '').trim().toLowerCase() : '';
+        return !!text && NATIVE_LIVE_TV_HEADINGS.indexOf(text) >= 0;
+    }
+
+    function hideNativeLiveTvSections(page) {
+        var host = page.querySelector('.homeSectionsContainer') || page;
+        var sections = host.querySelectorAll('.verticalSection');
+        for (var i = 0; i < sections.length; i++) {
+            if (isNativeLiveTvSection(sections[i])) {
+                // A class, not an inline style: setting the same style over and over would
+                // keep waking the observer that called us.
+                sections[i].classList.add('liteTvHiddenSection');
+            }
+        }
+    }
+
+    var nativeSectionObserver = null;
+
+    function watchNativeLiveTvSections(page) {
+        getFlags().then(function (flags) {
+            if (!flags.enabled || !flags.hideNativeLiveTv) {
+                return;
+            }
+            ensureStyle();
+            hideNativeLiveTvSections(page);
+            // The stock rows render after us and re-render on their own, so one sweep at
+            // page load would only catch whichever of them happened to be there already.
+            // Marking a row adds a class and nothing more, so the sweep this wakes finds
+            // nothing left to do and settles.
+            if (nativeSectionObserver) {
+                nativeSectionObserver.disconnect();
+            }
+            nativeSectionObserver = new MutationObserver(function () {
+                hideNativeLiveTvSections(page);
+            });
+            nativeSectionObserver.observe(page, { childList: true, subtree: true });
+        });
+    }
+
     function closeGuide() {
         removeOverlay(GUIDE_ID);
     }
@@ -1191,18 +1432,29 @@
         el.style.left = left + '%';
         el.style.width = width + '%';
 
+        // A poster in the block is what makes a row of the grid readable as programmes
+        // rather than as a row of labels. Only where the block is wide enough to hold one:
+        // below that it would crowd out the title, which matters more.
+        if (width * (spanMs / 3600000) * GUIDE_HOUR_WIDTH / 100 >= 6) {
+            addImage(el, program, 'poster', 120, 'liteTvProgArt');
+        }
+
+        var text = document.createElement('div');
+        text.className = 'liteTvProgText';
+        el.appendChild(text);
+
         var title = document.createElement('div');
         title.className = 'liteTvProgTitle';
         title.textContent = program.Kind === 'Interstitial' && program.NextProgramName
             ? 'Werbung – gleich: ' + program.NextProgramName
             : (program.SeriesName ? program.SeriesName + ': ' : '') + program.Name;
-        el.appendChild(title);
+        text.appendChild(title);
 
         var time = document.createElement('div');
         time.className = 'liteTvProgTime';
         time.textContent = formatTime(program.StartUtc) + '–' + formatTime(program.EndUtc)
             + (program.BlockName ? ' · ' + program.BlockName : '');
-        el.appendChild(time);
+        text.appendChild(time);
 
         el.title = title.textContent + '\n' + time.textContent;
         return el;
@@ -1403,12 +1655,21 @@
             if (tuned) {
                 chainInProgress = false;
                 startWatcher();
+                return;
             }
+            // Not our playback as far as this tab knows - but it may be a channel switched
+            // on from the library entry, which the web client takes over.
+            getFlags().then(function (flags) {
+                if (flags.enabled) {
+                    adoptChannelPlayback();
+                }
+            });
             return;
         }
 
         if (isHome(e) && e.target) {
             renderHomeRow(e.target);
+            watchNativeLiveTvSections(e.target);
         }
 
         // Landing anywhere that is not the video OSD means the viewer has left the

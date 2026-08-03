@@ -32,6 +32,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool ShowHeaderButton { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether Jellyfin's own Live TV rows on the web home
+    /// screen ("Live TV" and "On Now") are hidden, leaving the channel row as the single
+    /// place TV is watched from. Only affects the web client, and only the home screen: the
+    /// Live TV section itself stays where it is.
+    /// </summary>
+    public bool HideNativeLiveTvSections { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the channels are published as a Jellyfin
     /// channel, which is what makes them browsable and playable on clients the plugin
     /// cannot inject its web UI into - TV apps, phones, anything but the web client.

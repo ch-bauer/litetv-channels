@@ -259,10 +259,7 @@ public class TunedSessionMonitor : IHostedService
         }
 
         tuned.Touch();
-        foreach (var user in e.Users)
-        {
-            _shield.Release(e.Session.Id, user.Id, item.Id, ReleaseGracePeriod);
-        }
+        _ = ReleaseUnlessResumedAsync(e.Session.Id, e.Users.Select(u => u.Id).ToList(), item.Id);
 
         if (tuned.HasLeft)
         {
@@ -292,8 +289,59 @@ public class TunedSessionMonitor : IHostedService
         }
         else
         {
-            // Nothing pushes a follow-up here, so the viewer stopped the channel.
-            Untune(e.Session.Id);
+            // Nothing pushes a follow-up here, so the viewer either stopped the channel or
+            // seeked - and a seek must not end the channel, so the session is only let go
+            // once it has really gone quiet.
+            _ = UntuneUnlessResumedAsync(e.Session.Id);
+        }
+    }
+
+    private async Task UntuneUnlessResumedAsync(string sessionId)
+    {
+        await Task.Delay(StopSettleDelay).ConfigureAwait(false);
+        if (!StillPlaying(sessionId))
+        {
+            Untune(sessionId);
+        }
+    }
+
+    /// <summary>
+    /// How long to wait before believing a stop. Seeking is reported as one: the client tears
+    /// the running stream down and starts a new one at the new position, and the stop that
+    /// goes out in between is indistinguishable from the programme ending - a seek into the
+    /// last minutes even reports it as played to completion. What tells the two apart is what
+    /// the session is doing a moment later, and this is how long that moment is.
+    /// </summary>
+    private static readonly TimeSpan StopSettleDelay = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Gets a value indicating whether a session is still playing after a stop, which means
+    /// the stop was a stream being swapped out rather than playback ending.
+    /// </summary>
+    /// <param name="sessionId">The session the stop came from.</param>
+    /// <param name="itemId">The item that stopped, or null for any item.</param>
+    private bool StillPlaying(string sessionId, Guid? itemId = null)
+    {
+        var playing = FindSession(sessionId)?.NowPlayingItem;
+        return playing is not null && (itemId is null || playing.Id == itemId.Value);
+    }
+
+    /// <summary>
+    /// Drops an item's cover once its playback has really ended. A seek stops and restarts the
+    /// stream, and releasing on that stop would leave the rest of the programme recording its
+    /// watch state as ordinary watching - the one thing a channel must never do.
+    /// </summary>
+    private async Task ReleaseUnlessResumedAsync(string sessionId, IReadOnlyList<Guid> userIds, Guid itemId)
+    {
+        await Task.Delay(StopSettleDelay).ConfigureAwait(false);
+        if (StillPlaying(sessionId, itemId))
+        {
+            return; // the same programme is running again: nothing ended, so nothing is released
+        }
+
+        foreach (var userId in userIds)
+        {
+            _shield.Release(sessionId, userId, itemId, ReleaseGracePeriod);
         }
     }
 
@@ -307,7 +355,15 @@ public class TunedSessionMonitor : IHostedService
         try
         {
             // Let the client finish tearing the finished program down first.
-            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            await Task.Delay(StopSettleDelay).ConfigureAwait(false);
+
+            if (StillPlaying(sessionId))
+            {
+                // The viewer seeked: the stop was the old stream going away, and the new one
+                // is already running. Sending the channel now would stop the programme they
+                // just skipped through and drop them back at the live position.
+                return;
+            }
 
             var at = DateTime.UtcNow;
             var now = _liveOffset.Resolve(channelId, at);
@@ -369,7 +425,12 @@ public class TunedSessionMonitor : IHostedService
         try
         {
             // Give the client a moment to settle after the stop report.
-            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            await Task.Delay(StopSettleDelay).ConfigureAwait(false);
+
+            if (StillPlaying(sessionId))
+            {
+                return; // a seek, not the end of the programme
+            }
 
             var at = DateTime.UtcNow;
             var now = _liveOffset.Resolve(channelId, at);

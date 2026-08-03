@@ -38,6 +38,17 @@
 
                 <div class="checkboxContainer">
                     <label>
+                        <input is="emby-checkbox" type="checkbox" id="HideNativeLiveTvSections" />
+                        <span>Hide Jellyfin's own "Live TV" and "On Now" rows on the home screen</span>
+                    </label>
+                </div>
+                <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
+                    Web client only, and only the home screen — the Live TV section itself stays where
+                    it is. Use it when the channel row above has taken their place.
+                </div>
+
+                <div class="checkboxContainer">
+                    <label>
                         <input is="emby-checkbox" type="checkbox" id="PublishAsChannels" />
                         <span>Publish the channels to all clients (TV apps, phones)</span>
                     </label>
@@ -571,6 +582,7 @@
                         q('#EnableWebUi').checked = config.EnableWebUi !== false;
                         q('#ShowHomeRow').checked = config.ShowHomeRow !== false;
                         q('#ShowHeaderButton').checked = config.ShowHeaderButton !== false;
+                        q('#HideNativeLiveTvSections').checked = config.HideNativeLiveTvSections === true;
                         q('#PublishAsChannels').checked = config.PublishAsChannels !== false;
                         q('#PublishAsLiveTv').checked = config.PublishAsLiveTv === true;
                         currentIndex = config.Channels.length ? 0 : -1;
@@ -675,6 +687,7 @@
                     config.EnableWebUi = q('#EnableWebUi').checked;
                     config.ShowHomeRow = q('#ShowHomeRow').checked;
                     config.ShowHeaderButton = q('#ShowHeaderButton').checked;
+                    config.HideNativeLiveTvSections = q('#HideNativeLiveTvSections').checked;
                     config.PublishAsChannels = q('#PublishAsChannels').checked;
                     config.PublishAsLiveTv = q('#PublishAsLiveTv').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {

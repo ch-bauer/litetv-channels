@@ -1,4 +1,5 @@
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.LiteTv.Channels;
 using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Core;
 using Jellyfin.Plugin.LiteTv.Sessions;
@@ -7,6 +8,7 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Session;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -30,6 +32,7 @@ public class LiteTvController : ControllerBase
     private readonly TunedSessionMonitor _sessionMonitor;
     private readonly ISessionManager _sessionManager;
     private readonly ILibraryManager _libraryManager;
+    private readonly LiveOffsetResolver _liveOffset;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
@@ -38,16 +41,19 @@ public class LiteTvController : ControllerBase
     /// <param name="sessionMonitor">The tuned session monitor.</param>
     /// <param name="sessionManager">The session manager.</param>
     /// <param name="libraryManager">The library manager.</param>
+    /// <param name="liveOffset">Recognises the published channel items.</param>
     public LiteTvController(
         ChannelGuide guide,
         TunedSessionMonitor sessionMonitor,
         ISessionManager sessionManager,
-        ILibraryManager libraryManager)
+        ILibraryManager libraryManager,
+        LiveOffsetResolver liveOffset)
     {
         _guide = guide;
         _sessionMonitor = sessionMonitor;
         _sessionManager = sessionManager;
         _libraryManager = libraryManager;
+        _liveOffset = liveOffset;
     }
 
     /// <summary>
@@ -63,9 +69,11 @@ public class LiteTvController : ControllerBase
         {
             EnableWebUi = config?.EnableWebUi ?? false,
             ShowHomeRow = config?.ShowHomeRow ?? false,
-            ShowHeaderButton = config?.ShowHeaderButton ?? false
+            ShowHeaderButton = config?.ShowHeaderButton ?? false,
+            HideNativeLiveTvSections = config?.HideNativeLiveTvSections ?? false
         };
 
+        var artwork = NewArtworkCache();
         foreach (var channel in ChannelGuide.Channels())
         {
             var window = _guide.Window(channel, DateTime.UtcNow, DateTime.UtcNow.AddHours(DefaultGuideHours)).Take(24).ToList();
@@ -78,8 +86,8 @@ public class LiteTvController : ControllerBase
                 Name = channel.Name,
                 Kind = now?.Kind.ToString() ?? nameof(AiringKind.OffAir),
                 BlockName = string.IsNullOrEmpty(now?.BlockName) ? null : now!.BlockName,
-                Now = now is null || now.Entry is null ? null : ToProgram(now),
-                Next = nextProgram is null ? null : ToProgram(nextProgram)
+                Now = now is null || now.Entry is null ? null : ToProgram(now, artwork),
+                Next = nextProgram is null ? null : ToProgram(nextProgram, artwork)
             });
         }
 
@@ -102,12 +110,13 @@ public class LiteTvController : ControllerBase
         var end = start.AddHours(Math.Clamp(hours, 0.5, 48));
         var result = new GuideWindowDto { StartUtc = start, EndUtc = end, ServerTimeUtc = DateTime.UtcNow };
 
+        var artwork = NewArtworkCache();
         foreach (var channel in ChannelGuide.Channels())
         {
             var row = new GuideChannelDto { Id = channel.Id, Name = channel.Name };
             foreach (var airing in _guide.Window(channel, start, end).Take(512))
             {
-                row.Programs.Add(ToProgram(airing));
+                row.Programs.Add(ToProgram(airing, artwork));
             }
 
             result.Channels.Add(row);
@@ -144,22 +153,50 @@ public class LiteTvController : ControllerBase
         var following = window.Skip(1).Where(a => a.Kind == AiringKind.Program).ToList();
         var next = following.FirstOrDefault();
 
+        var artwork = NewArtworkCache();
         return new ChannelNowDto
         {
             ChannelId = channel.Id,
             ChannelName = channel.Name,
             Kind = current.Kind.ToString(),
             BlockName = string.IsNullOrEmpty(current.BlockName) ? null : current.BlockName,
-            Current = current.Entry is null ? null : ToProgram(current),
+            Current = current.Entry is null ? null : ToProgram(current, artwork),
             OffsetTicks = current.OffsetAt(at),
             EndUtc = current.EndUtc,
-            NextProgram = next is null ? null : ToProgram(next),
+            NextProgram = next is null ? null : ToProgram(next, artwork),
             // What the web client can play over an interstitial the library only knows the
             // address of - the usual case, since trailers are far more often linked than held.
             Trailers = next is null ? new List<TrailerDto>() : RemoteTrailers(next.Entry!.ItemId),
             ServerTimeUtc = at,
-            Upcoming = following.Take(Math.Clamp(upcoming, 0, 20)).Select(ToProgram).ToList()
+            Upcoming = following.Take(Math.Clamp(upcoming, 0, 20)).Select(a => ToProgram(a, artwork)).ToList()
         };
+    }
+
+    /// <summary>
+    /// Tells the web client whether what a session is playing is one of the published channel
+    /// items. That is how the injected UI recognises a channel started from the "TV-Sender"
+    /// library entry rather than from its own row, and takes it over.
+    /// </summary>
+    /// <param name="itemId">The item the client is playing.</param>
+    /// <returns>The channel behind it, or 404 when the item is not a LiteTV channel item.</returns>
+    [HttpGet("Playing/{itemId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<PlayingChannelDto> GetPlayingChannel([FromRoute] Guid itemId)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        if (item is null || _liveOffset.ChannelIdFor(item) is not { } channelId)
+        {
+            return NotFound();
+        }
+
+        var channel = ChannelGuide.Channel(channelId);
+        if (channel is null)
+        {
+            return NotFound();
+        }
+
+        return new PlayingChannelDto { ChannelId = channel.Id, ChannelName = channel.Name };
     }
 
     /// <summary>
@@ -349,10 +386,12 @@ public class LiteTvController : ControllerBase
         };
     }
 
-    private static ProgramDto ToProgram(Airing airing)
+    private static Dictionary<Guid, BaseItem?> NewArtworkCache() => new();
+
+    private ProgramDto ToProgram(Airing airing, Dictionary<Guid, BaseItem?> artwork)
     {
         var entry = airing.Entry;
-        return new ProgramDto
+        var dto = new ProgramDto
         {
             ItemId = entry?.ItemId ?? Guid.Empty,
             Name = entry?.Name ?? (airing.Kind == AiringKind.OffAir ? "Sendepause" : "Werbepause"),
@@ -367,6 +406,79 @@ public class LiteTvController : ControllerBase
             StartOffsetTicks = airing.OffsetTicks,
             NextProgramName = airing.NextProgram?.Name
         };
+
+        // An interstitial wears the artwork of the programme it is trailing, which is what a
+        // trailer looks like on television anyway. A dark stretch has nothing to wear.
+        var subject = entry ?? airing.NextProgram;
+        if (subject is not null)
+        {
+            ApplyArtwork(dto, subject, artwork);
+        }
+
+        return dto;
+    }
+
+    /// <summary>
+    /// Names the artwork a programme can be drawn with. Only images that actually exist are
+    /// named: a client that guessed would draw a broken rectangle for every item whose
+    /// library entry happens not to have that particular image, which is what left so much of
+    /// the guide blank. An episode falls back to its series, because a series poster is what
+    /// a viewer recognises a programme by when the episode itself has no still.
+    /// </summary>
+    private void ApplyArtwork(ProgramDto dto, ScheduledEntry entry, Dictionary<Guid, BaseItem?> cache)
+    {
+        var item = Artwork(cache, entry.ItemId);
+        var series = entry.SeriesId is { } seriesId && seriesId != Guid.Empty ? Artwork(cache, seriesId) : null;
+
+        // Portrait: the cover the item is known by.
+        if (Pick(new[] { ImageType.Primary, ImageType.Thumb }, item, series) is { } poster)
+        {
+            dto.PosterItemId = poster.ItemId;
+            dto.PosterType = poster.Type.ToString();
+        }
+
+        // Landscape: what a wide card wants. Falls back to the portrait image rather than
+        // leaving the card empty - a card with the wrong shape still says what is on.
+        if (Pick(new[] { ImageType.Thumb, ImageType.Backdrop }, item, series) is { } wide)
+        {
+            dto.BackdropItemId = wide.ItemId;
+            dto.BackdropType = wide.Type.ToString();
+        }
+        else
+        {
+            dto.BackdropItemId = dto.PosterItemId;
+            dto.BackdropType = dto.PosterType;
+        }
+    }
+
+    /// <summary>
+    /// Gets the first of the wanted image types that one of the items actually has, the item
+    /// itself taking precedence over the series it belongs to.
+    /// </summary>
+    private static (Guid ItemId, ImageType Type)? Pick(ImageType[] types, params BaseItem?[] items)
+    {
+        foreach (var type in types)
+        {
+            foreach (var item in items)
+            {
+                if (item is not null && item.GetImageInfo(type, 0) is not null)
+                {
+                    return (item.Id, type);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private BaseItem? Artwork(Dictionary<Guid, BaseItem?> cache, Guid itemId)
+    {
+        if (!cache.TryGetValue(itemId, out var item))
+        {
+            cache[itemId] = item = _libraryManager.GetItemById(itemId);
+        }
+
+        return item;
     }
 
     /// <summary>
@@ -444,6 +556,10 @@ public class GuideDto
 
     /// <summary>Gets or sets a value indicating whether the header guide button is enabled.</summary>
     public bool ShowHeaderButton { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether Jellyfin's own Live TV rows are
+    /// hidden on the web home screen.</summary>
+    public bool HideNativeLiveTvSections { get; set; }
 
     /// <summary>Gets the enabled channels.</summary>
     public List<ChannelSummaryDto> Channels { get; } = new();
@@ -583,4 +699,29 @@ public class ProgramDto
 
     /// <summary>Gets or sets the name of the program this leads into.</summary>
     public string? NextProgramName { get; set; }
+
+    /// <summary>Gets or sets the item to draw the portrait image from - the programme itself,
+    /// or the series it belongs to. Null when neither has one.</summary>
+    public Guid? PosterItemId { get; set; }
+
+    /// <summary>Gets or sets the image type to ask <see cref="PosterItemId"/> for.</summary>
+    public string? PosterType { get; set; }
+
+    /// <summary>Gets or sets the item to draw the landscape image from.</summary>
+    public Guid? BackdropItemId { get; set; }
+
+    /// <summary>Gets or sets the image type to ask <see cref="BackdropItemId"/> for.</summary>
+    public string? BackdropType { get; set; }
+}
+
+/// <summary>
+/// The channel behind an item a session is playing.
+/// </summary>
+public class PlayingChannelDto
+{
+    /// <summary>Gets or sets the channel id.</summary>
+    public Guid ChannelId { get; set; }
+
+    /// <summary>Gets or sets the channel name.</summary>
+    public string ChannelName { get; set; } = string.Empty;
 }

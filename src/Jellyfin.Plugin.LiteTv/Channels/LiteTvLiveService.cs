@@ -72,8 +72,8 @@ public class LiteTvLiveService : ILiveTvService
             // the channel was built on rather than from what is on air, because the server
             // stores a channel's image once: one that followed the schedule would just be
             // whichever programme happened to be on the last time the guide was refreshed.
-            var first = channel.Sources.Count > 0 ? _libraryManager.GetItemById(channel.Sources[0].ItemId) : null;
-            if (first?.PrimaryImagePath is { Length: > 0 } logo)
+            var logo = ChannelLogoPath(channel);
+            if (!string.IsNullOrEmpty(logo))
             {
                 info.ImagePath = logo;
                 info.HasImage = true;
@@ -226,6 +226,43 @@ public class LiteTvLiveService : ILiveTvService
 
     /// <inheritdoc />
     public Task CancelSeriesTimerAsync(string timerId, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <summary>
+    /// Gets the picture a channel wears in the guide's channel column: the first of its
+    /// sources that has one. A collection is asked what it holds when it has no artwork of
+    /// its own, which is the common case - a box set is a grouping, and the posters belong
+    /// to the films inside it. Without that the channel comes up as a blank rectangle even
+    /// though everything it airs has a cover.
+    /// </summary>
+    private string? ChannelLogoPath(Configuration.TvChannel channel)
+    {
+        foreach (var source in channel.Sources)
+        {
+            var item = _libraryManager.GetItemById(source.ItemId);
+            if (item is null)
+            {
+                continue;
+            }
+
+            if (item.PrimaryImagePath is { Length: > 0 } own)
+            {
+                return own;
+            }
+
+            if (item is Folder folder)
+            {
+                foreach (var child in folder.GetLinkedChildren())
+                {
+                    if (child.PrimaryImagePath is { Length: > 0 } childImage)
+                    {
+                        return childImage;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
 
     private BaseItem? Item(Dictionary<Guid, BaseItem?> cache, Guid id)
     {

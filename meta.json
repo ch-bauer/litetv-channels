@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fills in the guide artwork: programmes carry the cover of the film or series they air, and a channel wears the poster of what it was built on. Interstitials show the artwork of the programme they are trailing. Turning on Live TV publishing now refreshes Jellyfin's guide on save, instead of leaving the Live TV section empty until some scheduled run hours later.",
+  "changelog": "Artwork everywhere it was still missing: the channel row, the guide grid, the next-up card, the pause panel and the channel entries themselves. Only images that really exist are drawn, so nothing is a blank rectangle any more. Skipping forward no longer stops the programme and drops you back at the live position - a seek is reported as a stop, and that stop was being taken for the end of the programme. On the web, a channel switched on from the \"TV-Sender\" entry is now taken over by the channel UI, so it comes with the film's own metadata, the overlays and the pause panel instead of the bare channel item. New setting: hide Jellyfin's own \"Live TV\" and \"On Now\" rows on the web home screen.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.22.0",
+  "version": "1.0.23.0",
   "status": "Active",
   "autoUpdate": false
 }

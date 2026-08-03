@@ -253,7 +253,7 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
         var media = _libraryManager.GetItemById(current.ItemId) as MediaBrowser.Controller.Entities.Video;
         var sources = media?.GetMediaSources(true).ToList() ?? new List<MediaSourceInfo>();
 
-        return new ChannelItemInfo
+        var entry = new ChannelItemInfo
         {
             Id = NowPlayingId(channel.Id, current.ItemId),
             MediaSources = sources,
@@ -267,6 +267,37 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
             EndDate = now.EndUtc,
             IsLiveStream = false
         };
+
+        // The entry wears the artwork of what it is airing. Without it the channel is a blank
+        // rectangle wherever it is listed, and a client that draws its pause screen from the
+        // item it is playing has nothing but the schedule text to draw. The path, not a URL:
+        // the file is on this server, so no round trip and no token to authenticate it.
+        var artwork = ArtworkPath(media, current.SeriesId);
+        if (!string.IsNullOrEmpty(artwork))
+        {
+            entry.ImageUrl = artwork;
+        }
+
+        return entry;
+    }
+
+    /// <summary>
+    /// Gets the poster a programme is recognised by, falling back to its series where an
+    /// episode has no image of its own.
+    /// </summary>
+    private string? ArtworkPath(MediaBrowser.Controller.Entities.BaseItem? item, Guid? seriesId)
+    {
+        if (item?.PrimaryImagePath is { Length: > 0 } own)
+        {
+            return own;
+        }
+
+        if (seriesId is { } id && id != Guid.Empty)
+        {
+            return _libraryManager.GetItemById(id)?.PrimaryImagePath;
+        }
+
+        return null;
     }
 
     /// <summary>
