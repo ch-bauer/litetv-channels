@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.20.0",
+        "changelog": "Fixes a channel built from series showing nothing but \"Sendepause\": episodes filed under season 0 were dropped, and a library where that is where the episodes sit left the channel with nothing to play. Specials now air where their metadata says they belong - between the episodes they were made for - instead of being skipped. Scheduling grew up: program blocks give a part of the week its own lineup and its own weekdays, programs can start on a fixed grid so a block can promise the film at 20:15, a queue can be shuffled once and for good, and the time a slot leaves over is filled with trailers for what is coming up. The guide is now a real time grid, and the channels can be published to Jellyfin's own Live TV section so native clients get a schedule too.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.20.0/litetv-channels_1.0.20.0.zip",
+        "checksum": "e3d767ab28ecf5c22e0e797063fe85d9",
+        "timestamp": "2026-08-03T00:00:00Z"
+      },
+      {
         "version": "1.0.19.0",
         "changelog": "Fixes published channels flashing between the player and the menu without ever playing, which the previous release caused: the follow-up program was handed to the client as a queued item, but a client that starts it immediately instead of queuing it turns that into an endless loop. Channels no longer do this. A channel is also a single entry again rather than a folder of separate films to start - it switches on and joins what is on air, and the schedule is written in its description where it can be read in order and not played by accident.",
         "targetAbi": "10.11.0.0",
