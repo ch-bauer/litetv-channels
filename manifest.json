@@ -13,7 +13,7 @@
         "changelog": "Fixes the artwork added in 1.0.23.0 not appearing in the playback overlays: the pause panel's and next-up card's posters were loaded lazily, and an image in an overlay that has not been laid out yet has no height - so the browser never got round to loading it and the picture never arrived.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.24.0/litetv-channels_1.0.24.0.zip",
-        "checksum": "2568e2c487927c579016bc97a83fdba3",
+        "checksum": "f8078ebcb8bc09155616d2980f93a4cf",
         "timestamp": "2026-08-03T00:00:00Z"
       },
       {
