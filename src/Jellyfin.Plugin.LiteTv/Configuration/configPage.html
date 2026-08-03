@@ -58,7 +58,9 @@
                     native clients get a proper grid without the injected UI. Switching a channel on
                     there starts the current program from its beginning rather than joining it live —
                     Live TV hands a client a stream, not a position in one. For joining live, use the
-                    "TV-Sender" entry above.
+                    "TV-Sender" entry above. Saving asks Jellyfin to refresh its guide, which is what
+                    fills the Live TV section; it can also be run by hand under Scheduled Tasks →
+                    Refresh Guide.
                 </div>
 
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
@@ -525,6 +527,26 @@
                 });
             }
 
+            // Jellyfin only asks a Live TV service for its channels when the guide is
+            // refreshed, so ticking the box on its own leaves the Live TV section empty
+            // until some scheduled run hours later - which reads as the setting doing
+            // nothing. Saving asks for that refresh, so the guide fills in straight away.
+            function refreshLiveTvGuide() {
+                if (!config.PublishAsLiveTv) {
+                    return;
+                }
+                ApiClient.getScheduledTasks().then(function (tasks) {
+                    var task = (tasks || []).filter(function (t) { return t.Key === 'RefreshGuide'; })[0];
+                    if (task) {
+                        ApiClient.startScheduledTask(task.Id).catch(function (err) {
+                            console.warn('liteTv: could not start the guide refresh', err);
+                        });
+                    }
+                }).catch(function (err) {
+                    console.warn('liteTv: could not look up the guide refresh task', err);
+                });
+            }
+
             function applyEditorToChannel() {
                 applyEditorToBlock();
                 var channel = currentChannel();
@@ -658,6 +680,7 @@
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
                         renderBlockSelect();
+                        refreshLiveTvGuide();
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
                     return false;

@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes channel settings appearing to do nothing: an edited channel went on airing its old schedule for several minutes, because the cached schedule was only dropped on a configuration-changed event that never arrives. Program blocks, play order and slot times now take effect the moment they are saved.",
+  "changelog": "Fills in the guide artwork: programmes carry the cover of the film or series they air, and a channel wears the poster of what it was built on. Interstitials show the artwork of the programme they are trailing. Turning on Live TV publishing now refreshes Jellyfin's guide on save, instead of leaving the Live TV section empty until some scheduled run hours later.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.21.0",
+  "version": "1.0.22.0",
   "status": "Active",
   "autoUpdate": false
 }

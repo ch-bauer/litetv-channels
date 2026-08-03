@@ -1,4 +1,6 @@
 using Jellyfin.Plugin.LiteTv.Core;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Model.Dto;
@@ -58,13 +60,26 @@ public class LiteTvLiveService : ILiveTvService
         var number = 1;
         foreach (var channel in ChannelGuide.Channels())
         {
-            channels.Add(new ChannelInfo
+            var info = new ChannelInfo
             {
                 Id = channel.Id.ToString("N"),
                 Name = channel.Name,
                 Number = number.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ChannelType = ChannelType.TV
-            });
+            };
+
+            // A channel needs a face in the guide's channel column. It is taken from what
+            // the channel was built on rather than from what is on air, because the server
+            // stores a channel's image once: one that followed the schedule would just be
+            // whichever programme happened to be on the last time the guide was refreshed.
+            var first = channel.Sources.Count > 0 ? _libraryManager.GetItemById(channel.Sources[0].ItemId) : null;
+            if (first?.PrimaryImagePath is { Length: > 0 } logo)
+            {
+                info.ImagePath = logo;
+                info.HasImage = true;
+            }
+
+            channels.Add(info);
             number++;
         }
 
@@ -85,6 +100,11 @@ public class LiteTvLiveService : ILiveTvService
         }
 
         var programs = new List<ProgramInfo>();
+
+        // One lookup per item, not per airing: a channel loops, so the same handful of
+        // films come round many times over the days of guide a client asks for.
+        var items = new Dictionary<Guid, BaseItem?>();
+
         foreach (var airing in _guide.Window(channel, startDateUtc, endDateUtc).Take(1024))
         {
             // A dark stretch is not a program. The guide is better off showing a hole than
@@ -95,7 +115,14 @@ public class LiteTvLiveService : ILiveTvService
             }
 
             var isInterstitial = airing.Kind == AiringKind.Interstitial;
-            programs.Add(new ProgramInfo
+
+            // An interstitial is a trailer for what is coming, so it wears that programme's
+            // artwork - which is also what it looks like on television.
+            var subject = airing.Entry ?? airing.NextProgram;
+            var item = subject is null ? null : Item(items, subject.ItemId);
+            var episode = item as Episode;
+
+            var program = new ProgramInfo
             {
                 // The start time makes the id: an entry stands for a point in the schedule,
                 // and the same program airing again later is a different entry.
@@ -104,7 +131,8 @@ public class LiteTvLiveService : ILiveTvService
                 Name = isInterstitial
                     ? "Werbepause" + (airing.NextProgram is null ? string.Empty : " – gleich: " + Title(airing.NextProgram))
                     : Title(airing.Entry!),
-                Overview = airing.BlockName,
+                Overview = item?.Overview,
+                ShortOverview = airing.BlockName,
                 StartDate = airing.StartUtc,
                 EndDate = airing.EndUtc,
                 EpisodeTitle = airing.Entry?.SeriesName is null ? null : airing.Entry.Name,
@@ -112,8 +140,27 @@ public class LiteTvLiveService : ILiveTvService
                 IsMovie = airing.Entry?.SeriesName is null && !isInterstitial,
                 IsNews = false,
                 IsKids = false,
-                IsSports = false
-            });
+                IsSports = false,
+                Genres = item?.Genres.ToList() ?? new List<string>(),
+                OfficialRating = item?.OfficialRating,
+                CommunityRating = item?.CommunityRating,
+                ProductionYear = item?.ProductionYear,
+                SeasonNumber = episode?.ParentIndexNumber,
+                EpisodeNumber = episode?.IndexNumber,
+                SeriesId = airing.Entry?.SeriesId?.ToString("N"),
+                OriginalAirDate = item?.PremiereDate
+            };
+
+            // The path, not a URL: the file is on this server, so the guide can read the
+            // artwork straight off disk without a round trip or a token to authenticate it.
+            var imagePath = ImagePathFor(item, items);
+            if (!string.IsNullOrEmpty(imagePath))
+            {
+                program.ImagePath = imagePath;
+                program.HasImage = true;
+            }
+
+            programs.Add(program);
         }
 
         return Task.FromResult<IEnumerable<ProgramInfo>>(programs);
@@ -179,6 +226,43 @@ public class LiteTvLiveService : ILiveTvService
 
     /// <inheritdoc />
     public Task CancelSeriesTimerAsync(string timerId, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private BaseItem? Item(Dictionary<Guid, BaseItem?> cache, Guid id)
+    {
+        if (!cache.TryGetValue(id, out var item))
+        {
+            item = _libraryManager.GetItemById(id);
+            cache[id] = item;
+        }
+
+        return item;
+    }
+
+    /// <summary>
+    /// Gets the artwork for a programme. An episode usually has a thumbnail of its own, but
+    /// a guide full of stills from single episodes reads as noise; where an episode has no
+    /// image the series poster is what a viewer recognises the programme by.
+    /// </summary>
+    private string? ImagePathFor(BaseItem? item, Dictionary<Guid, BaseItem?> cache)
+    {
+        if (item is null)
+        {
+            return null;
+        }
+
+        var path = item.PrimaryImagePath;
+        if (!string.IsNullOrEmpty(path))
+        {
+            return path;
+        }
+
+        if (item is Episode episode && episode.SeriesId != Guid.Empty)
+        {
+            return Item(cache, episode.SeriesId)?.PrimaryImagePath;
+        }
+
+        return null;
+    }
 
     private static string Title(ScheduledEntry entry)
         => entry.SeriesName is null ? entry.Name : entry.SeriesName + ": " + entry.Name;
