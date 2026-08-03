@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes a channel built from series showing nothing but \"Sendepause\": episodes filed under season 0 were dropped, and a library where that is where the episodes sit left the channel with nothing to play. Specials now air where their metadata says they belong - between the episodes they were made for - instead of being skipped. Scheduling grew up: program blocks give a part of the week its own lineup and its own weekdays, programs can start on a fixed grid so a block can promise the film at 20:15, a queue can be shuffled once and for good, and the time a slot leaves over is filled with trailers for what is coming up. The guide is now a real time grid, and the channels can be published to Jellyfin's own Live TV section so native clients get a schedule too.",
+  "changelog": "Fixes channel settings appearing to do nothing: an edited channel went on airing its old schedule for several minutes, because the cached schedule was only dropped on a configuration-changed event that never arrives. Program blocks, play order and slot times now take effect the moment they are saved.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.20.0",
+  "version": "1.0.21.0",
   "status": "Active",
   "autoUpdate": false
 }

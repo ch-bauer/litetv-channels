@@ -22,8 +22,8 @@ public class ChannelPlaylistBuilder
 
     private readonly ILibraryManager _libraryManager;
     private readonly ILogger<ChannelPlaylistBuilder> _logger;
-    private readonly ConcurrentDictionary<Guid, (DateTime BuiltUtc, IReadOnlyList<ScheduledEntry> Entries)> _cache = new();
-    private readonly ConcurrentDictionary<Guid, (DateTime BuiltUtc, ChannelSchedule Schedule)> _schedules = new();
+    private readonly ConcurrentDictionary<Guid, (DateTime BuiltUtc, string Fingerprint, IReadOnlyList<ScheduledEntry> Entries)> _cache = new();
+    private readonly ConcurrentDictionary<Guid, (DateTime BuiltUtc, string Fingerprint, ChannelSchedule Schedule)> _schedules = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelPlaylistBuilder"/> class.
@@ -49,13 +49,16 @@ public class ChannelPlaylistBuilder
     /// <returns>The ordered playable entries; may be empty.</returns>
     public IReadOnlyList<ScheduledEntry> GetEntries(TvChannel channel)
     {
-        if (_cache.TryGetValue(channel.Id, out var cached) && DateTime.UtcNow - cached.BuiltUtc < CacheTtl)
+        var fingerprint = Fingerprint(channel);
+        if (_cache.TryGetValue(channel.Id, out var cached)
+            && string.Equals(cached.Fingerprint, fingerprint, StringComparison.Ordinal)
+            && DateTime.UtcNow - cached.BuiltUtc < CacheTtl)
         {
             return cached.Entries;
         }
 
         var entries = Build(channel);
-        _cache[channel.Id] = (DateTime.UtcNow, entries);
+        _cache[channel.Id] = (DateTime.UtcNow, fingerprint, entries);
         return entries;
     }
 
@@ -67,14 +70,63 @@ public class ChannelPlaylistBuilder
     /// <returns>The schedule.</returns>
     public ChannelSchedule GetSchedule(TvChannel channel)
     {
-        if (_schedules.TryGetValue(channel.Id, out var cached) && DateTime.UtcNow - cached.BuiltUtc < CacheTtl)
+        var fingerprint = Fingerprint(channel);
+        if (_schedules.TryGetValue(channel.Id, out var cached)
+            && string.Equals(cached.Fingerprint, fingerprint, StringComparison.Ordinal)
+            && DateTime.UtcNow - cached.BuiltUtc < CacheTtl)
         {
             return cached.Schedule;
         }
 
         var schedule = BuildSchedule(channel);
-        _schedules[channel.Id] = (DateTime.UtcNow, schedule);
+        _schedules[channel.Id] = (DateTime.UtcNow, fingerprint, schedule);
         return schedule;
+    }
+
+    /// <summary>
+    /// Everything about a channel that decides what it airs, as one string. A cached
+    /// schedule is only reused while this still matches, which is what makes an edit take
+    /// effect the moment it is saved.
+    /// <para>
+    /// There is an event for configuration changes and this used to rely on it. It does not
+    /// arrive - a channel edited in the dashboard went on airing the old schedule until the
+    /// cache aged out minutes later, which reads as the setting having been ignored. Asking
+    /// the configuration itself whether it changed cannot miss, and costs a string compare.
+    /// </para>
+    /// </summary>
+    /// <param name="channel">The channel definition.</param>
+    /// <returns>The fingerprint.</returns>
+    internal static string Fingerprint(TvChannel channel)
+    {
+        var text = new System.Text.StringBuilder();
+        text.Append(channel.AnchorUtc.Ticks).Append('|')
+            .Append(channel.EpisodesPerBlock).Append('|')
+            .Append((int)channel.Order).Append('|')
+            .Append(channel.SlotMinutes).Append('|')
+            .Append(channel.TrailersInGaps).Append('|');
+        AppendSources(text, channel.Sources);
+
+        foreach (var block in channel.Blocks)
+        {
+            text.Append("#").Append(block.Name).Append(',')
+                .Append(block.Enabled).Append(',')
+                .Append(block.StartMinutes).Append(',')
+                .Append(block.DurationMinutes).Append(',')
+                .Append(string.Join('+', block.Days)).Append(',')
+                .Append(block.EpisodesPerBlock).Append(',')
+                .Append((int)block.Order).Append(':');
+            AppendSources(text, block.Sources);
+        }
+
+        return text.ToString();
+    }
+
+    private static void AppendSources(System.Text.StringBuilder text, IReadOnlyList<ChannelSource> sources)
+    {
+        foreach (var source in sources)
+        {
+            text.Append(source.ItemId.ToString("N")).Append('-').Append((int)source.Type).Append(';');
+        }
     }
 
     /// <summary>
