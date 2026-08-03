@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes the artwork added in 1.0.23.0 not appearing in the playback overlays: the pause panel's and next-up card's posters were loaded lazily, and an image in an overlay that has not been laid out yet has no height - so the browser never got round to loading it and the picture never arrived.",
+  "changelog": "Programme artwork now arrives in Jellyfin's own Live TV guide. The server records a programme's image from its path alone, leaving the modification date and the pixel dimensions blank, and each omission breaks the picture in its own way: with no dimensions every request is answered with the full-size original instead of a thumbnail, and the blank date reaches the browser as a date of year one, on the strength of which the server answers \"not modified\" with an empty body - so the card stays empty waiting for a cached copy it was never given. Both fields are now filled in from the artwork itself, after every guide refresh and once at startup.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.24.0",
+  "timestamp": "2026-08-03T00:00:00.000Z",
+  "version": "1.0.25.0",
   "status": "Active",
   "autoUpdate": false
 }

@@ -42,8 +42,15 @@ public class LiteTvLiveService : ILiveTvService
         _logger = logger;
     }
 
+    /// <summary>
+    /// The name the server files this plugin's channels and programmes under. Stored on every
+    /// channel it creates, which is what lets <see cref="ProgramImageRepair"/> tell them apart
+    /// from another Live TV provider's.
+    /// </summary>
+    public const string ServiceName = "LiteTV";
+
     /// <inheritdoc />
-    public string Name => "LiteTV";
+    public string Name => ServiceName;
 
     /// <inheritdoc />
     public string HomePageUrl => "https://github.com/ch-bauer/jellyfin-plugin-litetv";
