@@ -24,22 +24,22 @@ namespace Jellyfin.Plugin.LiteTv.Channels;
 public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasCacheKey
 {
     private readonly ILibraryManager _libraryManager;
-    private readonly ChannelPlaylistBuilder _playlistBuilder;
+    private readonly ChannelGuide _guide;
     private readonly ILogger<LiteTvChannelProvider> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvChannelProvider"/> class.
     /// </summary>
     /// <param name="libraryManager">The library manager.</param>
-    /// <param name="playlistBuilder">The channel playlist builder.</param>
+    /// <param name="guide">The channel guide.</param>
     /// <param name="logger">The logger.</param>
     public LiteTvChannelProvider(
         ILibraryManager libraryManager,
-        ChannelPlaylistBuilder playlistBuilder,
+        ChannelGuide guide,
         ILogger<LiteTvChannelProvider> logger)
     {
         _libraryManager = libraryManager;
-        _playlistBuilder = playlistBuilder;
+        _guide = guide;
         _logger = logger;
     }
 
@@ -91,8 +91,8 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
         var parts = new List<string>();
         foreach (var channel in EnabledChannels())
         {
-            var now = Resolve(channel);
-            parts.Add(now is null ? channel.Id + ":-" : channel.Id + ":" + now.Current.ItemId);
+            var (now, _) = Resolve(channel, 0);
+            parts.Add(now?.Entry is null ? channel.Id + ":-" : channel.Id + ":" + now.Entry.ItemId);
         }
 
         return string.Join('|', parts);
@@ -212,16 +212,21 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     /// </summary>
     private const int LineupLength = 9;
 
-    private ScheduleNow? Resolve(TvChannel channel, int upcomingCount = 1)
+    /// <summary>
+    /// Gets what the channel is airing and what follows, as the entry needs both: one to
+    /// play and the other to describe.
+    /// </summary>
+    private (Airing? Now, IReadOnlyList<Airing> Upcoming) Resolve(TvChannel channel, int upcomingCount = 1)
     {
-        var entries = _playlistBuilder.GetEntries(channel);
+        var at = DateTime.UtcNow;
+        var window = _guide.Window(channel, at, at.AddHours(12)).Take(256).ToList();
+        var now = window.FirstOrDefault();
+        var upcoming = window.Skip(1)
+            .Where(a => a.Kind == AiringKind.Program)
+            .Take(Math.Max(0, upcomingCount))
+            .ToList();
 
-        // A channel loops, so asking for more upcoming entries than it has would list the
-        // same programs again - and with them the same ids.
-        var playable = entries.Count(e => e.RuntimeTicks > 0);
-        upcomingCount = Math.Max(0, Math.Min(upcomingCount, playable - 1));
-
-        return ScheduleResolver.Resolve(entries, channel.AnchorUtc, DateTime.UtcNow, upcomingCount);
+        return (now, upcoming);
     }
 
     /// <summary>
@@ -234,13 +239,13 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     /// </summary>
     private ChannelItemInfo? ChannelEntry(TvChannel channel)
     {
-        var now = Resolve(channel, LineupLength);
-        if (now is null)
+        var (now, upcoming) = Resolve(channel, LineupLength);
+        if (now?.Entry is null)
         {
             return null;
         }
 
-        var current = now.Current;
+        var current = now.Entry;
 
         // Carry the media on the entry itself, not only through the callback. A client
         // reads container and stream details off the item it is about to play, and an entry
@@ -253,13 +258,13 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
             Id = NowPlayingId(channel.Id, current.ItemId),
             MediaSources = sources,
             Name = channel.Name,
-            Overview = Schedule(now),
+            Overview = Schedule(now, upcoming),
             Type = ChannelItemType.Media,
             ContentType = ChannelMediaContentType.Movie,
             MediaType = ChannelMediaType.Video,
             RunTimeTicks = current.RuntimeTicks,
-            StartDate = now.CurrentStartedUtc,
-            EndDate = now.CurrentStartedUtc + TimeSpan.FromTicks(current.RuntimeTicks),
+            StartDate = now.StartUtc,
+            EndDate = now.EndUtc,
             IsLiveStream = false
         };
     }
@@ -267,18 +272,24 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     /// <summary>
     /// Writes out what is on and what follows, as the entry's description.
     /// </summary>
-    private static string Schedule(ScheduleNow now)
+    private static string Schedule(Airing now, IReadOnlyList<Airing> upcoming)
     {
-        var lines = new List<string>
+        var lines = new List<string>();
+        if (!string.IsNullOrEmpty(now.BlockName))
         {
-            "Jetzt: " + Title(now.Current),
-            string.Empty,
-            "Danach:"
-        };
+            lines.Add(now.BlockName);
+            lines.Add(string.Empty);
+        }
 
-        foreach (var (entry, startUtc) in now.Upcoming)
+        lines.Add(now.Kind == AiringKind.Interstitial
+            ? "Werbepause bis " + Clock(now.EndUtc)
+            : "Jetzt: " + Title(now.Entry!));
+        lines.Add(string.Empty);
+        lines.Add("Danach:");
+
+        foreach (var airing in upcoming)
         {
-            lines.Add(Clock(startUtc) + "  " + Title(entry));
+            lines.Add(Clock(airing.StartUtc) + "  " + Title(airing.Entry!));
         }
 
         return string.Join('\n', lines);

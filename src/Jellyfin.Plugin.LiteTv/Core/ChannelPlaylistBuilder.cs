@@ -5,14 +5,16 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.LiteTv.Core;
 
 /// <summary>
 /// Expands a channel's sources (movies, series, collections) into the flat ordered
-/// queue the <see cref="ScheduleResolver"/> operates on. Results are cached briefly
-/// so EPG polling stays cheap; deleted items and items without a runtime are skipped.
+/// queues its schedule is built from, and assembles the schedule itself. Results are
+/// cached briefly so EPG polling stays cheap; deleted items and items without a runtime
+/// are skipped.
 /// </summary>
 public class ChannelPlaylistBuilder
 {
@@ -21,6 +23,7 @@ public class ChannelPlaylistBuilder
     private readonly ILibraryManager _libraryManager;
     private readonly ILogger<ChannelPlaylistBuilder> _logger;
     private readonly ConcurrentDictionary<Guid, (DateTime BuiltUtc, IReadOnlyList<ScheduledEntry> Entries)> _cache = new();
+    private readonly ConcurrentDictionary<Guid, (DateTime BuiltUtc, ChannelSchedule Schedule)> _schedules = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelPlaylistBuilder"/> class.
@@ -57,25 +60,115 @@ public class ChannelPlaylistBuilder
     }
 
     /// <summary>
-    /// Drops all cached queues (called when the plugin configuration changes).
+    /// Gets the channel's whole schedule: the week it repeats, the lineup each program
+    /// block airs, and the channel's own lineup filling everything no block claims.
+    /// </summary>
+    /// <param name="channel">The channel definition.</param>
+    /// <returns>The schedule.</returns>
+    public ChannelSchedule GetSchedule(TvChannel channel)
+    {
+        if (_schedules.TryGetValue(channel.Id, out var cached) && DateTime.UtcNow - cached.BuiltUtc < CacheTtl)
+        {
+            return cached.Schedule;
+        }
+
+        var schedule = BuildSchedule(channel);
+        _schedules[channel.Id] = (DateTime.UtcNow, schedule);
+        return schedule;
+    }
+
+    /// <summary>
+    /// Gets the trailers held in the library for an item, as things a channel can actually
+    /// air. Only local ones: a trailer that lives on YouTube is not a file the server can
+    /// schedule, so those are left to the web client, which can embed them.
+    /// </summary>
+    /// <param name="itemId">The library item.</param>
+    /// <returns>The trailers, longest last; empty when the library has none.</returns>
+    public IReadOnlyList<ScheduledEntry> TrailersFor(Guid itemId)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        if (item is null)
+        {
+            return Array.Empty<ScheduledEntry>();
+        }
+
+        var trailers = new List<ScheduledEntry>();
+        foreach (var extra in item.GetExtras(new[] { ExtraType.Trailer, ExtraType.Clip }))
+        {
+            if ((extra.RunTimeTicks ?? 0) > 0)
+            {
+                trailers.Add(new ScheduledEntry(extra.Id, extra.Name ?? string.Empty, item.Name, item.Id, extra.RunTimeTicks!.Value));
+            }
+        }
+
+        return trailers;
+    }
+
+    /// <summary>
+    /// Drops all cached queues and schedules (called when the plugin configuration changes).
     /// </summary>
     public void Invalidate()
     {
         _cache.Clear();
+        _schedules.Clear();
+    }
+
+    private ChannelSchedule BuildSchedule(TvChannel channel)
+    {
+        var slotTicks = Math.Max(0, channel.SlotMinutes) * TimeSpan.TicksPerMinute;
+        var lineups = new Dictionary<int, Lineup>
+        {
+            [WeekTimeline.BaseLineup] = new Lineup(GetEntries(channel), slotTicks)
+        };
+        var names = new Dictionary<int, string>();
+        var windows = new List<BlockWindow>();
+
+        for (var i = 0; i < channel.Blocks.Count; i++)
+        {
+            var block = channel.Blocks[i];
+            if (!block.Enabled || block.DurationMinutes <= 0)
+            {
+                continue;
+            }
+
+            windows.Add(new BlockWindow(i, block.StartMinutes, block.DurationMinutes, block.Days));
+            names[i] = block.Name;
+            lineups[i] = new Lineup(
+                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i),
+                slotTicks);
+        }
+
+        return new ChannelSchedule(
+            WeekTimeline.Build(windows),
+            lineups,
+            names,
+            channel.AnchorUtc,
+            TimeZoneInfo.Local);
     }
 
     private IReadOnlyList<ScheduledEntry> Build(TvChannel channel)
     {
-        // Expand each source into its own ordered list ("stream"). With the default
-        // block size the streams are simply concatenated (each source played in full);
-        // with a positive block size they are interleaved round-robin (see below).
+        return Order(
+            Interleave(Expand(channel.Sources, channel.Name), channel.EpisodesPerBlock),
+            channel.Order,
+            channel.Id,
+            WeekTimeline.BaseLineup);
+    }
+
+    /// <summary>
+    /// Expands each source into its own ordered list ("stream"). With the default block
+    /// size the streams are simply concatenated (each source played in full); with a
+    /// positive block size they are interleaved round-robin.
+    /// </summary>
+    private List<List<ScheduledEntry>> Expand(IReadOnlyList<ChannelSource> sources, string channelName)
+    {
         var streams = new List<List<ScheduledEntry>>();
-        foreach (var source in channel.Sources)
+        foreach (var source in sources)
         {
             var item = _libraryManager.GetItemById(source.ItemId);
             if (item is null)
             {
-                _logger.LogWarning("LiteTV channel {Channel}: source item {ItemId} no longer exists; skipping.", channel.Name, source.ItemId);
+                _logger.LogWarning("LiteTV channel {Channel}: source item {ItemId} no longer exists; skipping.", channelName, source.ItemId);
                 continue;
             }
 
@@ -99,7 +192,61 @@ public class ChannelPlaylistBuilder
             }
         }
 
-        return Interleave(streams, channel.EpisodesPerBlock);
+        return streams;
+    }
+
+    /// <summary>
+    /// Applies the channel's play order. A shuffle is drawn from the channel and lineup
+    /// alone, never from the clock, so it is the same shuffle on every request, on every
+    /// client and after every restart. A schedule that re-draws is not a schedule: the
+    /// guide would promise one program and the player would air another.
+    /// </summary>
+    private static IReadOnlyList<ScheduledEntry> Order(
+        IReadOnlyList<ScheduledEntry> entries,
+        PlayOrder order,
+        Guid channelId,
+        int owner)
+    {
+        if (order != PlayOrder.Shuffle || entries.Count < 2)
+        {
+            return entries;
+        }
+
+        // Deliberately not System.Random: a seeded shuffle only holds still as long as the
+        // generator behind it does, and this one has to hold across runtime versions.
+        var state = Seed(channelId, owner);
+        var shuffled = entries.ToList();
+        for (var i = shuffled.Count - 1; i > 0; i--)
+        {
+            state = NextState(state);
+            var j = (int)(state % (ulong)(i + 1));
+            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
+        }
+
+        return shuffled;
+    }
+
+    private static ulong Seed(Guid channelId, int owner)
+    {
+        Span<byte> bytes = stackalloc byte[16];
+        channelId.TryWriteBytes(bytes);
+        ulong seed = 1469598103934665603;
+        foreach (var b in bytes)
+        {
+            seed = (seed ^ b) * 1099511628211;
+        }
+
+        return seed ^ ((ulong)owner + 0x9E3779B97F4A7C15);
+    }
+
+    /// <summary>xorshift64*, chosen because it is a handful of operations that will mean the
+    /// same thing in ten years.</summary>
+    private static ulong NextState(ulong state)
+    {
+        state ^= state >> 12;
+        state ^= state << 25;
+        state ^= state >> 27;
+        return state == 0 ? 0x9E3779B97F4A7C15 : state;
     }
 
     /// <summary>
@@ -144,16 +291,66 @@ public class ChannelPlaylistBuilder
             AncestorIds = new[] { series.Id },
             IncludeItemTypes = new[] { BaseItemKind.Episode },
             Recursive = true
-        })
-            .OfType<Episode>()
-            .Where(e => (e.ParentIndexNumber ?? 0) > 0) // skip specials in v1
-            .OrderBy(e => e.ParentIndexNumber ?? 0)
-            .ThenBy(e => e.IndexNumber ?? 0);
+        }).OfType<Episode>();
 
-        foreach (var episode in episodes)
+        foreach (var episode in InAiredOrder(episodes))
         {
             AddIfPlayable(entries, episode, series);
         }
+    }
+
+    /// <summary>
+    /// Puts a series' episodes into the order they air in: by season, then by episode
+    /// number, with specials where they belong rather than dropped or heaped at the end.
+    /// A special that carries the metadata for it - "airs before S2E1", "airs after season
+    /// 1" - is placed there, which is the whole point of that metadata: a recap or a
+    /// prologue only makes sense next to the episode it was made for. A special with
+    /// nothing to place it by airs after the numbered seasons.
+    /// Specials are never dropped. Dropping them took a channel off the air completely when
+    /// specials were all a series had - it expanded to nothing, and a channel with nothing
+    /// to play shows "Sendepause". Season 0 is also where the server files every episode it
+    /// cannot place, so "only specials" is a thing an ordinary library really does have.
+    /// The path breaks ties so the order is the same every time the queue is rebuilt; two
+    /// files claiming the same episode number would otherwise swap places between rebuilds
+    /// and move the whole schedule under the viewer.
+    /// </summary>
+    /// <param name="episodes">The episodes to order.</param>
+    /// <returns>The episodes in airing order.</returns>
+    internal static IEnumerable<Episode> InAiredOrder(IEnumerable<Episode> episodes)
+    {
+        return episodes
+            .OrderBy(e => AiringKey(e).Season)
+            .ThenBy(e => AiringKey(e).Episode)
+            .ThenBy(e => AiringKey(e).Rank)
+            .ThenBy(e => e.IndexNumber ?? 0)
+            .ThenBy(e => e.Path, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Where an episode sits in the airing order. The rank orders the three things that can
+    /// share one season/episode position: a special that airs before the episode, the
+    /// episode itself, and a special that airs after a whole season.
+    /// </summary>
+    private static (int Season, int Episode, int Rank) AiringKey(Episode episode)
+    {
+        var season = episode.ParentIndexNumber ?? 0;
+        if (season > 0)
+        {
+            return (season, episode.IndexNumber ?? 0, 1);
+        }
+
+        // A special: placed by what its metadata says it airs around.
+        if (episode.AirsBeforeSeasonNumber is { } beforeSeason)
+        {
+            return (beforeSeason, episode.AirsBeforeEpisodeNumber ?? 0, 0);
+        }
+
+        if (episode.AirsAfterSeasonNumber is { } afterSeason)
+        {
+            return (afterSeason, int.MaxValue, 2);
+        }
+
+        return (int.MaxValue, episode.IndexNumber ?? 0, 1);
     }
 
     private void AddCollection(List<ScheduledEntry> entries, BoxSet boxSet)

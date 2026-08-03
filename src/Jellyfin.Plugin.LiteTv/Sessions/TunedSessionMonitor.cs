@@ -49,7 +49,6 @@ public class TunedSessionMonitor : IHostedService
     private readonly WatchStateShield _shield;
     private readonly LiveOffsetResolver _liveOffset;
     private readonly IChannelManager _channelManager;
-    private readonly ChannelPlaylistBuilder _playlistBuilder;
     private readonly ILogger<TunedSessionMonitor> _logger;
 
     private readonly ConcurrentDictionary<string, TunedSession> _tuned = new(StringComparer.Ordinal);
@@ -64,7 +63,6 @@ public class TunedSessionMonitor : IHostedService
     /// <param name="shield">The watch-state shield.</param>
     /// <param name="liveOffset">Resolves published channel items and their live position.</param>
     /// <param name="channelManager">Used to build the entry for the program coming up.</param>
-    /// <param name="playlistBuilder">The channel playlist builder.</param>
     /// <param name="logger">The logger.</param>
     public TunedSessionMonitor(
         ISessionManager sessionManager,
@@ -73,7 +71,6 @@ public class TunedSessionMonitor : IHostedService
         WatchStateShield shield,
         LiveOffsetResolver liveOffset,
         IChannelManager channelManager,
-        ChannelPlaylistBuilder playlistBuilder,
         ILogger<TunedSessionMonitor> logger)
     {
         _sessionManager = sessionManager;
@@ -82,7 +79,6 @@ public class TunedSessionMonitor : IHostedService
         _shield = shield;
         _liveOffset = liveOffset;
         _channelManager = channelManager;
-        _playlistBuilder = playlistBuilder;
         _logger = logger;
     }
 
@@ -313,13 +309,14 @@ public class TunedSessionMonitor : IHostedService
             // Let the client finish tearing the finished program down first.
             await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
-            var now = _liveOffset.Resolve(channelId);
-            if (now is null)
+            var at = DateTime.UtcNow;
+            var now = _liveOffset.Resolve(channelId, at);
+            if (now?.Entry is null)
             {
-                return; // the channel has nothing left to air
+                return; // the channel has nothing to air at the moment
             }
 
-            var next = await FindEntryAsync(finished, channelId, now.Current.ItemId).ConfigureAwait(false);
+            var next = await FindEntryAsync(finished, channelId, now.Entry.ItemId).ConfigureAwait(false);
             if (next is null)
             {
                 _logger.LogWarning("LiteTV: could not find the follow-up entry for {Channel} to continue with.", channelId);
@@ -332,7 +329,7 @@ public class TunedSessionMonitor : IHostedService
                 new PlayRequest
                 {
                     ItemIds = new[] { next.Id },
-                    StartPositionTicks = now.OffsetTicks,
+                    StartPositionTicks = now.OffsetAt(at),
                     PlayCommand = PlayCommand.PlayNow
                 },
                 CancellationToken.None).ConfigureAwait(false);
@@ -374,30 +371,24 @@ public class TunedSessionMonitor : IHostedService
             // Give the client a moment to settle after the stop report.
             await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
-            var channel = Plugin.Instance?.Configuration.Channels
-                .FirstOrDefault(c => c.Id == channelId && c.Enabled);
-            if (channel is null)
-            {
-                return;
-            }
-
-            var now = ScheduleResolver.Resolve(_playlistBuilder.GetEntries(channel), channel.AnchorUtc, DateTime.UtcNow);
-            if (now is null)
+            var at = DateTime.UtcNow;
+            var now = _liveOffset.Resolve(channelId, at);
+            if (now?.Entry is null)
             {
                 return;
             }
 
             // Shield before the command goes out: the client can report playback the
             // moment it receives it.
-            Tune(sessionId, channelId, followSchedule: true, now.Current.ItemId);
+            Tune(sessionId, channelId, followSchedule: true, now.Entry.ItemId);
 
             await _sessionManager.SendPlayCommand(
                 sessionId,
                 sessionId,
                 new PlayRequest
                 {
-                    ItemIds = new[] { now.Current.ItemId },
-                    StartPositionTicks = now.OffsetTicks,
+                    ItemIds = new[] { now.Entry.ItemId },
+                    StartPositionTicks = now.OffsetAt(at),
                     PlayCommand = PlayCommand.PlayNow
                 },
                 CancellationToken.None).ConfigureAwait(false);

@@ -12,6 +12,7 @@
     var TUNE_OVERLAY_ID = 'liteTvTuneOverlay';
     var NEXT_OVERLAY_ID = 'liteTvNextOverlay';
     var PAUSE_PANEL_ID = 'liteTvPausePanel';
+    var INTERSTITIAL_ID = 'liteTvInterstitial';
     var TUNED_BODY_CLASS = 'liteTvTuned';
     var NEXT_OVERLAY_WINDOW_SECONDS = 45;
     // Programs play out in full, credits included. The hand-off still sits a second
@@ -33,6 +34,7 @@
     var skipInFlight = false;
     var homeRowObserver = null;
     var lastHomeRowGuide = null;
+    var interstitialTimer = null;
 
     function apiGet(path) {
         return window.ApiClient.fetch({ url: window.ApiClient.getUrl(path), type: 'GET', dataType: 'json' });
@@ -146,6 +148,42 @@
             '#' + GUIDE_ID + ' .liteTvDevices { margin-top: 0.6em; display: none; }' +
             '#' + GUIDE_ID + ' .liteTvDevices .liteTvPill { display: block; width: 100%; text-align: left; margin: 0.35em 0; }' +
 
+            /* --------------------------------------------------- guide grid ---- */
+            /* A time grid, the way a channel guide has always been drawn: one row per */
+            /* channel, time running left to right, every programme as wide as it is long. */
+            '#' + GUIDE_ID + ' .liteTvPanelWide { width: min(78em, 96vw); }' +
+            '#' + GUIDE_ID + ' .liteTvGuideBar { display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.9em; flex-wrap: wrap; }' +
+            '#' + GUIDE_ID + ' .liteTvGuideBar h2 { margin: 0; flex-grow: 1; }' +
+            '#' + GUIDE_ID + ' .liteTvGrid { overflow-x: auto; overflow-y: visible; scrollbar-width: thin; }' +
+            '#' + GUIDE_ID + ' .liteTvAxis { display: flex; position: sticky; top: 0; z-index: 3; background: rgba(24, 27, 33, 0.97); }' +
+            '#' + GUIDE_ID + ' .liteTvRow { display: flex; margin-top: 0.35em; }' +
+            '#' + GUIDE_ID + ' .liteTvRowName, #' + GUIDE_ID + ' .liteTvAxisSpacer {' +
+            '  position: sticky; left: 0; z-index: 2; flex: 0 0 9.5em; width: 9.5em;' +
+            '  background: rgba(24, 27, 33, 0.97); padding-right: 0.6em; box-sizing: border-box;' +
+            '}' +
+            '#' + GUIDE_ID + ' .liteTvRowName { display: flex; flex-direction: column; justify-content: center; gap: 0.3em; }' +
+            '#' + GUIDE_ID + ' .liteTvRowName .liteTvGuideName { font-size: 1em; cursor: pointer; }' +
+            '#' + GUIDE_ID + ' .liteTvRowName .liteTvPill { padding: 0.2em 0.7em; font-size: 0.75em; align-self: flex-start; }' +
+            '#' + GUIDE_ID + ' .liteTvTrack { position: relative; height: 3.4em; }' +
+            '#' + GUIDE_ID + ' .liteTvAxis .liteTvTrack { height: 1.8em; }' +
+            '#' + GUIDE_ID + ' .liteTvTick {' +
+            '  position: absolute; top: 0; bottom: 0; border-left: 1px solid rgba(255,255,255,0.12);' +
+            '  padding-left: 0.4em; font-size: 0.78em; opacity: 0.75; font-variant-numeric: tabular-nums;' +
+            '}' +
+            '#' + GUIDE_ID + ' .liteTvProg {' +
+            '  position: absolute; top: 0; bottom: 0; overflow: hidden;' +
+            '  border-radius: 0.4em; border: 1px solid rgba(255,255,255,0.12);' +
+            '  background: rgba(255,255,255,0.07); padding: 0.4em 0.6em; box-sizing: border-box;' +
+            '  font-size: 0.82em; line-height: 1.25; cursor: default;' +
+            '}' +
+            '#' + GUIDE_ID + ' .liteTvProgOn { background: rgba(0,164,220,0.28); border-color: rgba(77,208,255,0.55); cursor: pointer; }' +
+            '#' + GUIDE_ID + ' .liteTvProgOn:hover { background: rgba(0,164,220,0.42); }' +
+            '#' + GUIDE_ID + ' .liteTvProgFill { background: repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 0.5em, rgba(255,255,255,0.02) 0.5em 1em); opacity: 0.85; }' +
+            '#' + GUIDE_ID + ' .liteTvProgDark { background: rgba(255,255,255,0.02); opacity: 0.55; }' +
+            '#' + GUIDE_ID + ' .liteTvProgTitle { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
+            '#' + GUIDE_ID + ' .liteTvProgTime { opacity: 0.7; font-size: 0.9em; font-variant-numeric: tabular-nums; }' +
+            '#' + GUIDE_ID + ' .liteTvNowLine { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff4d4f; z-index: 1; pointer-events: none; }' +
+
             /* ---------------------------------------------- shared buttons ---- */
             '.liteTvPill {' +
             '  appearance: none; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 0.95em;' +
@@ -190,6 +228,19 @@
             '.liteTvCountdownBar { height: 0.2em; border-radius: 999px; background: rgba(255,255,255,0.16); margin-top: 1em; overflow: hidden; }' +
             '.liteTvCountdownBar > div { height: 100%; background: linear-gradient(90deg, #00a4dc, #4dd0ff); transition: width 1s linear; }' +
 
+            /* ------------------------------------------------- interstitial ---- */
+            '#' + INTERSTITIAL_ID + ' {' +
+            '  position: fixed; inset: 0; z-index: 1150; display: flex;' +
+            '  align-items: center; justify-content: center; background: #05070b;' +
+            '  opacity: 0; transition: opacity 0.35s ease; font-size: clamp(11px, 1.1vw, 17px); color: #fff;' +
+            '}' +
+            '#' + INTERSTITIAL_ID + '.liteTvVisible { opacity: 1; }' +
+            '#' + INTERSTITIAL_ID + ' .liteTvInterCard { width: min(64em, 92vw); text-align: left; }' +
+            '#' + INTERSTITIAL_ID + ' .liteTvInterVideo {' +
+            '  width: 100%; aspect-ratio: 16 / 9; border-radius: 0.7em; margin-bottom: 1.1em;' +
+            '  background: #000; box-shadow: 0 0.6em 2.2em rgba(0,0,0,0.6);' +
+            '}' +
+
             /* -------------------------------------------------- pause panel ---- */
             '#' + PAUSE_PANEL_ID + ' { pointer-events: auto; font-size: clamp(11px, 1.1vw, 17px); }' +
             '#' + PAUSE_PANEL_ID + '.liteTvPauseFloating { position: absolute; left: 4%; bottom: 14%; z-index: 1000; margin: 0; }' +
@@ -231,6 +282,17 @@
     function tuneIn(channelId) {
         closeGuide();
         return apiGet('LiteTv/Channels/' + channelId + '/Now?upcoming=1').then(function (now) {
+            // Nothing to play: either the slot is between programmes, or the channel is
+            // dark. The first is a gap to fill, the second is not something to sit in.
+            if (!now.Current) {
+                if (now.Kind === 'Interstitial') {
+                    showInterstitial(now, channelId);
+                } else {
+                    console.debug('liteTv: channel is off air');
+                }
+                return null;
+            }
+
             // Pass the channel id so playItem marks the session tuned and snapshots the
             // first item's watch state before playback starts.
             return playItem(now.Current.ItemId, now.OffsetTicks, channelId).then(function (sessionId) {
@@ -251,7 +313,96 @@
         });
     }
 
+    // ---------------------------------------------------------- interstitials
+
+    // A slot that leaves time over before the next programme is what a real channel fills
+    // with trailers. Trailers the library holds as files are scheduled by the server and
+    // simply play; the far more common kind is one the library only knows the address of,
+    // and those are embedded here, in the client, because nothing else can play them.
+    function youtubeId(url) {
+        var match = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/.exec(url || '');
+        return match ? match[1] : null;
+    }
+
+    function clearInterstitial() {
+        if (interstitialTimer) {
+            clearInterval(interstitialTimer);
+            interstitialTimer = null;
+        }
+        removeOverlay(INTERSTITIAL_ID);
+    }
+
+    /// Shows the gap: the trailer for what is about to start, and how long until it does.
+    /// When it does, the channel is joined - which is what the viewer asked for by tuning in.
+    function showInterstitial(now, channelId) {
+        clearInterstitial();
+        ensureStyle();
+
+        var endMs = new Date(now.EndUtc).getTime();
+        var overlay = document.createElement('div');
+        overlay.id = INTERSTITIAL_ID;
+
+        var card = document.createElement('div');
+        card.className = 'liteTvInterCard';
+        overlay.appendChild(card);
+
+        var trailer = (now.Trailers || [])[0];
+        var videoId = trailer ? youtubeId(trailer.Url) : null;
+        if (videoId) {
+            var frame = document.createElement('iframe');
+            frame.className = 'liteTvInterVideo';
+            frame.setAttribute('allow', 'autoplay; encrypted-media');
+            frame.setAttribute('allowfullscreen', '');
+            frame.setAttribute('frameborder', '0');
+            frame.src = 'https://www.youtube.com/embed/' + videoId
+                + '?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=0';
+            card.appendChild(frame);
+        }
+
+        var eyebrow = document.createElement('div');
+        eyebrow.className = 'liteTvEyebrow';
+        eyebrow.textContent = 'Werbepause';
+        card.appendChild(eyebrow);
+
+        var title = document.createElement('div');
+        title.className = 'liteTvNextName';
+        title.textContent = now.NextProgram
+            ? 'Gleich: ' + (now.NextProgram.SeriesName ? now.NextProgram.SeriesName + ': ' : '') + now.NextProgram.Name
+            : 'Gleich geht es weiter';
+        card.appendChild(title);
+
+        var countdown = document.createElement('div');
+        countdown.className = 'liteTvCountdownText';
+        card.appendChild(countdown);
+
+        var buttons = document.createElement('div');
+        buttons.className = 'liteTvNextButtons';
+        buttons.appendChild(makeButton('Sender verlassen', 'liteTvPill', function () {
+            clearInterstitial();
+            untune();
+        }));
+        card.appendChild(buttons);
+
+        function tick() {
+            var remaining = Math.max(0, Math.round((endMs - Date.now()) / 1000));
+            countdown.textContent = remaining > 0
+                ? 'Weiter in ' + Math.floor(remaining / 60) + ':' + ('0' + (remaining % 60)).slice(-2)
+                : 'Es geht los …';
+            if (remaining <= 0) {
+                clearInterstitial();
+                tuneIn(channelId);
+            }
+        }
+
+        tick();
+        interstitialTimer = setInterval(tick, 1000);
+        document.body.appendChild(overlay);
+        void overlay.offsetWidth;
+        overlay.classList.add('liteTvVisible');
+    }
+
     function untune() {
+        clearInterstitial();
         if (!tuned) {
             return;
         }
@@ -468,7 +619,7 @@
                 el.appendChild(document.createTextNode(text));
                 meta.appendChild(el);
             }
-            var current = now.Current.ItemId === tuned.currentItemId ? now.Current : null;
+            var current = now.Current && now.Current.ItemId === tuned.currentItemId ? now.Current : null;
             if (current) {
                 line('Jetzt', (current.SeriesName ? current.SeriesName + ': ' : '') + current.Name);
             }
@@ -600,7 +751,9 @@
     // lineup (the clock moved past it, or after a binge detour) do we rejoin the
     // live position.
     function resolveScheduleNext(now, referenceItemId) {
-        var lineup = [now.Current].concat(now.Upcoming || []);
+        // Current is missing while the channel is between programmes; the lineup is then
+        // simply what is still to come.
+        var lineup = (now.Current ? [now.Current] : []).concat(now.Upcoming || []);
         for (var i = 0; i < lineup.length; i++) {
             if (lineup[i].ItemId === referenceItemId && i + 1 < lineup.length) {
                 // Reference item has not fully aired yet per the clock, so the
@@ -608,7 +761,9 @@
                 return { program: lineup[i + 1], offsetTicks: 0, live: false };
             }
         }
-        return { program: now.Current, offsetTicks: now.OffsetTicks, live: true };
+        return now.Current
+            ? { program: now.Current, offsetTicks: now.OffsetTicks, live: true }
+            : { program: lineup[0] || null, offsetTicks: 0, live: false };
     }
 
     function prepareNext() {
@@ -787,8 +942,14 @@
         // live position.
         tuned.mode = 'schedule';
         var endedItemId = tuned.currentItemId;
-        apiGet('LiteTv/Channels/' + tuned.channelId + '/Now?upcoming=8').then(function (now) {
+        var channelId = tuned.channelId;
+        apiGet('LiteTv/Channels/' + channelId + '/Now?upcoming=8').then(function (now) {
             var next = resolveScheduleNext(now, endedItemId);
+            if (!next.program) {
+                // The channel is between programmes: fill the gap rather than stopping.
+                showInterstitial(now, channelId);
+                return null;
+            }
             tuned.currentItemId = next.program.ItemId;
             tuned.currentSeriesId = next.program.SeriesId || null;
             return playItem(next.program.ItemId, next.offsetTicks);
@@ -838,6 +999,12 @@
         now.className = 'liteTvNow';
         if (channel.Now) {
             now.textContent = (channel.Now.SeriesName ? channel.Now.SeriesName + ': ' : '') + channel.Now.Name;
+        } else if (channel.Kind === 'Interstitial') {
+            // Between programmes is not off air, and saying so is the difference between a
+            // channel that looks broken and one that looks like a channel.
+            now.textContent = channel.Next
+                ? 'Werbung – gleich: ' + (channel.Next.SeriesName ? channel.Next.SeriesName + ': ' : '') + channel.Next.Name
+                : 'Werbepause';
         } else {
             now.textContent = 'Sendepause';
         }
@@ -945,117 +1112,242 @@
         removeOverlay(GUIDE_ID);
     }
 
+    // The guide is a time grid: one row per channel, time running left to right, every
+    // programme drawn as wide as it is long. That is what makes a schedule readable at a
+    // glance - which channel is between programmes, what overlaps what, how long there is
+    // left of the thing on now. A list of "now" and "next" per channel cannot show any of it.
+    var GUIDE_HOURS = 4;
+    var GUIDE_HOUR_WIDTH = 15; // em per hour
+    var guideStartMs = null;
+
+    function guideWindowStart() {
+        if (guideStartMs !== null) {
+            return guideStartMs;
+        }
+        // Start the window on the half hour before now, so the grid lines land on the
+        // times a viewer thinks in rather than on whatever minute it happens to be.
+        var now = new Date();
+        now.setSeconds(0, 0);
+        now.setMinutes(now.getMinutes() < 30 ? 0 : 30);
+        return now.getTime();
+    }
+
+    function deviceButton(channel, devices) {
+        return makeButton('Auf Gerät…', 'liteTvPill', function () {
+            if (devices.style.display === 'block') {
+                devices.style.display = 'none';
+                return;
+            }
+            devices.style.display = 'block';
+            devices.innerHTML = '';
+            window.ApiClient.getSessions().then(function (sessions) {
+                var ownDeviceId = window.ApiClient.deviceId();
+                var targets = (sessions || []).filter(function (s) {
+                    return s.DeviceId !== ownDeviceId && s.SupportsRemoteControl !== false;
+                });
+                if (!targets.length) {
+                    var none = document.createElement('div');
+                    none.textContent = 'Keine anderen aktiven Geräte gefunden.';
+                    devices.appendChild(none);
+                    return;
+                }
+                targets.forEach(function (s) {
+                    devices.appendChild(makeButton(
+                        (s.DeviceName || s.Client || 'Gerät') + (s.UserName ? ' – ' + s.UserName : ''),
+                        'liteTvPill',
+                        function () {
+                            apiPost('LiteTv/Channels/' + channel.Id + '/PlayOn/' + encodeURIComponent(s.Id)).then(function () {
+                                closeGuide();
+                            }).catch(function (err) {
+                                console.warn('liteTv: play on device failed', err);
+                            });
+                        }));
+                });
+            });
+        });
+    }
+
+    function buildProgramBlock(program, startMs, spanMs, nowMs) {
+        var from = new Date(program.StartUtc).getTime();
+        var to = new Date(program.EndUtc).getTime();
+        var left = ((from - startMs) / spanMs) * 100;
+        var width = ((to - from) / spanMs) * 100;
+
+        // Clip to the window: the first and last programmes of a row usually hang over it.
+        if (left < 0) {
+            width += left;
+            left = 0;
+        }
+        width = Math.min(width, 100 - left);
+        if (width <= 0) {
+            return null;
+        }
+
+        var el = document.createElement('div');
+        el.className = 'liteTvProg'
+            + (program.Kind === 'Interstitial' ? ' liteTvProgFill' : '')
+            + (program.Kind === 'OffAir' ? ' liteTvProgDark' : '')
+            + (from <= nowMs && nowMs < to && program.Kind === 'Program' ? ' liteTvProgOn' : '');
+        el.style.left = left + '%';
+        el.style.width = width + '%';
+
+        var title = document.createElement('div');
+        title.className = 'liteTvProgTitle';
+        title.textContent = program.Kind === 'Interstitial' && program.NextProgramName
+            ? 'Werbung – gleich: ' + program.NextProgramName
+            : (program.SeriesName ? program.SeriesName + ': ' : '') + program.Name;
+        el.appendChild(title);
+
+        var time = document.createElement('div');
+        time.className = 'liteTvProgTime';
+        time.textContent = formatTime(program.StartUtc) + '–' + formatTime(program.EndUtc)
+            + (program.BlockName ? ' · ' + program.BlockName : '');
+        el.appendChild(time);
+
+        el.title = title.textContent + '\n' + time.textContent;
+        return el;
+    }
+
+    function renderGuideGrid(host, guide) {
+        host.innerHTML = '';
+        var startMs = new Date(guide.StartUtc).getTime();
+        var endMs = new Date(guide.EndUtc).getTime();
+        var spanMs = endMs - startMs;
+        var nowMs = new Date(guide.ServerTimeUtc).getTime();
+        var trackWidth = ((spanMs / 3600000) * GUIDE_HOUR_WIDTH) + 'em';
+
+        function track() {
+            var el = document.createElement('div');
+            el.className = 'liteTvTrack';
+            el.style.flex = '0 0 ' + trackWidth;
+            el.style.width = trackWidth;
+            return el;
+        }
+
+        function nowLine() {
+            if (nowMs < startMs || nowMs > endMs) {
+                return null;
+            }
+            var line = document.createElement('div');
+            line.className = 'liteTvNowLine';
+            line.style.left = (((nowMs - startMs) / spanMs) * 100) + '%';
+            return line;
+        }
+
+        var axis = document.createElement('div');
+        axis.className = 'liteTvAxis';
+        var spacer = document.createElement('div');
+        spacer.className = 'liteTvAxisSpacer';
+        axis.appendChild(spacer);
+        var axisTrack = track();
+        for (var tick = startMs; tick < endMs; tick += 1800000) {
+            var label = document.createElement('div');
+            label.className = 'liteTvTick';
+            label.style.left = (((tick - startMs) / spanMs) * 100) + '%';
+            label.textContent = formatTime(new Date(tick).toISOString());
+            axisTrack.appendChild(label);
+        }
+        axis.appendChild(axisTrack);
+        host.appendChild(axis);
+
+        guide.Channels.forEach(function (channel) {
+            var row = document.createElement('div');
+            row.className = 'liteTvRow';
+
+            var nameCell = document.createElement('div');
+            nameCell.className = 'liteTvRowName';
+            var name = document.createElement('div');
+            name.className = 'liteTvGuideName';
+            name.textContent = channel.Name;
+            name.addEventListener('click', function () { tuneIn(channel.Id); });
+            nameCell.appendChild(name);
+
+            var devices = document.createElement('div');
+            devices.className = 'liteTvDevices';
+            nameCell.appendChild(deviceButton(channel, devices));
+            row.appendChild(nameCell);
+
+            var rowTrack = track();
+            channel.Programs.forEach(function (program) {
+                var block = buildProgramBlock(program, startMs, spanMs, nowMs);
+                if (!block) {
+                    return;
+                }
+                if (block.className.indexOf('liteTvProgOn') >= 0) {
+                    block.addEventListener('click', function () { tuneIn(channel.Id); });
+                }
+                rowTrack.appendChild(block);
+            });
+            var line = nowLine();
+            if (line) {
+                rowTrack.appendChild(line);
+            }
+            row.appendChild(rowTrack);
+            host.appendChild(row);
+            host.appendChild(devices);
+        });
+    }
+
+    function loadGuide(host) {
+        var start = guideWindowStart();
+        return apiGet('LiteTv/Guide?hours=' + GUIDE_HOURS + '&from=' + encodeURIComponent(new Date(start).toISOString()))
+            .then(function (guide) {
+                if (!guide.Channels.length) {
+                    host.innerHTML = '';
+                    var empty = document.createElement('div');
+                    empty.textContent = 'Keine Sender konfiguriert. Sender werden im Dashboard unter Plugins → LiteTV Channels angelegt.';
+                    host.appendChild(empty);
+                    return;
+                }
+                renderGuideGrid(host, guide);
+            });
+    }
+
     function openGuide() {
         closeGuide();
         ensureStyle();
-        apiGet('LiteTv/Channels').then(function (guide) {
-            var backdrop = document.createElement('div');
-            backdrop.id = GUIDE_ID;
-            backdrop.addEventListener('click', function (e) {
-                if (e.target === backdrop) {
-                    closeGuide();
-                }
-            });
+        guideStartMs = null;
 
-            var panel = document.createElement('div');
-            panel.className = 'liteTvPanel';
-            backdrop.appendChild(panel);
-
-            var heading = document.createElement('h2');
-            heading.textContent = '📺 TV-Sender';
-            panel.appendChild(heading);
-
-            if (!guide.Channels.length) {
-                var empty = document.createElement('div');
-                empty.textContent = 'Keine Sender konfiguriert. Sender werden im Dashboard unter Plugins → LiteTV Channels angelegt.';
-                panel.appendChild(empty);
+        var backdrop = document.createElement('div');
+        backdrop.id = GUIDE_ID;
+        backdrop.addEventListener('click', function (e) {
+            if (e.target === backdrop) {
+                closeGuide();
             }
+        });
 
-            guide.Channels.forEach(function (channel) {
-                var row = document.createElement('div');
-                row.className = 'liteTvGuideChannel';
+        var panel = document.createElement('div');
+        panel.className = 'liteTvPanel liteTvPanelWide';
+        backdrop.appendChild(panel);
 
-                var head = document.createElement('div');
-                head.className = 'liteTvGuideHead';
-                var name = document.createElement('div');
-                name.className = 'liteTvGuideName';
-                name.textContent = channel.Name;
-                head.appendChild(name);
+        var bar = document.createElement('div');
+        bar.className = 'liteTvGuideBar';
+        var heading = document.createElement('h2');
+        heading.textContent = '📺 TV-Sender';
+        bar.appendChild(heading);
+        panel.appendChild(bar);
 
-                var actions = document.createElement('div');
-                actions.className = 'liteTvGuideActions';
+        var grid = document.createElement('div');
+        grid.className = 'liteTvGrid';
+        panel.appendChild(grid);
 
-                var devices = document.createElement('div');
-                devices.className = 'liteTvDevices';
+        function shift(hours) {
+            guideStartMs = (guideStartMs === null ? guideWindowStart() : guideStartMs) + (hours * 3600000);
+            loadGuide(grid).catch(function (err) { console.debug('liteTv: guide not available', err); });
+        }
 
-                actions.appendChild(makeButton('▶ Ansehen', 'liteTvPill liteTvPillPrimary', function () {
-                    tuneIn(channel.Id);
-                }));
+        bar.appendChild(makeButton('◀', 'liteTvPill', function () { shift(-2); }));
+        bar.appendChild(makeButton('Jetzt', 'liteTvPill', function () {
+            guideStartMs = null;
+            loadGuide(grid).catch(function (err) { console.debug('liteTv: guide not available', err); });
+        }));
+        bar.appendChild(makeButton('▶', 'liteTvPill', function () { shift(2); }));
 
-                actions.appendChild(makeButton('Auf Gerät…', 'liteTvPill', function () {
-                    if (devices.style.display === 'block') {
-                        devices.style.display = 'none';
-                        return;
-                    }
-                    devices.style.display = 'block';
-                    devices.innerHTML = '';
-                    window.ApiClient.getSessions().then(function (sessions) {
-                        var ownDeviceId = window.ApiClient.deviceId();
-                        var targets = (sessions || []).filter(function (s) {
-                            return s.DeviceId !== ownDeviceId
-                                && s.SupportsRemoteControl !== false;
-                        });
-                        if (!targets.length) {
-                            var none = document.createElement('div');
-                            none.textContent = 'Keine anderen aktiven Geräte gefunden.';
-                            devices.appendChild(none);
-                            return;
-                        }
-                        targets.forEach(function (s) {
-                            devices.appendChild(makeButton(
-                                (s.DeviceName || s.Client || 'Gerät') + (s.UserName ? ' – ' + s.UserName : ''),
-                                'liteTvPill',
-                                function () {
-                                    apiPost('LiteTv/Channels/' + channel.Id + '/PlayOn/' + encodeURIComponent(s.Id)).then(function () {
-                                        closeGuide();
-                                    }).catch(function (err) {
-                                        console.warn('liteTv: play on device failed', err);
-                                    });
-                                }));
-                        });
-                    });
-                }));
+        document.body.appendChild(backdrop);
+        void backdrop.offsetWidth;
+        backdrop.classList.add('liteTvVisible');
 
-                head.appendChild(actions);
-                row.appendChild(head);
-
-                var epg = document.createElement('div');
-                epg.className = 'liteTvEpg';
-                function epgLine(prefix, program) {
-                    var line = document.createElement('div');
-                    var time = document.createElement('span');
-                    time.className = 'liteTvEpgTime';
-                    time.textContent = prefix;
-                    line.appendChild(time);
-                    line.appendChild(document.createTextNode(
-                        (program.SeriesName ? program.SeriesName + ': ' : '') + program.Name));
-                    return line;
-                }
-                if (channel.Now) {
-                    epg.appendChild(epgLine('Jetzt', channel.Now));
-                }
-                if (channel.Next) {
-                    epg.appendChild(epgLine(formatTime(channel.Next.StartUtc), channel.Next));
-                }
-                row.appendChild(epg);
-                row.appendChild(devices);
-                panel.appendChild(row);
-            });
-
-            document.body.appendChild(backdrop);
-            void backdrop.offsetWidth;
-            backdrop.classList.add('liteTvVisible');
-        }).catch(function (err) {
+        loadGuide(grid).catch(function (err) {
             console.debug('liteTv: guide not available', err);
         });
     }

@@ -47,6 +47,20 @@
                     channel there joins whatever is on air, at the live position.
                 </div>
 
+                <div class="checkboxContainer">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="PublishAsLiveTv" />
+                        <span>Also publish to Jellyfin's Live TV section (fills the built-in guide)</span>
+                    </label>
+                </div>
+                <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
+                    Puts the channels and their whole schedule into the server's own Live TV guide, so
+                    native clients get a proper grid without the injected UI. Switching a channel on
+                    there starts the current program from its beginning rather than joining it live —
+                    Live TV hands a client a stream, not a position in one. For joining live, use the
+                    "TV-Sender" entry above.
+                </div>
+
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
                 <div class="fieldDescription" style="margin-bottom: 0.6em;">
                     Based on the media in your library. Adding a suggestion creates a channel you can still edit below.
@@ -92,6 +106,33 @@
                         </div>
                     </div>
 
+                    <div class="selectContainer">
+                        <select is="emby-select" id="PlayOrder" label="Play order">
+                            <option value="Sequential">In order (marathon)</option>
+                            <option value="Shuffle">Shuffled</option>
+                        </select>
+                        <div class="fieldDescription">
+                            The shuffle is drawn once from the channel itself, never from the clock, so the guide and the player always agree and the order survives a restart.
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SlotMinutes" min="0" step="5" label="Start programs on a grid of this many minutes (0 = back to back)" />
+                        <div class="fieldDescription">
+                            With 30, a program starts only on the hour or the half hour and the rest of its slot is time to fill — which is what lets a block promise the film at 20:15. A program longer than one slot takes as many whole slots as it needs.
+                        </div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input is="emby-checkbox" type="checkbox" id="TrailersInGaps" />
+                            <span>Fill the leftover time with trailers for what is coming up</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">
+                            Trailers held in the library air on every client. Trailers the library only links to (usually YouTube) are played by the web client during the gap.
+                        </div>
+                    </div>
+
                     <h4>Program (looping forever)</h4>
                     <div class="paperList" id="SourceList" style="margin-bottom: 1em;"></div>
 
@@ -99,6 +140,61 @@
                         <input is="emby-input" type="text" id="ItemSearch" label="Add content (search movies, series, collections)" />
                     </div>
                     <div class="paperList" id="SearchResults" style="margin-bottom: 1em;"></div>
+
+                    <h4 style="margin-top: 1.5em;">Program blocks</h4>
+                    <div class="fieldDescription" style="margin-bottom: 0.6em;">
+                        Parts of the week that air something else — the kids' programming until noon, the film on Saturday evening. Whatever no block covers airs the channel's own program above. A block picks up where it left off the last time it was on.
+                    </div>
+
+                    <div class="selectContainer">
+                        <select is="emby-select" id="BlockSelect" label="Block"></select>
+                    </div>
+                    <div style="margin-bottom: 1em;">
+                        <button is="emby-button" type="button" id="AddBlock" class="raised"><span>New block</span></button>
+                        <button is="emby-button" type="button" id="DeleteBlock" class="raised"><span>Delete block</span></button>
+                    </div>
+
+                    <div id="BlockEditor" style="display: none; border-left: 3px solid rgba(255,255,255,0.15); padding-left: 1em; margin-bottom: 1.5em;">
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="BlockName" label="Block name" />
+                        </div>
+
+                        <div class="checkboxContainer">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="BlockEnabled" />
+                                <span>In use</span>
+                            </label>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="time" id="BlockStart" label="Starts at" />
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="BlockDuration" min="1" step="15" label="Runs for (minutes)" />
+                            <div class="fieldDescription">May run past midnight; it then continues into the following day.</div>
+                        </div>
+
+                        <div class="checkboxContainer" id="BlockDays" style="display: flex; flex-wrap: wrap; gap: 0.9em;"></div>
+                        <div class="fieldDescription" style="margin-bottom: 0.8em;">Days the block starts on. None ticked means every day.</div>
+
+                        <div class="selectContainer">
+                            <select is="emby-select" id="BlockOrder" label="Play order">
+                                <option value="Sequential">In order (marathon)</option>
+                                <option value="Shuffle">Shuffled</option>
+                            </select>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="BlockEpisodesPerBlock" min="0" step="1" label="Episodes per block (0 = play each source in full)" />
+                        </div>
+
+                        <div class="paperList" id="BlockSourceList" style="margin-bottom: 1em;"></div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="BlockItemSearch" label="Add content to this block" />
+                        </div>
+                        <div class="paperList" id="BlockSearchResults" style="margin-bottom: 1em;"></div>
+                    </div>
                 </div>
 
                 <div>
@@ -115,7 +211,9 @@
             var pluginId = "13953c97-f5a0-4713-8d4c-96b5369e5791";
             var config = null;
             var currentIndex = -1;
+            var currentBlockIndex = -1;
             var searchTimer = null;
+            var blockSearchTimer = null;
 
             function q(sel) { return document.querySelector(sel); }
 
@@ -146,24 +244,37 @@
                 q('#ChannelName').value = channel.Name || '';
                 q('#ChannelEnabled').checked = channel.Enabled !== false;
                 q('#EpisodesPerBlock').value = channel.EpisodesPerBlock || 0;
+                q('#PlayOrder').value = channel.Order || 'Sequential';
+                q('#SlotMinutes').value = channel.SlotMinutes || 0;
+                q('#TrailersInGaps').checked = channel.TrailersInGaps !== false;
                 q('#ResetAnchor').checked = false;
                 renderSources();
                 q('#SearchResults').innerHTML = '';
                 q('#ItemSearch').value = '';
+                channel.Blocks = channel.Blocks || [];
+                currentBlockIndex = channel.Blocks.length ? 0 : -1;
+                renderBlockSelect();
+                renderBlockEditor();
             }
 
             function renderSources() {
-                var channel = currentChannel();
-                var list = q('#SourceList');
+                renderSourceList(q('#SourceList'), currentChannel());
+            }
+
+            function renderBlockSources() {
+                renderSourceList(q('#BlockSourceList'), currentBlock());
+            }
+
+            function renderSourceList(list, owner) {
                 list.innerHTML = '';
-                if (!channel || !channel.Sources || !channel.Sources.length) {
+                if (!owner || !owner.Sources || !owner.Sources.length) {
                     var empty = document.createElement('div');
                     empty.className = 'listItem';
                     empty.textContent = 'No content yet. Search below to add movies, series or collections.';
                     list.appendChild(empty);
                     return;
                 }
-                channel.Sources.forEach(function (source, i) {
+                owner.Sources.forEach(function (source, i) {
                     var row = document.createElement('div');
                     row.className = 'listItem';
                     row.style.display = 'flex';
@@ -183,11 +294,11 @@
                         btn.textContent = move[0];
                         btn.addEventListener('click', function () {
                             var j = i + move[1];
-                            if (j < 0 || j >= channel.Sources.length) { return; }
-                            var tmp = channel.Sources[i];
-                            channel.Sources[i] = channel.Sources[j];
-                            channel.Sources[j] = tmp;
-                            renderSources();
+                            if (j < 0 || j >= owner.Sources.length) { return; }
+                            var tmp = owner.Sources[i];
+                            owner.Sources[i] = owner.Sources[j];
+                            owner.Sources[j] = tmp;
+                            renderSourceList(list, owner);
                         });
                         row.appendChild(btn);
                     });
@@ -198,12 +309,106 @@
                     remove.className = 'raised emby-button';
                     remove.textContent = '✕';
                     remove.addEventListener('click', function () {
-                        channel.Sources.splice(i, 1);
-                        renderSources();
+                        owner.Sources.splice(i, 1);
+                        renderSourceList(list, owner);
                     });
                     row.appendChild(remove);
                     list.appendChild(row);
                 });
+            }
+
+            // ------------------------------------------------------------ program blocks
+
+            var DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+            function currentBlock() {
+                var channel = currentChannel();
+                return channel && channel.Blocks && currentBlockIndex >= 0 && channel.Blocks[currentBlockIndex]
+                    ? channel.Blocks[currentBlockIndex]
+                    : null;
+            }
+
+            function clockOf(minutes) {
+                var m = Math.max(0, Math.min(1439, minutes || 0));
+                return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2);
+            }
+
+            function minutesOf(clock) {
+                var parts = (clock || '').split(':');
+                if (parts.length !== 2) { return 0; }
+                return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+            }
+
+            function blockLabel(block, i) {
+                var days = block.Days && block.Days.length ? block.Days.map(function (d) { return d.slice(0, 2); }).join(' ') : 'daily';
+                return (i + 1) + '. ' + (block.Name || '(unnamed)') + ' — ' + clockOf(block.StartMinutes)
+                    + ' for ' + (block.DurationMinutes || 0) + ' min, ' + days + (block.Enabled === false ? ' (off)' : '');
+            }
+
+            function renderBlockSelect() {
+                var channel = currentChannel();
+                var select = q('#BlockSelect');
+                select.innerHTML = '';
+                ((channel && channel.Blocks) || []).forEach(function (block, i) {
+                    var option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = blockLabel(block, i);
+                    select.appendChild(option);
+                });
+                if (currentBlockIndex >= 0) {
+                    select.value = currentBlockIndex;
+                }
+            }
+
+            function renderBlockEditor() {
+                var block = currentBlock();
+                q('#BlockEditor').style.display = block ? 'block' : 'none';
+                if (!block) {
+                    return;
+                }
+                q('#BlockName').value = block.Name || '';
+                q('#BlockEnabled').checked = block.Enabled !== false;
+                q('#BlockStart').value = clockOf(block.StartMinutes);
+                q('#BlockDuration').value = block.DurationMinutes || 0;
+                q('#BlockOrder').value = block.Order || 'Sequential';
+                q('#BlockEpisodesPerBlock').value = block.EpisodesPerBlock || 0;
+
+                var days = q('#BlockDays');
+                days.innerHTML = '';
+                DAYS.forEach(function (day) {
+                    var label = document.createElement('label');
+                    label.style.display = 'inline-flex';
+                    label.style.alignItems = 'center';
+                    var box = document.createElement('input');
+                    box.setAttribute('is', 'emby-checkbox');
+                    box.type = 'checkbox';
+                    box.className = 'blockDay';
+                    box.value = day;
+                    box.checked = (block.Days || []).indexOf(day) >= 0;
+                    label.appendChild(box);
+                    var text = document.createElement('span');
+                    text.textContent = day.slice(0, 3);
+                    label.appendChild(text);
+                    days.appendChild(label);
+                });
+
+                renderBlockSources();
+                q('#BlockSearchResults').innerHTML = '';
+                q('#BlockItemSearch').value = '';
+            }
+
+            function applyEditorToBlock() {
+                var block = currentBlock();
+                if (!block) { return; }
+                block.Name = q('#BlockName').value.trim() || 'Block';
+                block.Enabled = q('#BlockEnabled').checked;
+                block.StartMinutes = minutesOf(q('#BlockStart').value);
+                block.DurationMinutes = Math.max(1, parseInt(q('#BlockDuration').value, 10) || 0);
+                block.Order = q('#BlockOrder').value;
+                block.EpisodesPerBlock = parseInt(q('#BlockEpisodesPerBlock').value, 10) || 0;
+                block.Days = Array.prototype.slice.call(document.querySelectorAll('.blockDay'))
+                    .filter(function (box) { return box.checked; })
+                    .map(function (box) { return box.value; });
             }
 
             function newGuid() {
@@ -277,8 +482,7 @@
                 return 'Movie';
             }
 
-            function runSearch(term) {
-                var results = q('#SearchResults');
+            function runSearch(term, results, ownerFn, onAdded) {
                 if (!term || term.length < 2) {
                     results.innerHTML = '';
                     return;
@@ -309,11 +513,11 @@
                         add.className = 'raised emby-button';
                         add.textContent = 'Add';
                         add.addEventListener('click', function () {
-                            var channel = currentChannel();
-                            if (!channel) { return; }
-                            channel.Sources = channel.Sources || [];
-                            channel.Sources.push({ Type: typeForItem(item), ItemId: item.Id, Name: item.Name });
-                            renderSources();
+                            var owner = ownerFn();
+                            if (!owner) { return; }
+                            owner.Sources = owner.Sources || [];
+                            owner.Sources.push({ Type: typeForItem(item), ItemId: item.Id, Name: item.Name });
+                            onAdded();
                         });
                         row.appendChild(add);
                         results.appendChild(row);
@@ -322,11 +526,15 @@
             }
 
             function applyEditorToChannel() {
+                applyEditorToBlock();
                 var channel = currentChannel();
                 if (!channel) { return; }
                 channel.Name = q('#ChannelName').value.trim() || 'Channel';
                 channel.Enabled = q('#ChannelEnabled').checked;
                 channel.EpisodesPerBlock = parseInt(q('#EpisodesPerBlock').value, 10) || 0;
+                channel.Order = q('#PlayOrder').value;
+                channel.SlotMinutes = Math.max(0, parseInt(q('#SlotMinutes').value, 10) || 0);
+                channel.TrailersInGaps = q('#TrailersInGaps').checked;
                 if (q('#ResetAnchor').checked) {
                     channel.AnchorUtc = new Date().toISOString();
                 }
@@ -341,7 +549,8 @@
                         q('#EnableWebUi').checked = config.EnableWebUi !== false;
                         q('#ShowHomeRow').checked = config.ShowHomeRow !== false;
                         q('#ShowHeaderButton').checked = config.ShowHeaderButton !== false;
-                    q('#PublishAsChannels').checked = config.PublishAsChannels !== false;
+                        q('#PublishAsChannels').checked = config.PublishAsChannels !== false;
+                        q('#PublishAsLiveTv').checked = config.PublishAsLiveTv === true;
                         currentIndex = config.Channels.length ? 0 : -1;
                         renderChannelSelect();
                         renderEditor();
@@ -363,7 +572,11 @@
                     Name: 'New channel',
                     Enabled: true,
                     AnchorUtc: new Date().toISOString(),
-                    Sources: []
+                    Sources: [],
+                    Blocks: [],
+                    Order: 'Sequential',
+                    SlotMinutes: 0,
+                    TrailersInGaps: true
                 });
                 currentIndex = config.Channels.length - 1;
                 renderChannelSelect();
@@ -381,7 +594,55 @@
             q('#ItemSearch').addEventListener('input', function () {
                 var term = this.value.trim();
                 if (searchTimer) { clearTimeout(searchTimer); }
-                searchTimer = setTimeout(function () { runSearch(term); }, 350);
+                searchTimer = setTimeout(function () {
+                    runSearch(term, q('#SearchResults'), currentChannel, renderSources);
+                }, 350);
+            });
+
+            q('#BlockItemSearch').addEventListener('input', function () {
+                var term = this.value.trim();
+                if (blockSearchTimer) { clearTimeout(blockSearchTimer); }
+                blockSearchTimer = setTimeout(function () {
+                    runSearch(term, q('#BlockSearchResults'), currentBlock, renderBlockSources);
+                }, 350);
+            });
+
+            q('#BlockSelect').addEventListener('change', function () {
+                applyEditorToBlock();
+                currentBlockIndex = parseInt(this.value, 10);
+                // The labels carry the times, so an edit to the block just left has to be
+                // written back into the list before it is drawn again.
+                renderBlockSelect();
+                renderBlockEditor();
+            });
+
+            q('#AddBlock').addEventListener('click', function () {
+                var channel = currentChannel();
+                if (!channel) { return; }
+                applyEditorToBlock();
+                channel.Blocks = channel.Blocks || [];
+                channel.Blocks.push({
+                    Name: 'New block',
+                    Enabled: true,
+                    StartMinutes: 20 * 60 + 15,
+                    DurationMinutes: 180,
+                    Days: [],
+                    Sources: [],
+                    EpisodesPerBlock: 0,
+                    Order: 'Sequential'
+                });
+                currentBlockIndex = channel.Blocks.length - 1;
+                renderBlockSelect();
+                renderBlockEditor();
+            });
+
+            q('#DeleteBlock').addEventListener('click', function () {
+                var channel = currentChannel();
+                if (!channel || currentBlockIndex < 0) { return; }
+                channel.Blocks.splice(currentBlockIndex, 1);
+                currentBlockIndex = channel.Blocks.length ? 0 : -1;
+                renderBlockSelect();
+                renderBlockEditor();
             });
 
             document.querySelector('#LiteTvConfigForm')
@@ -393,8 +654,10 @@
                     config.ShowHomeRow = q('#ShowHomeRow').checked;
                     config.ShowHeaderButton = q('#ShowHeaderButton').checked;
                     config.PublishAsChannels = q('#PublishAsChannels').checked;
+                    config.PublishAsLiveTv = q('#PublishAsLiveTv').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
+                        renderBlockSelect();
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
                     return false;

@@ -5,6 +5,7 @@ using Jellyfin.Plugin.LiteTv.Web;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +24,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddSingleton<ChannelPlaylistBuilder>();
 
+        // The single answer to "what is on this channel", shared by the web guide, the
+        // published channel items, the Live TV service and the session monitor.
+        serviceCollection.AddSingleton<ChannelGuide>();
+
         serviceCollection.AddSingleton<WatchStateShield>();
         // The shield needs to know which client a watch-state write came from; registering
         // the accessor is a no-op when the server already did.
@@ -36,6 +41,12 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 
         // Publishes the channels to every client, not just the injected web UI.
         serviceCollection.AddSingleton<IChannel, LiteTvChannelProvider>();
+
+        // And into the server's own Live TV section, so its guide - the one native clients
+        // already have - shows what the channels are airing. Registration is unconditional
+        // because it happens once at startup; the service itself reports no channels while
+        // the option is off, so the setting can be changed without a restart.
+        serviceCollection.AddSingleton<ILiveTvService, LiteTvLiveService>();
         serviceCollection.AddSingleton<LiveOffsetResolver>();
 
         // Preferred: register the script injection with the File Transformation

@@ -37,6 +37,15 @@ public class PluginConfiguration : BasePluginConfiguration
     /// cannot inject its web UI into - TV apps, phones, anything but the web client.
     /// </summary>
     public bool PublishAsChannels { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the channels are also published to
+    /// Jellyfin's own Live TV section, which fills the server's real guide - the grid every
+    /// client already knows how to draw - with what the channels are airing. Switching a
+    /// channel on there starts the current program from its beginning rather than joining
+    /// it live, because Live TV hands a client a stream and not a position in one.
+    /// </summary>
+    public bool PublishAsLiveTv { get; set; }
 }
 
 /// <summary>
@@ -80,6 +89,99 @@ public class TvChannel
     /// the next (a marathon).
     /// </summary>
     public int EpisodesPerBlock { get; set; }
+
+    /// <summary>
+    /// Gets or sets the order the queue is played in.
+    /// </summary>
+    public PlayOrder Order { get; set; }
+
+    /// <summary>
+    /// Gets or sets the grid programs start on, in minutes. Zero - the default - runs
+    /// them back to back, the way the channel always has. With 30, a program starts only
+    /// on the hour or the half hour and the rest of its slot is time to fill; that is what
+    /// makes "the film at 20:15" a thing the channel can actually promise.
+    /// </summary>
+    public int SlotMinutes { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the time a slot leaves over is filled with
+    /// trailers for the program about to start, rather than left as dead air.
+    /// </summary>
+    public bool TrailersInGaps { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the program blocks: parts of the week that air something other than
+    /// the channel's own <see cref="Sources"/>. Whatever no block covers is aired from
+    /// <see cref="Sources"/>, so a channel with no blocks behaves exactly as it always
+    /// has, and a channel whose blocks leave gaps falls back to its own lineup.
+    /// </summary>
+    public List<ProgramBlock> Blocks { get; set; } = new();
+}
+
+/// <summary>
+/// A part of the week that airs its own lineup: the kids' programming until noon, the
+/// film on Saturday evening. A block owns a window of the day on the weekdays it applies
+/// to, and holds its own sources, so the channel's identity can change with the hour
+/// without needing a second channel.
+/// </summary>
+public class ProgramBlock
+{
+    /// <summary>
+    /// Gets or sets the block name, shown in the guide.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the block is in use.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets when the block starts, in minutes after local midnight.
+    /// </summary>
+    public int StartMinutes { get; set; }
+
+    /// <summary>
+    /// Gets or sets how long the block runs, in minutes. A block may run past midnight;
+    /// it then continues into the following day.
+    /// </summary>
+    public int DurationMinutes { get; set; } = 240;
+
+    /// <summary>
+    /// Gets or sets the local weekdays the block starts on. Empty means every day.
+    /// </summary>
+    public List<DayOfWeek> Days { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the block's own content.
+    /// </summary>
+    public List<ChannelSource> Sources { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the block's source interleaving, as on the channel.
+    /// </summary>
+    public int EpisodesPerBlock { get; set; }
+
+    /// <summary>
+    /// Gets or sets the order the block's queue is played in.
+    /// </summary>
+    public PlayOrder Order { get; set; }
+}
+
+/// <summary>
+/// The order a queue is played in.
+/// </summary>
+public enum PlayOrder
+{
+    /// <summary>Source order: each source in full, or interleaved in blocks.</summary>
+    Sequential,
+
+    /// <summary>
+    /// Shuffled - but shuffled once and for good, not re-drawn on every request. A
+    /// schedule that reshuffles is not a schedule: the guide would promise one thing and
+    /// air another, and a viewer already watching would be moved mid-program.
+    /// </summary>
+    Shuffle
 }
 
 /// <summary>

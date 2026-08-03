@@ -23,7 +23,10 @@ namespace Jellyfin.Plugin.LiteTv.Api;
 [Authorize]
 public class LiteTvController : ControllerBase
 {
-    private readonly ChannelPlaylistBuilder _playlistBuilder;
+    /// <summary>How far ahead the guide grid looks when no window is asked for.</summary>
+    private const int DefaultGuideHours = 4;
+
+    private readonly ChannelGuide _guide;
     private readonly TunedSessionMonitor _sessionMonitor;
     private readonly ISessionManager _sessionManager;
     private readonly ILibraryManager _libraryManager;
@@ -31,17 +34,17 @@ public class LiteTvController : ControllerBase
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
     /// </summary>
-    /// <param name="playlistBuilder">The channel playlist builder.</param>
+    /// <param name="guide">The channel guide.</param>
     /// <param name="sessionMonitor">The tuned session monitor.</param>
     /// <param name="sessionManager">The session manager.</param>
     /// <param name="libraryManager">The library manager.</param>
     public LiteTvController(
-        ChannelPlaylistBuilder playlistBuilder,
+        ChannelGuide guide,
         TunedSessionMonitor sessionMonitor,
         ISessionManager sessionManager,
         ILibraryManager libraryManager)
     {
-        _playlistBuilder = playlistBuilder;
+        _guide = guide;
         _sessionMonitor = sessionMonitor;
         _sessionManager = sessionManager;
         _libraryManager = libraryManager;
@@ -63,21 +66,51 @@ public class LiteTvController : ControllerBase
             ShowHeaderButton = config?.ShowHeaderButton ?? false
         };
 
-        foreach (var channel in config?.Channels ?? new())
+        foreach (var channel in ChannelGuide.Channels())
         {
-            if (!channel.Enabled)
-            {
-                continue;
-            }
+            var window = _guide.Window(channel, DateTime.UtcNow, DateTime.UtcNow.AddHours(DefaultGuideHours)).Take(24).ToList();
+            var now = window.FirstOrDefault();
+            var nextProgram = window.Skip(1).FirstOrDefault(a => a.Kind == AiringKind.Program);
 
-            var now = ScheduleResolver.Resolve(_playlistBuilder.GetEntries(channel), channel.AnchorUtc, DateTime.UtcNow, upcomingCount: 1);
             result.Channels.Add(new ChannelSummaryDto
             {
                 Id = channel.Id,
                 Name = channel.Name,
-                Now = now is null ? null : ToProgram(now.Current, now.CurrentStartedUtc),
-                Next = now?.Upcoming.Count > 0 ? ToProgram(now.Upcoming[0].Entry, now.Upcoming[0].StartUtc) : null
+                Kind = now?.Kind.ToString() ?? nameof(AiringKind.OffAir),
+                BlockName = string.IsNullOrEmpty(now?.BlockName) ? null : now!.BlockName,
+                Now = now is null || now.Entry is null ? null : ToProgram(now),
+                Next = nextProgram is null ? null : ToProgram(nextProgram)
             });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gets every channel's programming over a window of time: the grid a guide is drawn
+    /// from. This is the whole schedule, interstitials and dark stretches included, not
+    /// just the programs - a guide that silently skipped them would not add up.
+    /// </summary>
+    /// <param name="from">Where the window starts (UTC); defaults to now.</param>
+    /// <param name="hours">How many hours it covers.</param>
+    /// <returns>The guide grid.</returns>
+    [HttpGet("Guide")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<GuideWindowDto> GetGuide([FromQuery] DateTime? from = null, [FromQuery] double hours = DefaultGuideHours)
+    {
+        var start = (from ?? DateTime.UtcNow).ToUniversalTime();
+        var end = start.AddHours(Math.Clamp(hours, 0.5, 48));
+        var result = new GuideWindowDto { StartUtc = start, EndUtc = end, ServerTimeUtc = DateTime.UtcNow };
+
+        foreach (var channel in ChannelGuide.Channels())
+        {
+            var row = new GuideChannelDto { Id = channel.Id, Name = channel.Name };
+            foreach (var airing in _guide.Window(channel, start, end).Take(512))
+            {
+                row.Programs.Add(ToProgram(airing));
+            }
+
+            result.Channels.Add(row);
         }
 
         return result;
@@ -94,31 +127,38 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<ChannelNowDto> GetNow([FromRoute] Guid channelId, [FromQuery] int upcoming = 5)
     {
-        var channel = Plugin.Instance?.Configuration.Channels
-            .FirstOrDefault(c => c.Id == channelId && c.Enabled);
+        var channel = ChannelGuide.Channel(channelId);
         if (channel is null)
         {
             return NotFound();
         }
 
-        var now = ScheduleResolver.Resolve(
-            _playlistBuilder.GetEntries(channel),
-            channel.AnchorUtc,
-            DateTime.UtcNow,
-            Math.Clamp(upcoming, 0, 20));
-        if (now is null)
+        var at = DateTime.UtcNow;
+        var window = _guide.Window(channel, at, at.AddHours(12)).Take(256).ToList();
+        var current = window.FirstOrDefault();
+        if (current is null)
         {
             return NotFound();
         }
+
+        var following = window.Skip(1).Where(a => a.Kind == AiringKind.Program).ToList();
+        var next = following.FirstOrDefault();
 
         return new ChannelNowDto
         {
             ChannelId = channel.Id,
             ChannelName = channel.Name,
-            Current = ToProgram(now.Current, now.CurrentStartedUtc),
-            OffsetTicks = now.OffsetTicks,
-            ServerTimeUtc = DateTime.UtcNow,
-            Upcoming = now.Upcoming.Select(u => ToProgram(u.Entry, u.StartUtc)).ToList()
+            Kind = current.Kind.ToString(),
+            BlockName = string.IsNullOrEmpty(current.BlockName) ? null : current.BlockName,
+            Current = current.Entry is null ? null : ToProgram(current),
+            OffsetTicks = current.OffsetAt(at),
+            EndUtc = current.EndUtc,
+            NextProgram = next is null ? null : ToProgram(next),
+            // What the web client can play over an interstitial the library only knows the
+            // address of - the usual case, since trailers are far more often linked than held.
+            Trailers = next is null ? new List<TrailerDto>() : RemoteTrailers(next.Entry!.ItemId),
+            ServerTimeUtc = at,
+            Upcoming = following.Take(Math.Clamp(upcoming, 0, 20)).Select(ToProgram).ToList()
         };
     }
 
@@ -165,29 +205,29 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> PlayOn([FromRoute] Guid channelId, [FromRoute] string sessionId)
     {
-        var channel = Plugin.Instance?.Configuration.Channels
-            .FirstOrDefault(c => c.Id == channelId && c.Enabled);
+        var channel = ChannelGuide.Channel(channelId);
         if (channel is null)
         {
             return NotFound();
         }
 
-        var now = ScheduleResolver.Resolve(_playlistBuilder.GetEntries(channel), channel.AnchorUtc, DateTime.UtcNow);
-        if (now is null)
+        var at = DateTime.UtcNow;
+        var airing = _guide.NowOn(channel, at);
+        if (airing?.Entry is null)
         {
             return NotFound();
         }
 
         // The item is registered before the command goes out so its watch state is
         // snapshotted while it is still untouched.
-        _sessionMonitor.Tune(sessionId, channelId, followSchedule: true, now.Current.ItemId);
+        _sessionMonitor.Tune(sessionId, channelId, followSchedule: true, airing.Entry.ItemId);
         await _sessionManager.SendPlayCommand(
             sessionId,
             sessionId,
             new PlayRequest
             {
-                ItemIds = new[] { now.Current.ItemId },
-                StartPositionTicks = now.OffsetTicks,
+                ItemIds = new[] { airing.Entry.ItemId },
+                StartPositionTicks = airing.OffsetAt(at),
                 PlayCommand = PlayCommand.PlayNow
             },
             HttpContext.RequestAborted).ConfigureAwait(false);
@@ -309,19 +349,86 @@ public class LiteTvController : ControllerBase
         };
     }
 
-    private static ProgramDto ToProgram(ScheduledEntry entry, DateTime startUtc)
+    private static ProgramDto ToProgram(Airing airing)
     {
+        var entry = airing.Entry;
         return new ProgramDto
         {
-            ItemId = entry.ItemId,
-            Name = entry.Name,
-            SeriesName = entry.SeriesName,
-            SeriesId = entry.SeriesId,
-            StartUtc = startUtc,
-            EndUtc = startUtc + TimeSpan.FromTicks(entry.RuntimeTicks),
-            RuntimeTicks = entry.RuntimeTicks
+            ItemId = entry?.ItemId ?? Guid.Empty,
+            Name = entry?.Name ?? (airing.Kind == AiringKind.OffAir ? "Sendepause" : "Werbepause"),
+            SeriesName = entry?.SeriesName,
+            SeriesId = entry?.SeriesId,
+            StartUtc = airing.StartUtc,
+            EndUtc = airing.EndUtc,
+            RuntimeTicks = entry?.RuntimeTicks ?? (airing.EndUtc - airing.StartUtc).Ticks,
+            Kind = airing.Kind.ToString(),
+            BlockName = string.IsNullOrEmpty(airing.BlockName) ? null : airing.BlockName,
+            // A program the block boundary cut into: it does not start at its beginning.
+            StartOffsetTicks = airing.OffsetTicks,
+            NextProgramName = airing.NextProgram?.Name
         };
     }
+
+    /// <summary>
+    /// Gets the trailers the library only holds an address for - almost always YouTube,
+    /// which is what the metadata providers fill in. Nothing the server can schedule, but
+    /// the web client can embed them, and that is what fills an interstitial in practice.
+    /// </summary>
+    private List<TrailerDto> RemoteTrailers(Guid itemId)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        return item?.RemoteTrailers
+            .Where(t => !string.IsNullOrEmpty(t.Url))
+            .Select(t => new TrailerDto { Name = t.Name ?? string.Empty, Url = t.Url })
+            .Take(4)
+            .ToList() ?? new List<TrailerDto>();
+    }
+}
+
+/// <summary>
+/// A trailer the library links to rather than holds.
+/// </summary>
+public class TrailerDto
+{
+    /// <summary>Gets or sets the trailer name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the address it plays from.</summary>
+    public string Url { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Every channel's programming over a window of time: the grid a guide is drawn from.
+/// </summary>
+public class GuideWindowDto
+{
+    /// <summary>Gets or sets the start of the window (UTC).</summary>
+    public DateTime StartUtc { get; set; }
+
+    /// <summary>Gets or sets the end of the window (UTC).</summary>
+    public DateTime EndUtc { get; set; }
+
+    /// <summary>Gets or sets the server clock, so the client can place "now" without
+    /// trusting its own.</summary>
+    public DateTime ServerTimeUtc { get; set; }
+
+    /// <summary>Gets the channel rows.</summary>
+    public List<GuideChannelDto> Channels { get; } = new();
+}
+
+/// <summary>
+/// One channel's row in the guide grid.
+/// </summary>
+public class GuideChannelDto
+{
+    /// <summary>Gets or sets the channel id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Gets or sets the channel name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets the programming, in order and without gaps between the entries.</summary>
+    public List<ProgramDto> Programs { get; } = new();
 }
 
 /// <summary>
@@ -358,6 +465,12 @@ public class ChannelSummaryDto
 
     /// <summary>Gets or sets the following program.</summary>
     public ProgramDto? Next { get; set; }
+
+    /// <summary>Gets or sets what kind of thing is on: a program, an interstitial, or nothing.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the program block on air, when one is.</summary>
+    public string? BlockName { get; set; }
 }
 
 /// <summary>
@@ -371,8 +484,25 @@ public class ChannelNowDto
     /// <summary>Gets or sets the channel name.</summary>
     public string ChannelName { get; set; } = string.Empty;
 
-    /// <summary>Gets or sets the program on air.</summary>
-    public ProgramDto Current { get; set; } = new();
+    /// <summary>Gets or sets what is playing: the program, or the trailer filling the gap
+    /// before the next one. Null when there is nothing to play.</summary>
+    public ProgramDto? Current { get; set; }
+
+    /// <summary>Gets or sets what kind of thing is on: a program, an interstitial, or nothing.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the program block on air, when one is.</summary>
+    public string? BlockName { get; set; }
+
+    /// <summary>Gets or sets when what is on now ends (UTC).</summary>
+    public DateTime EndUtc { get; set; }
+
+    /// <summary>Gets or sets the next program, which is what an interstitial is trailing.</summary>
+    public ProgramDto? NextProgram { get; set; }
+
+    /// <summary>Gets or sets the linked trailers for the next program, for a client that can
+    /// embed them.</summary>
+    public List<TrailerDto> Trailers { get; set; } = new();
 
     /// <summary>Gets or sets how far into the current program the channel is.</summary>
     public long OffsetTicks { get; set; }
@@ -440,4 +570,17 @@ public class ProgramDto
 
     /// <summary>Gets or sets the runtime in ticks.</summary>
     public long RuntimeTicks { get; set; }
+
+    /// <summary>Gets or sets what kind of thing this is: Program, Interstitial or OffAir.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the program block it belongs to, when it belongs to one.</summary>
+    public string? BlockName { get; set; }
+
+    /// <summary>Gets or sets how far into the item this airing begins - non-zero only where
+    /// the end of a block cut the program short and it resumed when the block came round.</summary>
+    public long StartOffsetTicks { get; set; }
+
+    /// <summary>Gets or sets the name of the program this leads into.</summary>
+    public string? NextProgramName { get; set; }
 }

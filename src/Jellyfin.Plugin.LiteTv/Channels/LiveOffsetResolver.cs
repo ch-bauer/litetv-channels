@@ -38,8 +38,9 @@ public sealed class LiveOffsetResolver
             return null;
         }
 
-        var now = Resolve(channelId.Value);
-        if (now is null)
+        var at = DateTime.UtcNow;
+        var airing = Resolve(channelId.Value, at);
+        if (airing?.Entry is null)
         {
             return null;
         }
@@ -48,53 +49,25 @@ public sealed class LiveOffsetResolver
         // listing would otherwise be told to resume a finished program at the position the
         // channel has since moved on to.
         var programId = LiteTvChannelProvider.ProgramIdFromItemId(item.ExternalId!);
-        return programId == now.Current.ItemId ? now.OffsetTicks : null;
+        return programId == airing.Entry.ItemId ? airing.OffsetAt(at) : null;
     }
 
     /// <summary>
     /// Gets what a channel is airing right now and how far into it.
     /// </summary>
     /// <param name="channelId">The LiteTV channel id.</param>
-    /// <returns>The resolved position, or null when the channel has nothing to air.</returns>
-    public ScheduleNow? Resolve(Guid channelId)
+    /// <param name="utc">The moment to resolve at; defaults to now.</param>
+    /// <returns>The airing, or null when the channel has nothing to air.</returns>
+    public Airing? Resolve(Guid channelId, DateTime? utc = null)
     {
-        var channel = Plugin.Instance?.Configuration.Channels
-            .FirstOrDefault(c => c.Id == channelId && c.Enabled);
-        var builder = _serviceProvider.GetService<ChannelPlaylistBuilder>();
-        if (channel is null || builder is null)
+        var channel = ChannelGuide.Channel(channelId);
+        var guide = _serviceProvider.GetService<ChannelGuide>();
+        if (channel is null || guide is null)
         {
             return null;
         }
 
-        return ScheduleResolver.Resolve(builder.GetEntries(channel), channel.AnchorUtc, DateTime.UtcNow);
-    }
-
-    /// <summary>
-    /// Gets the program a channel plays after the given one. Read off the channel's own
-    /// order rather than the clock, so it stays right for a viewer who is ahead of the
-    /// schedule after skipping through a program.
-    /// </summary>
-    /// <param name="channelId">The LiteTV channel id.</param>
-    /// <param name="programId">The program currently playing.</param>
-    /// <returns>The next program, or null when the channel has only this one.</returns>
-    public Guid? ProgramAfter(Guid channelId, Guid programId)
-    {
-        var channel = Plugin.Instance?.Configuration.Channels
-            .FirstOrDefault(c => c.Id == channelId && c.Enabled);
-        var builder = _serviceProvider.GetService<ChannelPlaylistBuilder>();
-        if (channel is null || builder is null)
-        {
-            return null;
-        }
-
-        var entries = builder.GetEntries(channel).Where(e => e.RuntimeTicks > 0).ToList();
-        if (entries.Count < 2)
-        {
-            return null;
-        }
-
-        var index = entries.FindIndex(e => e.ItemId == programId);
-        return index < 0 ? null : entries[(index + 1) % entries.Count].ItemId;
+        return guide.NowOn(channel, utc);
     }
 
     /// <summary>
