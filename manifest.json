@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.22.0",
+        "changelog": "Fills in the guide artwork: programmes carry the cover of the film or series they air, and a channel wears the poster of what it was built on. Interstitials show the artwork of the programme they are trailing. Turning on Live TV publishing now refreshes Jellyfin's guide on save, instead of leaving the Live TV section empty until some scheduled run hours later.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/jellyfin-plugin-litetv/releases/download/v1.0.22.0/litetv-channels_1.0.22.0.zip",
+        "checksum": "585c699f5f83904c5739a1d3405c04e2",
+        "timestamp": "2026-08-03T00:00:00Z"
+      },
+      {
         "version": "1.0.21.0",
         "changelog": "Fixes channel settings appearing to do nothing: an edited channel went on airing its old schedule for several minutes, because the cached schedule was only dropped on a configuration-changed event that never arrives. Program blocks, play order and slot times now take effect the moment they are saved.",
         "targetAbi": "10.11.0.0",
