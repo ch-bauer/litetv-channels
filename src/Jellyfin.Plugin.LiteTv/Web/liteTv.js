@@ -115,7 +115,11 @@
         var img = document.createElement('img');
         img.className = className;
         img.src = url;
-        img.loading = 'lazy';
+        // Eagerly, never lazily. These images sit in overlays that are laid out only when
+        // they are shown, so until the picture arrives the element has no height - and an
+        // element with no height is one the browser does not consider worth loading yet.
+        // The picture then never appears at all. There are only ever a handful of them.
+        img.loading = 'eager';
         img.alt = '';
         // A picture the server offered but the client cannot fetch must not leave a
         // broken-image glyph sitting in the middle of the overlay.

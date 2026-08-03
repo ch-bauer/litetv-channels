@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Artwork everywhere it was still missing: the channel row, the guide grid, the next-up card, the pause panel and the channel entries themselves. Only images that really exist are drawn, so nothing is a blank rectangle any more. Skipping forward no longer stops the programme and drops you back at the live position - a seek is reported as a stop, and that stop was being taken for the end of the programme. On the web, a channel switched on from the \"TV-Sender\" entry is now taken over by the channel UI, so it comes with the film's own metadata, the overlays and the pause panel instead of the bare channel item. New setting: hide Jellyfin's own \"Live TV\" and \"On Now\" rows on the web home screen.",
+  "changelog": "Fixes the artwork added in 1.0.23.0 not appearing in the playback overlays: the pause panel's and next-up card's posters were loaded lazily, and an image in an overlay that has not been laid out yet has no height - so the browser never got round to loading it and the picture never arrived.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-01T00:00:00.000Z",
-  "version": "1.0.23.0",
+  "version": "1.0.24.0",
   "status": "Active",
   "autoUpdate": false
 }
