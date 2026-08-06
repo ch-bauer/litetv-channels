@@ -45,11 +45,10 @@ public sealed class LiveOffsetResolver
             return null;
         }
 
-        // Only while the entry still names what is on air. A client holding an older
-        // listing would otherwise be told to resume a finished program at the position the
-        // channel has since moved on to.
-        var programId = LiteTvChannelProvider.ProgramIdFromItemId(item.ExternalId!);
-        return programId == airing.Entry.ItemId ? airing.OffsetAt(at) : null;
+        // EXPERIMENT: the id no longer names a program, so there is nothing to go stale and
+        // nothing to compare. The entry always stands for whatever the channel is airing now,
+        // which is what a channel is, and the offset is always the live one.
+        return airing.OffsetAt(at);
     }
 
     /// <summary>

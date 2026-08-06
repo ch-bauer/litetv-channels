@@ -131,19 +131,34 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     /// <returns>The current program's media sources.</returns>
     public Task<IEnumerable<MediaSourceInfo>> GetChannelItemMediaInfo(string id, CancellationToken cancellationToken)
     {
-        // The program is taken from the id rather than from the clock: the server caches
-        // what this returns for the rest of its run, so the answer has to stay true.
-        var programId = ProgramIdFromItemId(id);
-        if (programId is null)
+        // EXPERIMENT: resolve from the clock rather than from the id. Every call is logged
+        // with what it answered, which is the whole point: if the server really caches this,
+        // the log will show it asked once and never again while the schedule moved on.
+        var channelId = ChannelIdFromItemId(id);
+        var channel = channelId is null ? null : ChannelGuide.Channel(channelId.Value);
+        if (channel is null)
         {
             return Task.FromResult(Enumerable.Empty<MediaSourceInfo>());
         }
 
-        if (_libraryManager.GetItemById(programId.Value) is not MediaBrowser.Controller.Entities.Video video)
+        var airing = _guide.ProgramOn(channel);
+        if (airing?.Entry is null)
+        {
+            _logger.LogWarning("LiteTV[experiment]: channel item {Id} asked for media with nothing on air.", id);
+            return Task.FromResult(Enumerable.Empty<MediaSourceInfo>());
+        }
+
+        if (_libraryManager.GetItemById(airing.Entry.ItemId) is not MediaBrowser.Controller.Entities.Video video)
         {
             _logger.LogWarning("LiteTV: the program behind channel item {Id} is no longer in the library.", id);
             return Task.FromResult(Enumerable.Empty<MediaSourceInfo>());
         }
+
+        _logger.LogInformation(
+            "LiteTV[experiment]: media asked for {Id} at {Now:HH:mm:ss}, answered with {Program}.",
+            id,
+            DateTime.Now,
+            airing.Entry.Name);
 
         return Task.FromResult(video.GetMediaSources(true).AsEnumerable());
     }
@@ -158,16 +173,17 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     public IEnumerable<ImageType> GetSupportedChannelImages() => Array.Empty<ImageType>();
 
     /// <summary>
-    /// Builds the id of a channel's on-air item, naming both the channel and the program.
-    /// The program has to be part of it: the server resolves an item's media once and then
-    /// keeps that answer for the rest of its run, so an id that outlived the program would
-    /// keep playing the program it was first resolved for.
+    /// Builds the id of a channel's on-air item. EXPERIMENT: the id names only the channel,
+    /// so it survives a programme changeover instead of being replaced by a new one every
+    /// time the schedule moves on. Whether that is safe depends on whether the server really
+    /// does resolve an item's media once and keep that answer, which is what this build
+    /// exists to find out - see <see cref="GetChannelItemMediaInfo"/>.
     /// </summary>
     /// <param name="channelId">The LiteTV channel id.</param>
-    /// <param name="programId">The library item on air.</param>
+    /// <param name="programId">The library item on air; no longer part of the id.</param>
     /// <returns>The channel item id.</returns>
     internal static string NowPlayingId(Guid channelId, Guid programId)
-        => "now_" + channelId.ToString("N") + "_" + programId.ToString("N");
+        => "now_" + channelId.ToString("N");
 
     /// <summary>
     /// Reads the channel back out of an on-air item id.
@@ -247,16 +263,16 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
 
         var current = now.Entry;
 
-        // Carry the media on the entry itself, not only through the callback. A client
-        // reads container and stream details off the item it is about to play, and an entry
-        // that says nothing about its media is one some players will not start.
+        // EXPERIMENT 2: the entry deliberately carries NO media. Handing the server the
+        // sources here is what freezes them - it stores them on the item and then has no
+        // reason to ask again, which is why experiment 1 kept serving the programme that was
+        // on when the entry was built. Leaving them off is the only way to find out whether
+        // the server falls back to IRequiresMediaInfoCallback for each playback instead.
         var media = _libraryManager.GetItemById(current.ItemId) as MediaBrowser.Controller.Entities.Video;
-        var sources = media?.GetMediaSources(true).ToList() ?? new List<MediaSourceInfo>();
 
         var entry = new ChannelItemInfo
         {
             Id = NowPlayingId(channel.Id, current.ItemId),
-            MediaSources = sources,
             Name = channel.Name,
             Overview = Schedule(now, upcoming),
             Type = ChannelItemType.Media,
