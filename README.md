@@ -1,6 +1,6 @@
 <div align="center">
   <img src="images/icon.png" alt="LiteTV Channels for Jellyfin" width="128" />
-  <h1>LiteTV Channels for Jellyfin (Proof of Concept)</h1>
+  <h1>LiteTV Channels for Jellyfin (WIP)</h1>
 </div>
 
 Lightweight virtual TV channels for your Jellyfin library — **no transcoding, no tuner
