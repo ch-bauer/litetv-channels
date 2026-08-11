@@ -1,4 +1,7 @@
-# LiteTV Channels for Jellyfin (Proof of Concept)
+<div align="center">
+  <img src="images/icon.png" alt="LiteTV Channels for Jellyfin" width="128" />
+  <h1>LiteTV Channels for Jellyfin (Proof of Concept)</h1>
+</div>
 
 Lightweight virtual TV channels for your Jellyfin library — **no transcoding, no tuner
 emulation, no separate app**. A channel is just a deterministic schedule over your own
