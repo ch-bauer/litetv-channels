@@ -3,6 +3,16 @@
   <h1>LiteTV Channels for Jellyfin (WIP)</h1>
 </div>
 
+> [!CAUTION]
+> **This is a proof of concept, written with AI.** It is purely for testing, and there are
+> many items that are known to be incorrect or broken. It is not advisable to use this on a
+> non-test server.
+>
+> For this reason it is offered as is, with **no guarantee of support, bug fixes, or
+> troubleshooting**.
+>
+> **It is NOT recommended to fork or build on top of this plugin!**
+
 Lightweight virtual TV channels for your Jellyfin library — **no transcoding, no tuner
 emulation, no separate app**. A channel is just a deterministic schedule over your own
 movies and series: tuning in starts normal direct playback of whatever is "on air"
