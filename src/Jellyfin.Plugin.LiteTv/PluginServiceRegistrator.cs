@@ -1,7 +1,6 @@
 using Jellyfin.Plugin.LiteTv.Channels;
 using Jellyfin.Plugin.LiteTv.Core;
 using Jellyfin.Plugin.LiteTv.Sessions;
-using Jellyfin.Plugin.LiteTv.Web;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Library;
@@ -45,15 +44,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 
         // Keeps the channel out of My Media when the setting asks for it, on every client.
         serviceCollection.AddHostedService<MyMediaVisibility>();
-
-        // Preferred: register the script injection with the File Transformation
-        // plugin when installed (same mechanism as Intro Skipper).
-        serviceCollection.AddHostedService<FileTransformationRegistration>();
-
-        // Fallback: request-time injection into the web client's index.html; works
-        // even when the web directory on disk is read-only. Stands down when File
-        // Transformation handles the injection.
-        serviceCollection.AddSingleton<IStartupFilter, InjectionStartupFilter>();
     }
 
     /// <summary>

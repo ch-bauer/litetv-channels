@@ -67,10 +67,6 @@ public class LiteTvController : ControllerBase
         var config = Plugin.Instance?.Configuration;
         var result = new GuideDto
         {
-            EnableWebUi = config?.EnableWebUi ?? false,
-            ShowHomeRow = config?.ShowHomeRow ?? false,
-            ShowHeaderButton = config?.ShowHeaderButton ?? false,
-            HideNativeLiveTvSections = config?.HideNativeLiveTvSections ?? false,
             ShieldBingedEpisodes = config?.ShieldBingedEpisodes ?? true
         };
 
@@ -637,19 +633,6 @@ public class GuideChannelDto
 /// </summary>
 public class GuideDto
 {
-    /// <summary>Gets or sets a value indicating whether the injected web UI is enabled.</summary>
-    public bool EnableWebUi { get; set; }
-
-    /// <summary>Gets or sets a value indicating whether the home row is enabled.</summary>
-    public bool ShowHomeRow { get; set; }
-
-    /// <summary>Gets or sets a value indicating whether the header guide button is enabled.</summary>
-    public bool ShowHeaderButton { get; set; }
-
-    /// <summary>Gets or sets a value indicating whether Jellyfin's own Live TV rows are
-    /// hidden on the web home screen.</summary>
-    public bool HideNativeLiveTvSections { get; set; }
-
     /// <summary>Gets or sets a value indicating whether episodes watched by carrying on with
     /// a series are kept off the account like the rest of what a channel plays.</summary>
     public bool ShieldBingedEpisodes { get; set; }

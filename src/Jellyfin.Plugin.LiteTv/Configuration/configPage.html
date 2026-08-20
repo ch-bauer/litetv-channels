@@ -12,41 +12,6 @@
                     <h2 class="sectionTitle">LiteTV Channels</h2>
                 </div>
 
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label>
-                        <input is="emby-checkbox" type="checkbox" id="EnableWebUi" />
-                        <span>Enable the TV UI in the web client</span>
-                    </label>
-                    <div class="fieldDescription checkboxFieldDescription">
-                        Master switch for the playback overlays (channel bug, next-up, pause panel) and the two options below. Web client only (browser and apps that embed the web UI). After installing or updating the plugin, hard-refresh the browser (Ctrl+F5) once.
-                    </div>
-                </div>
-
-                <div class="checkboxContainer">
-                    <label>
-                        <input is="emby-checkbox" type="checkbox" id="ShowHomeRow" />
-                        <span>Show a "TV" row with channel cards on the home screen</span>
-                    </label>
-                </div>
-
-                <div class="checkboxContainer">
-                    <label>
-                        <input is="emby-checkbox" type="checkbox" id="ShowHeaderButton" />
-                        <span>Show the 📺 channel-guide button in the header</span>
-                    </label>
-                </div>
-
-                <div class="checkboxContainer">
-                    <label>
-                        <input is="emby-checkbox" type="checkbox" id="HideNativeLiveTvSections" />
-                        <span>Hide Jellyfin's own "Live TV" and "On Now" rows on the home screen</span>
-                    </label>
-                </div>
-                <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
-                    Web client only, and only the home screen — the Live TV section itself stays where
-                    it is. Use it when the channel row above has taken their place.
-                </div>
-
                 <div class="checkboxContainer">
                     <label>
                         <input is="emby-checkbox" type="checkbox" id="PublishAsChannels" />
@@ -68,8 +33,8 @@
                     A channel is not a library, and listed beside the film and series folders it
                     offers a flat list of schedule entries rather than a channel. This takes the
                     entry out of My Media everywhere at once — it does not unpublish anything, and
-                    the channels stay playable. The web client reaches them through its own row and
-                    guide; the TV app asks for hidden views on purpose, so it still lists them.
+                    the channels stay playable. The TV app asks for hidden views on purpose, so it
+                    still lists them.
                 </div>
 
 
@@ -154,7 +119,7 @@
                             <span>Fill the leftover time with trailers for what is coming up</span>
                         </label>
                         <div class="fieldDescription checkboxFieldDescription">
-                            Trailers held in the library air on every client. Trailers the library only links to (usually YouTube) are played by the web client during the gap.
+                            Trailers held in the library air as ordinary schedule entries. Trailers the library only links to (usually YouTube) are not played yet.
                         </div>
                     </div>
 
@@ -620,10 +585,6 @@
                     ApiClient.getPluginConfiguration(pluginId).then(function (loaded) {
                         config = loaded;
                         config.Channels = config.Channels || [];
-                        q('#EnableWebUi').checked = config.EnableWebUi !== false;
-                        q('#ShowHomeRow').checked = config.ShowHomeRow !== false;
-                        q('#ShowHeaderButton').checked = config.ShowHeaderButton !== false;
-                        q('#HideNativeLiveTvSections').checked = config.HideNativeLiveTvSections === true;
                         q('#PublishAsChannels').checked = config.PublishAsChannels !== false;
                         q('#HideChannelFromMyMedia').checked = config.HideChannelFromMyMedia === true;
                         q('#ShieldBingedEpisodes').checked = config.ShieldBingedEpisodes !== false;
@@ -738,10 +699,6 @@
                     e.preventDefault();
                     Dashboard.showLoadingMsg();
                     applyEditorToChannel();
-                    config.EnableWebUi = q('#EnableWebUi').checked;
-                    config.ShowHomeRow = q('#ShowHomeRow').checked;
-                    config.ShowHeaderButton = q('#ShowHeaderButton').checked;
-                    config.HideNativeLiveTvSections = q('#HideNativeLiveTvSections').checked;
                     config.PublishAsChannels = q('#PublishAsChannels').checked;
                     config.HideChannelFromMyMedia = q('#HideChannelFromMyMedia').checked;
                     config.ShieldBingedEpisodes = q('#ShieldBingedEpisodes').checked;
