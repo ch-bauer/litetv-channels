@@ -60,18 +60,30 @@
 
                 <div class="checkboxContainer">
                     <label>
-                        <input is="emby-checkbox" type="checkbox" id="PublishAsLiveTv" />
-                        <span>Also publish to Jellyfin's Live TV section (fills the built-in guide)</span>
+                        <input is="emby-checkbox" type="checkbox" id="HideChannelFromMyMedia" />
+                        <span>Hide "TV-Sender" from My Media on all devices</span>
                     </label>
                 </div>
                 <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
-                    Puts the channels and their whole schedule into the server's own Live TV guide, so
-                    native clients get a proper grid without the injected UI. Switching a channel on
-                    there starts the current program from its beginning rather than joining it live —
-                    Live TV hands a client a stream, not a position in one. For joining live, use the
-                    "TV-Sender" entry above. Saving asks Jellyfin to refresh its guide, which is what
-                    fills the Live TV section; it can also be run by hand under Scheduled Tasks →
-                    Refresh Guide.
+                    A channel is not a library, and listed beside the film and series folders it
+                    offers a flat list of schedule entries rather than a channel. This takes the
+                    entry out of My Media everywhere at once — it does not unpublish anything, and
+                    the channels stay playable. The web client reaches them through its own row and
+                    guide; the TV app asks for hidden views on purpose, so it still lists them.
+                </div>
+
+
+                <div class="checkboxContainer">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="ShieldBingedEpisodes" />
+                        <span>Keep episodes watched by carrying on with a series off the account too</span>
+                    </label>
+                </div>
+                <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
+                    On a channel you can choose to keep watching the series instead of following the
+                    schedule. Those episodes are still the channel playing, so by default they leave no
+                    trace either. Turn this off to record them normally, so Next Up moves on and the
+                    series can be resumed elsewhere.
                 </div>
 
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
@@ -145,6 +157,37 @@
                             Trailers held in the library air on every client. Trailers the library only links to (usually YouTube) are played by the web client during the gap.
                         </div>
                     </div>
+
+
+                    <h4>Trailers</h4>
+                    <div class="selectContainer">
+                        <select is="emby-select" id="TrailerMode" label="Work trailers into the schedule">
+                            <option value="Off">Off</option>
+                            <option value="Preview">Preview — advertise what this channel airs later</option>
+                            <option value="Manual">Only the titles named below</option>
+                            <option value="Both">Preview, falling back to the titles named below</option>
+                        </select>
+                        <div class="fieldDescription">
+                            A trailer becomes part of the schedule like any other program, so it shows in the guide and everything after it moves along by its length. This is separate from filling slot gaps above — a channel running back to back has no gaps, and would otherwise never show one.
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="TrailerEveryPrograms" min="1" step="1" label="Show a trailer after every N programs" />
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="TrailerLookahead" min="1" step="1" label="Advertise the program this many places ahead" />
+                        <div class="fieldDescription">
+                            1 announces whatever is next; a few places ahead previews something still to come. The queue loops, so the last programs advertise what comes round at the start again.
+                        </div>
+                    </div>
+
+                    <div class="paperList" id="TrailerTitleList" style="margin-bottom: 1em;"></div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="TrailerSearch" label="Advertise these titles (search movies, series, collections)" />
+                    </div>
+                    <div class="paperList" id="TrailerSearchResults" style="margin-bottom: 1em;"></div>
 
                     <h4>Program (looping forever)</h4>
                     <div class="paperList" id="SourceList" style="margin-bottom: 1em;"></div>
@@ -226,6 +269,7 @@
             var currentIndex = -1;
             var currentBlockIndex = -1;
             var searchTimer = null;
+            var trailerSearchTimer;
             var blockSearchTimer = null;
 
             function q(sel) { return document.querySelector(sel); }
@@ -260,6 +304,9 @@
                 q('#PlayOrder').value = channel.Order || 'Sequential';
                 q('#SlotMinutes').value = channel.SlotMinutes || 0;
                 q('#TrailersInGaps').checked = channel.TrailersInGaps !== false;
+                q('#TrailerMode').value = channel.Trailers || 'Off';
+                q('#TrailerEveryPrograms').value = channel.TrailerEveryPrograms || 3;
+                q('#TrailerLookahead').value = channel.TrailerLookahead || 3;
                 q('#ResetAnchor').checked = false;
                 renderSources();
                 q('#SearchResults').innerHTML = '';
@@ -272,22 +319,32 @@
 
             function renderSources() {
                 renderSourceList(q('#SourceList'), currentChannel());
+                renderTrailerTitles();
+            }
+
+            function renderTrailerTitles() {
+                renderSourceList(
+                    q('#TrailerTitleList'),
+                    currentChannel(),
+                    'TrailerTitles',
+                    'Nothing named yet. These are advertised whatever the channel is airing.');
             }
 
             function renderBlockSources() {
                 renderSourceList(q('#BlockSourceList'), currentBlock());
             }
 
-            function renderSourceList(list, owner) {
+            function renderSourceList(list, owner, key, emptyText) {
+                key = key || 'Sources';
                 list.innerHTML = '';
-                if (!owner || !owner.Sources || !owner.Sources.length) {
+                if (!owner || !owner[key] || !owner[key].length) {
                     var empty = document.createElement('div');
                     empty.className = 'listItem';
-                    empty.textContent = 'No content yet. Search below to add movies, series or collections.';
+                    empty.textContent = emptyText || 'No content yet. Search below to add movies, series or collections.';
                     list.appendChild(empty);
                     return;
                 }
-                owner.Sources.forEach(function (source, i) {
+                owner[key].forEach(function (source, i) {
                     var row = document.createElement('div');
                     row.className = 'listItem';
                     row.style.display = 'flex';
@@ -307,11 +364,11 @@
                         btn.textContent = move[0];
                         btn.addEventListener('click', function () {
                             var j = i + move[1];
-                            if (j < 0 || j >= owner.Sources.length) { return; }
-                            var tmp = owner.Sources[i];
-                            owner.Sources[i] = owner.Sources[j];
-                            owner.Sources[j] = tmp;
-                            renderSourceList(list, owner);
+                            if (j < 0 || j >= owner[key].length) { return; }
+                            var tmp = owner[key][i];
+                            owner[key][i] = owner[key][j];
+                            owner[key][j] = tmp;
+                            renderSourceList(list, owner, key, emptyText);
                         });
                         row.appendChild(btn);
                     });
@@ -322,8 +379,8 @@
                     remove.className = 'raised emby-button';
                     remove.textContent = '✕';
                     remove.addEventListener('click', function () {
-                        owner.Sources.splice(i, 1);
-                        renderSourceList(list, owner);
+                        owner[key].splice(i, 1);
+                        renderSourceList(list, owner, key, emptyText);
                     });
                     row.appendChild(remove);
                     list.appendChild(row);
@@ -495,7 +552,8 @@
                 return 'Movie';
             }
 
-            function runSearch(term, results, ownerFn, onAdded) {
+            function runSearch(term, results, ownerFn, onAdded, key) {
+                key = key || 'Sources';
                 if (!term || term.length < 2) {
                     results.innerHTML = '';
                     return;
@@ -528,33 +586,13 @@
                         add.addEventListener('click', function () {
                             var owner = ownerFn();
                             if (!owner) { return; }
-                            owner.Sources = owner.Sources || [];
-                            owner.Sources.push({ Type: typeForItem(item), ItemId: item.Id, Name: item.Name });
+                            owner[key] = owner[key] || [];
+                            owner[key].push({ Type: typeForItem(item), ItemId: item.Id, Name: item.Name });
                             onAdded();
                         });
                         row.appendChild(add);
                         results.appendChild(row);
                     });
-                });
-            }
-
-            // Jellyfin only asks a Live TV service for its channels when the guide is
-            // refreshed, so ticking the box on its own leaves the Live TV section empty
-            // until some scheduled run hours later - which reads as the setting doing
-            // nothing. Saving asks for that refresh, so the guide fills in straight away.
-            function refreshLiveTvGuide() {
-                if (!config.PublishAsLiveTv) {
-                    return;
-                }
-                ApiClient.getScheduledTasks().then(function (tasks) {
-                    var task = (tasks || []).filter(function (t) { return t.Key === 'RefreshGuide'; })[0];
-                    if (task) {
-                        ApiClient.startScheduledTask(task.Id).catch(function (err) {
-                            console.warn('liteTv: could not start the guide refresh', err);
-                        });
-                    }
-                }).catch(function (err) {
-                    console.warn('liteTv: could not look up the guide refresh task', err);
                 });
             }
 
@@ -568,6 +606,9 @@
                 channel.Order = q('#PlayOrder').value;
                 channel.SlotMinutes = Math.max(0, parseInt(q('#SlotMinutes').value, 10) || 0);
                 channel.TrailersInGaps = q('#TrailersInGaps').checked;
+                channel.Trailers = q('#TrailerMode').value;
+                channel.TrailerEveryPrograms = Math.max(1, parseInt(q('#TrailerEveryPrograms').value, 10) || 3);
+                channel.TrailerLookahead = Math.max(1, parseInt(q('#TrailerLookahead').value, 10) || 3);
                 if (q('#ResetAnchor').checked) {
                     channel.AnchorUtc = new Date().toISOString();
                 }
@@ -584,7 +625,8 @@
                         q('#ShowHeaderButton').checked = config.ShowHeaderButton !== false;
                         q('#HideNativeLiveTvSections').checked = config.HideNativeLiveTvSections === true;
                         q('#PublishAsChannels').checked = config.PublishAsChannels !== false;
-                        q('#PublishAsLiveTv').checked = config.PublishAsLiveTv === true;
+                        q('#HideChannelFromMyMedia').checked = config.HideChannelFromMyMedia === true;
+                        q('#ShieldBingedEpisodes').checked = config.ShieldBingedEpisodes !== false;
                         currentIndex = config.Channels.length ? 0 : -1;
                         renderChannelSelect();
                         renderEditor();
@@ -610,7 +652,11 @@
                     Blocks: [],
                     Order: 'Sequential',
                     SlotMinutes: 0,
-                    TrailersInGaps: true
+                    TrailersInGaps: true,
+                    Trailers: 'Off',
+                    TrailerEveryPrograms: 3,
+                    TrailerLookahead: 3,
+                    TrailerTitles: []
                 });
                 currentIndex = config.Channels.length - 1;
                 renderChannelSelect();
@@ -630,6 +676,14 @@
                 if (searchTimer) { clearTimeout(searchTimer); }
                 searchTimer = setTimeout(function () {
                     runSearch(term, q('#SearchResults'), currentChannel, renderSources);
+                }, 350);
+            });
+
+            q('#TrailerSearch').addEventListener('input', function () {
+                var term = this.value.trim();
+                if (trailerSearchTimer) { clearTimeout(trailerSearchTimer); }
+                trailerSearchTimer = setTimeout(function () {
+                    runSearch(term, q('#TrailerSearchResults'), currentChannel, renderTrailerTitles, 'TrailerTitles');
                 }, 350);
             });
 
@@ -689,11 +743,11 @@
                     config.ShowHeaderButton = q('#ShowHeaderButton').checked;
                     config.HideNativeLiveTvSections = q('#HideNativeLiveTvSections').checked;
                     config.PublishAsChannels = q('#PublishAsChannels').checked;
-                    config.PublishAsLiveTv = q('#PublishAsLiveTv').checked;
+                    config.HideChannelFromMyMedia = q('#HideChannelFromMyMedia').checked;
+                    config.ShieldBingedEpisodes = q('#ShieldBingedEpisodes').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
                         renderBlockSelect();
-                        refreshLiveTvGuide();
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
                     return false;

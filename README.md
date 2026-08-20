@@ -36,7 +36,7 @@ comes straight from your library.
 | Client | Experience |
 | --- | --- |
 | Web browser / apps embedding the web UI | Full: home-screen channel row, 📺 guide as a time grid, overlays, autoplay, trailers between programs. A channel switched on from the "TV-Sender" library entry is taken over by the same UI, so it plays the program itself — with its own artwork, plot and pause screen — rather than the bare channel entry |
-| Native apps (Android TV, iOS, …) | Browse the "TV-Sender" library entry and play a channel to join it live. Optionally the channels also appear in Jellyfin's own **Live TV** section with the full schedule in the built-in guide — switching on there starts the current program from its beginning rather than joining it live, because Live TV hands a client a stream and not a position in one |
+| Native apps (Android TV, iOS, …) | Browse the "TV-Sender" library entry and play a channel to join it live. The channels are deliberately not published to Jellyfin's own **Live TV** section: that route hands a client a stream rather than a position in one, so it could only ever start the current program from its beginning — a worse way in to the same channels |
 | Any client, driven from a browser | Open the guide on any browser (e.g. your phone) and "Auf Gerät…" — the server starts channel playback on the device at the live position and keeps pushing the next program |
 
 ## Installation

@@ -103,8 +103,13 @@ public class ChannelPlaylistBuilder
             .Append(channel.EpisodesPerBlock).Append('|')
             .Append((int)channel.Order).Append('|')
             .Append(channel.SlotMinutes).Append('|')
-            .Append(channel.TrailersInGaps).Append('|');
+            .Append(channel.TrailersInGaps).Append('|')
+            .Append((int)channel.Trailers).Append('|')
+            .Append(channel.TrailerEveryPrograms).Append('|')
+            .Append(channel.TrailerLookahead).Append('|');
         AppendSources(text, channel.Sources);
+        text.Append('~');
+        AppendSources(text, channel.TrailerTitles);
 
         foreach (var block in channel.Blocks)
         {
@@ -200,11 +205,87 @@ public class ChannelPlaylistBuilder
 
     private IReadOnlyList<ScheduledEntry> Build(TvChannel channel)
     {
-        return Order(
-            Interleave(Expand(channel.Sources, channel.Name), channel.EpisodesPerBlock),
-            channel.Order,
-            channel.Id,
-            WeekTimeline.BaseLineup);
+        return WithScheduledTrailers(
+            Order(
+                Interleave(Expand(channel.Sources, channel.Name), channel.EpisodesPerBlock),
+                channel.Order,
+                channel.Id,
+                WeekTimeline.BaseLineup),
+            channel);
+    }
+
+    /// <summary>
+    /// Works trailers into a channel's queue as programming in their own right.
+    /// <para>
+    /// A trailer here is not filler. Filling gaps only ever happens where a slot grid leaves
+    /// one, so a channel running back to back would never show a trailer at all - and a
+    /// trailer for whatever starts in a moment announces rather than advertises. So one is
+    /// worked in every few programs, for something far enough ahead to still be worth
+    /// hearing about.
+    /// </para>
+    /// <para>
+    /// The choice is made from the queue and the channel alone, never from the clock: a
+    /// trailer becomes a scheduled entry like any other, and everything after it in the loop
+    /// moves by its length. Were it drawn any other way the guide would promise one thing
+    /// and the channel would air another.
+    /// </para>
+    /// <para>
+    /// Only trailers the library holds as files can be placed. Where a library links its
+    /// trailers out instead, nothing is scheduled and the web client embeds them as before.
+    /// </para>
+    /// </summary>
+    /// <param name="queue">The channel's programs, in the order they play.</param>
+    /// <param name="channel">The channel definition.</param>
+    /// <returns>The queue with trailers worked in.</returns>
+    private IReadOnlyList<ScheduledEntry> WithScheduledTrailers(IReadOnlyList<ScheduledEntry> queue, TvChannel channel)
+    {
+        if (channel.Trailers == TrailerMode.Off || queue.Count == 0)
+        {
+            return queue;
+        }
+
+        var every = Math.Max(1, channel.TrailerEveryPrograms);
+        var lookahead = Math.Max(1, channel.TrailerLookahead);
+        var wantsPreview = channel.Trailers is TrailerMode.Preview or TrailerMode.Both;
+        var wantsManual = channel.Trailers is TrailerMode.Manual or TrailerMode.Both;
+
+        var named = wantsManual
+            ? channel.TrailerTitles.SelectMany(t => TrailersFor(t.ItemId)).ToList()
+            : new List<ScheduledEntry>();
+
+        var result = new List<ScheduledEntry>(queue.Count);
+        var namedTaken = 0;
+
+        for (var i = 0; i < queue.Count; i++)
+        {
+            result.Add(queue[i]);
+
+            if ((i + 1) % every != 0)
+            {
+                continue;
+            }
+
+            ScheduledEntry? trailer = null;
+            if (wantsPreview)
+            {
+                // Wrapping is deliberate: a channel is a loop, so the program a few places on
+                // from the end is the one that comes round at the start again.
+                var advertised = queue[(i + lookahead) % queue.Count];
+                trailer = TrailersFor(advertised.ItemId).FirstOrDefault();
+            }
+
+            if (trailer is null && named.Count > 0)
+            {
+                trailer = named[namedTaken++ % named.Count];
+            }
+
+            if (trailer is not null)
+            {
+                result.Add(trailer);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
