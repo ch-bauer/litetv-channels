@@ -162,6 +162,14 @@ public class ChannelPlaylistBuilder
     }
 
     /// <summary>
+    /// How long a library item runs, in ticks, or zero when it is unknown or gone.
+    /// </summary>
+    /// <param name="itemId">The item.</param>
+    /// <returns>The runtime in ticks.</returns>
+    public long RuntimeOf(Guid itemId)
+        => _libraryManager.GetItemById(itemId)?.RunTimeTicks ?? 0;
+
+    /// <summary>
     /// Drops all cached queues and schedules (called when the plugin configuration changes).
     /// </summary>
     public void Invalidate()

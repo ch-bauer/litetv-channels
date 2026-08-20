@@ -35,6 +35,48 @@ public class PluginConfiguration : BasePluginConfiguration
 }
 
 /// <summary>
+/// A trailer the schedule places itself, at a time of the week the viewer chose.
+/// <para>
+/// Unlike the automatic filling, which trails whatever happens to be on next, a slot is a
+/// standing instruction: this thing, at this time, on these days. It claims the interstitial
+/// its start time falls inside, so it only ever airs where the schedule already left room.
+/// </para>
+/// </summary>
+public class TrailerSlot
+{
+    /// <summary>Gets or sets what to call it in the guide.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets a value indicating whether the slot is in use.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Gets or sets the time of day it airs, in minutes past midnight.</summary>
+    public int StartMinutes { get; set; }
+
+    /// <summary>Gets or sets the days it applies to. Empty means every day.</summary>
+    public List<DayOfWeek> Days { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the library item to play - a trailer, a clip, anything with a runtime.
+    /// Takes precedence over <see cref="Url"/> when both are set, because a file the server
+    /// holds can be scheduled to the second and an address cannot.
+    /// </summary>
+    public Guid ItemId { get; set; }
+
+    /// <summary>
+    /// Gets or sets an address to play instead, for something the library only links to.
+    /// The client resolves and plays it; the server never fetches it.
+    /// </summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets how long to give it, in seconds, when it is an address. A library item
+    /// brings its own runtime; an address has none the server can read.
+    /// </summary>
+    public int DurationSeconds { get; set; } = 30;
+}
+
+/// <summary>
 /// A virtual TV channel: an ordered, endlessly looping queue of library content.
 /// The schedule is fully deterministic: what is on "now" derives from the wall clock,
 /// the anchor timestamp and the item runtimes. (v2 may add optional time blocks.)
@@ -135,6 +177,19 @@ public class TvChannel
     /// has, and a channel whose blocks leave gaps falls back to its own lineup.
     /// </summary>
     public List<ProgramBlock> Blocks { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets trailers placed at particular times, rather than found for whatever the
+    /// channel is about to air.
+    /// <para>
+    /// The automatic filling is fine for "something before the film", but it cannot say "this
+    /// bumper, at eight, on weekdays". A slot claims an interstitial whose time it falls in and
+    /// plays what it names - a library item, or an address, which is how a trailer the library
+    /// only links to gets scheduled deliberately rather than found.
+    /// </para>
+    /// </summary>
+    public List<TrailerSlot> TrailerSlots { get; set; } = new();
+
 }
 
 /// <summary>
