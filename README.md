@@ -45,7 +45,7 @@ wanted back.
 ## Installation
 
 1. Dashboard → Plugins → Repositories → add
-   `https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/manifest.json`
+   `https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/manifest.json`
 2. Install **LiteTV Channels** from the catalog and restart Jellyfin.
 3. Configure channels under Dashboard → Plugins → LiteTV Channels.
 
