@@ -63,7 +63,7 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     public string DataVersion => ConfigurationVersion();
 
     /// <inheritdoc />
-    public string HomePageUrl => "https://github.com/ch-bauer/jellyfin-plugin-litetv";
+    public string HomePageUrl => "https://github.com/ch-bauer/litetv-channels";
 
     /// <inheritdoc />
     public ChannelParentalRating ParentalRating => ChannelParentalRating.GeneralAudience;
