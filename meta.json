@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "A guide row asks for one wide, specific picture of the programme, and which image that is depends on what the programme is. An episode's Primary image is its still - already the right shape, and the one thing that tells two episodes of a series apart. A film's Primary is its upright poster, and cropping that into a wide row is what left the films looking wrong next to the episodes. Films now ask for the Thumb (\"Miniaturansicht\"), which is the same artwork drawn wide.\n\nAn episode with no still of its own no longer falls through to the series poster, which is the same wrong shape one rung further away; it takes the series' Thumb or backdrop instead. Primary is still the last resort everywhere, because it is the one image nearly everything has and a badly-shaped picture of the right programme beats an empty rectangle.",
+  "changelog": "A channel has three pictures now, not one wide one used twice. A banner is made to be looked at with a name over it, which is what a channel card is; a backdrop is the only artwork drawn to fill a screen; a cover is the upright one. Answering the first two with the same file made the channel screen a blown-up version of the card that led to it.\n\nThe channel's automatic cover asks the series before the episode. An episode's Primary image is a 16:9 still of one scene - neither upright nor a picture of the channel - which is what turned up in the cover slot.\n\nThe configuration page shows what a channel will actually air: times, titles and breaks, day by day. Everything else on that page describes a channel and none of it says what comes out, and a loop of three series on a fifteen-minute grid is not something anybody can hold in their head. A suggested channel now arrives with the same fields a hand-made one has, rather than half of them.\n\nChosen artwork can be downloaded and kept: POST /LiteTv/Artwork/{channelId}/{kind}/Fetch takes an address and stores the bytes here. A picture from a metadata provider does this automatically, since an address nobody here looks after stops working sooner or later, and a television behind a household firewall may not reach it even while it works. Pictures are drawn whole and in their own shape when choosing, rather than as small wide crops that turn every poster into a slice of somebody's face.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-20T00:00:00.000Z",
-  "version": "1.0.30.0",
+  "version": "1.0.31.0",
   "status": "Active",
   "autoUpdate": false
 }

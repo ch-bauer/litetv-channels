@@ -33,6 +33,7 @@ public class LiteTvController : ControllerBase
     private readonly ILibraryManager _libraryManager;
     private readonly ChannelPlaybackUser _playbackUser;
     private readonly YouTubeStreamResolver _trailers;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
@@ -41,16 +42,19 @@ public class LiteTvController : ControllerBase
     /// <param name="libraryManager">The library manager.</param>
     /// <param name="playbackUser">The account channel playback runs under.</param>
     /// <param name="trailers">Resolves linked trailers into playable streams.</param>
+    /// <param name="httpClientFactory">Fetches artwork chosen from somewhere else.</param>
     public LiteTvController(
         ChannelGuide guide,
         ILibraryManager libraryManager,
         ChannelPlaybackUser playbackUser,
-        YouTubeStreamResolver trailers)
+        YouTubeStreamResolver trailers,
+        IHttpClientFactory httpClientFactory)
     {
         _guide = guide;
         _libraryManager = libraryManager;
         _playbackUser = playbackUser;
         _trailers = trailers;
+        _httpClientFactory = httpClientFactory;
     }
 
     /// <summary>
@@ -250,6 +254,92 @@ public class LiteTvController : ControllerBase
         }
 
         return new UploadedArtworkDto { Url = $"/LiteTv/Artwork/{channelId}/{kind.ToLowerInvariant()}" };
+    }
+
+    /// <summary>
+    /// Fetches a picture from somewhere else and keeps it.
+    /// <para>
+    /// A picture chosen from a metadata provider is an address on somebody else's server, and
+    /// an address nobody here is looking after stops working sooner or later - at which point
+    /// the channel is a black rectangle again and nothing says why. A television on the far
+    /// side of a household firewall may not reach it even while it works. Downloading it once
+    /// makes the choice permanent and local, which is what choosing a picture ought to mean.
+    /// </para>
+    /// <para>
+    /// Addresses on this server are fetched too, deliberately: a copy stops following the
+    /// library item, which is the point when somebody re-scrapes a series and does not want
+    /// the channel's face to change with it.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel the picture belongs to.</param>
+    /// <param name="kind">Which picture: banner, backdrop or poster.</param>
+    /// <param name="request">The address to fetch.</param>
+    /// <returns>The address the picture is now served from.</returns>
+    [HttpPost("Artwork/{channelId}/{kind}/Fetch")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<UploadedArtworkDto>> FetchArtwork(
+        [FromRoute] Guid channelId,
+        [FromRoute] string kind,
+        [FromBody] FetchArtworkDto request)
+    {
+        if (!ArtworkKinds.Contains(kind, StringComparer.OrdinalIgnoreCase))
+        {
+            return BadRequest("kind must be banner, backdrop or poster");
+        }
+
+        var directory = ArtworkDirectory();
+        if (directory is null)
+        {
+            return BadRequest("the plugin has nowhere to store artwork");
+        }
+
+        if (!Uri.TryCreate(request.Url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return BadRequest("give an http or https address");
+        }
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(30);
+
+            using var response = await client
+                .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, HttpContext.RequestAborted)
+                .ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return BadRequest($"the address answered {(int)response.StatusCode}");
+            }
+
+            var type = response.Content.Headers.ContentType?.MediaType;
+            if (type is not null && !type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest($"that address is {type}, not a picture");
+            }
+
+            Directory.CreateDirectory(directory);
+            var path = Path.Combine(directory, ArtworkFileName(channelId, kind));
+
+            // Written whole and moved into place, so a fetch that dies half way leaves the
+            // picture that was already there rather than a truncated file the client will
+            // draw as nothing.
+            var temporary = path + ".part";
+            await using (var file = System.IO.File.Create(temporary))
+            {
+                await response.Content.CopyToAsync(file, HttpContext.RequestAborted).ConfigureAwait(false);
+            }
+
+            System.IO.File.Move(temporary, path, overwrite: true);
+            return new UploadedArtworkDto { Url = $"/LiteTv/Artwork/{channelId}/{kind.ToLowerInvariant()}" };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        {
+            return BadRequest($"could not fetch that picture: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -597,11 +687,18 @@ public class LiteTvController : ControllerBase
             PosterUrl = NullIfBlank(configured.PosterUrl)
         };
 
-        if (configured.ImageItemId != Guid.Empty && FillChannelImage(dto, Artwork(cache, configured.ImageItemId), null))
+        // A named item fills whatever it can; the scan below tops up anything it did not have,
+        // so pointing a channel at a series that has no backdrop still gets it a backdrop.
+        if (configured.ImageItemId != Guid.Empty
+            && FillChannelImage(dto, Artwork(cache, configured.ImageItemId), null))
         {
             return dto;
         }
 
+        // Kept going rather than stopped at the first hit. The three pictures are three
+        // different shapes and one item rarely has all of them - a series with a banner and no
+        // backdrop is ordinary - so the scan takes what each entry can give and stops when the
+        // channel has a full set, or when the schedule runs out.
         foreach (var entry in window.Select(a => a.Entry ?? a.NextProgram).OfType<ScheduledEntry>())
         {
             var series = entry.SeriesId is { } seriesId && seriesId != Guid.Empty ? Artwork(cache, seriesId) : null;
@@ -615,28 +712,43 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
-    /// Puts whatever artwork the given items have onto the channel image, and says whether
-    /// that was enough to draw a channel card with.
+    /// Puts whatever artwork the given items have onto the channel image, and says whether the
+    /// channel now has a full set.
     /// <para>
-    /// A banner leads the wide search here, unlike a program's, because a banner is drawn to
-    /// be looked at with a name written over it - which is exactly what a channel card is.
+    /// Three pictures, because a client draws three different things and they are not
+    /// interchangeable. A banner is made to be looked at with a name written over it, which is
+    /// what a channel card is. A backdrop is the only artwork actually drawn to fill a screen.
+    /// A cover is the upright one. Answering all three with the same file - which is what
+    /// happened while there was only one wide slot - makes the channel screen a blown-up
+    /// version of the card that led to it.
+    /// </para>
+    /// <para>
+    /// The series is asked before the item throughout. For a channel these stand for the
+    /// channel rather than for whatever is on it, and an episode's own artwork is a picture of
+    /// one scene: its Primary is a 16:9 still, which is neither upright nor the channel.
     /// </para>
     /// </summary>
     private static bool FillChannelImage(ChannelImageDto dto, BaseItem? item, BaseItem? series)
     {
-        if (Pick(new[] { ImageType.Primary, ImageType.Thumb }, item, series) is { } poster)
+        if (Pick(new[] { ImageType.Primary }, series, item) is { } poster)
         {
             dto.PosterItemId ??= poster.ItemId;
             dto.PosterType ??= poster.Type.ToString();
         }
 
-        if (Pick(new[] { ImageType.Banner, ImageType.Thumb, ImageType.Backdrop }, item, series) is { } wide)
+        if (Pick(new[] { ImageType.Banner, ImageType.Thumb }, series, item) is { } banner)
+        {
+            dto.BannerItemId ??= banner.ItemId;
+            dto.BannerType ??= banner.Type.ToString();
+        }
+
+        if (Pick(new[] { ImageType.Backdrop, ImageType.Thumb }, series, item) is { } wide)
         {
             dto.BackdropItemId ??= wide.ItemId;
             dto.BackdropType ??= wide.Type.ToString();
         }
 
-        return dto.BackdropItemId is not null;
+        return dto.PosterItemId is not null && dto.BannerItemId is not null && dto.BackdropItemId is not null;
     }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -815,6 +927,15 @@ public class ChannelSummaryDto
 }
 
 /// <summary>
+/// An address to fetch a channel picture from.
+/// </summary>
+public class FetchArtworkDto
+{
+    /// <summary>Gets or sets the address.</summary>
+    public string Url { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Where an uploaded channel picture ended up.
 /// </summary>
 public class UploadedArtworkDto
@@ -843,7 +964,14 @@ public class ChannelImageDto
     /// <summary>Gets or sets the image type to ask <see cref="PosterItemId"/> for.</summary>
     public string? PosterType { get; set; }
 
-    /// <summary>Gets or sets the item holding the channel's wide artwork.</summary>
+    /// <summary>Gets or sets the item holding the channel's card artwork - wide, with room
+    /// for a name over it.</summary>
+    public Guid? BannerItemId { get; set; }
+
+    /// <summary>Gets or sets the image type to ask <see cref="BannerItemId"/> for.</summary>
+    public string? BannerType { get; set; }
+
+    /// <summary>Gets or sets the item holding the channel's full-screen artwork.</summary>
     public Guid? BackdropItemId { get; set; }
 
     /// <summary>Gets or sets the image type to ask <see cref="BackdropItemId"/> for.</summary>
