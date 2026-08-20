@@ -2,6 +2,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Core;
 using Jellyfin.Plugin.LiteTv.Sessions;
+using Jellyfin.Plugin.LiteTv.Trailers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -28,6 +29,7 @@ public class LiteTvController : ControllerBase
     private readonly ChannelGuide _guide;
     private readonly ILibraryManager _libraryManager;
     private readonly ChannelPlaybackUser _playbackUser;
+    private readonly YouTubeStreamResolver _trailers;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
@@ -35,14 +37,17 @@ public class LiteTvController : ControllerBase
     /// <param name="guide">The channel guide.</param>
     /// <param name="libraryManager">The library manager.</param>
     /// <param name="playbackUser">The account channel playback runs under.</param>
+    /// <param name="trailers">Resolves linked trailers into playable streams.</param>
     public LiteTvController(
         ChannelGuide guide,
         ILibraryManager libraryManager,
-        ChannelPlaybackUser playbackUser)
+        ChannelPlaybackUser playbackUser,
+        YouTubeStreamResolver trailers)
     {
         _guide = guide;
         _libraryManager = libraryManager;
         _playbackUser = playbackUser;
+        _trailers = trailers;
     }
 
     /// <summary>
@@ -179,6 +184,50 @@ public class LiteTvController : ControllerBase
         return credentials is null
             ? StatusCode(StatusCodes.Status503ServiceUnavailable)
             : credentials;
+    }
+
+    /// <summary>
+    /// Resolves a trailer for an item into something a player can be handed.
+    /// <para>
+    /// Almost every trailer a library has is a YouTube link rather than a file, and a
+    /// television app cannot open one - Jellyfin's own clients hand it to whatever app claims
+    /// the link, which leaves the channel behind in another application. This turns the link
+    /// into a stream URL, so a trailer is just another thing the player plays.
+    /// </para>
+    /// <para>
+    /// Ask for it <b>before</b> the break arrives. Resolution reaches out to several services
+    /// in turn and can take seconds, which a schedule cannot absorb at a programme boundary;
+    /// the client knows what is coming next long before it needs it. When this answers 404 the
+    /// client should show a card - "20:15 Avatar" over the artwork - rather than dead air.
+    /// </para>
+    /// </summary>
+    /// <param name="itemId">The item whose trailer is wanted.</param>
+    /// <returns>The resolved trailer, or 404 when there is none or it could not be resolved.</returns>
+    [HttpGet("Trailer/{itemId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ResolvedTrailerDto>> GetTrailer([FromRoute] Guid itemId)
+    {
+        foreach (var trailer in RemoteTrailers(itemId))
+        {
+            var url = await _trailers.ResolveAsync(trailer.Url, HttpContext.RequestAborted).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(url))
+            {
+                // Try the next one rather than giving up: a video pulled down or blocked in
+                // this region fails on its own, and the second-best trailer still airs.
+                continue;
+            }
+
+            return new ResolvedTrailerDto
+            {
+                Name = trailer.Name,
+                Url = url,
+                UserAgent = YouTubeStreamResolver.UserAgent,
+                Referer = YouTubeStreamResolver.Referer
+            };
+        }
+
+        return NotFound();
     }
 
     /// <summary>
@@ -402,9 +451,52 @@ public class LiteTvController : ControllerBase
         return item?.RemoteTrailers
             .Where(t => !string.IsNullOrEmpty(t.Url))
             .Select(t => new TrailerDto { Name = t.Name ?? string.Empty, Url = t.Url })
+            .OrderBy(TrailerRank)
+            .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .Take(4)
             .ToList() ?? new List<TrailerDto>();
     }
+
+    /// <summary>
+    /// Orders trailers the way a viewer would choose: the official trailer first, a teaser
+    /// last. A provider lists whatever it found in whatever order it found it, so without
+    /// this a channel's break can open with a fifteen-second teaser for a film it is about
+    /// to show in full. Borrowed from Wholphin, which sorts its own trailer picker this way.
+    /// </summary>
+    private static int TrailerRank(TrailerDto trailer)
+    {
+        var name = trailer.Name;
+        if (name.Contains("Official Trailer", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Official Theatrical Trailer", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (name.Contains("Teaser", StringComparison.OrdinalIgnoreCase))
+        {
+            return 10;
+        }
+
+        return name.Contains("Trailer", StringComparison.OrdinalIgnoreCase) ? 1 : 5;
+    }
+}
+
+/// <summary>
+/// A linked trailer, resolved to something playable.
+/// </summary>
+public class ResolvedTrailerDto
+{
+    /// <summary>Gets or sets the trailer name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the stream address to play.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the User-Agent the stream must be requested with.</summary>
+    public string UserAgent { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the Referer the stream must be requested with.</summary>
+    public string Referer { get; set; } = string.Empty;
 }
 
 /// <summary>
