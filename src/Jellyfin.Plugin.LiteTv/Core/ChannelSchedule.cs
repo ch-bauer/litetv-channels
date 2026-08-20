@@ -40,6 +40,13 @@ public sealed record Airing(
     ScheduledEntry? NextProgram)
 {
     /// <summary>
+    /// Gets or sets an address to play for this airing, where the schedule names one outright
+    /// rather than leaving it to be found. Only a configured trailer slot sets this; everything
+    /// else in a channel is a library item, and this stays null.
+    /// </summary>
+    public string? TrailerUrl { get; init; }
+
+    /// <summary>
     /// Gets how far into the program a viewer joining at the given moment comes in - the
     /// position to start playback at, which is the whole point of a channel.
     /// </summary>

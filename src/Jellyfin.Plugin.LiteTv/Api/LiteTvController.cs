@@ -73,7 +73,11 @@ public class LiteTvController : ControllerBase
                 Name = channel.Name,
                 Kind = now?.Kind.ToString() ?? nameof(AiringKind.OffAir),
                 BlockName = string.IsNullOrEmpty(now?.BlockName) ? null : now!.BlockName,
-                Now = now is null || now.Entry is null ? null : ToProgram(now, artwork),
+                // A break is something the channel is doing, not nothing. Dropping it left the
+                // overview saying "off air" every time a gap came round, which is both wrong
+                // and alarming; an interstitial describes itself and wears the artwork of what
+                // it is advertising. Only genuinely dark air has nothing to show.
+                Now = now is null || now.Kind == AiringKind.OffAir ? null : ToProgram(now, artwork),
                 Next = nextProgram is null ? null : ToProgram(nextProgram, artwork)
             });
         }
@@ -363,7 +367,15 @@ public class LiteTvController : ControllerBase
             BlockName = string.IsNullOrEmpty(airing.BlockName) ? null : airing.BlockName,
             // A program the block boundary cut into: it does not start at its beginning.
             StartOffsetTicks = airing.OffsetTicks,
-            NextProgramName = airing.NextProgram?.Name
+            NextProgramName = airing.NextProgram?.Name,
+            // Named, not inferred. A break advertises one particular programme - usually not
+            // the one that starts when the break ends, but one a few slots further on - and a
+            // client filling the break has to be told which. Working it out from what follows
+            // is right until the schedule does something ordinary, like putting two breaks
+            // together or ending the window on one.
+            TrailsItemId = airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.ItemId : null,
+            TrailsName = airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.Name : null,
+            TrailerUrl = airing.TrailerUrl
         };
 
         // An interstitial wears the artwork of the programme it is trailing, which is what a
@@ -688,6 +700,19 @@ public class ProgramDto
 
     /// <summary>Gets or sets the name of the program this leads into.</summary>
     public string? NextProgramName { get; set; }
+
+    /// <summary>Gets or sets the item this break is advertising. Set on an interstitial only.
+    /// Usually not the programme that follows the break - television trails what is on later,
+    /// not what is about to start - so a client must use this rather than looking at what comes
+    /// next. Its start time can be read off the same guide by finding this id.</summary>
+    public Guid? TrailsItemId { get; set; }
+
+    /// <summary>Gets or sets the name of the programme this break is advertising.</summary>
+    public string? TrailsName { get; set; }
+
+    /// <summary>Gets or sets the address to play in this interstitial, when the schedule names
+    /// one outright rather than leaving the client to find a trailer for the next programme.</summary>
+    public string? TrailerUrl { get; set; }
 
     /// <summary>Gets or sets the item to draw the portrait image from - the programme itself,
     /// or the series it belongs to. Null when neither has one.</summary>
