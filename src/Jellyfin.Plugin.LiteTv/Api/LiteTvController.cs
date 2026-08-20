@@ -1,4 +1,4 @@
-using Jellyfin.Data.Enums;
+﻿using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Core;
 using Jellyfin.Plugin.LiteTv.Sessions;
@@ -25,6 +25,9 @@ public class LiteTvController : ControllerBase
 {
     /// <summary>How far ahead the guide grid looks when no window is asked for.</summary>
     private const int DefaultGuideHours = 4;
+
+    /// <summary>The pictures a channel can be given: a wide card, a background, a cover.</summary>
+    private static readonly string[] ArtworkKinds = { "banner", "backdrop", "poster" };
 
     private readonly ChannelGuide _guide;
     private readonly ILibraryManager _libraryManager;
@@ -78,7 +81,12 @@ public class LiteTvController : ControllerBase
                 // and alarming; an interstitial describes itself and wears the artwork of what
                 // it is advertising. Only genuinely dark air has nothing to show.
                 Now = now is null || now.Kind == AiringKind.OffAir ? null : ToProgram(now, artwork),
-                Next = nextProgram is null ? null : ToProgram(nextProgram, artwork)
+                Next = nextProgram is null ? null : ToProgram(nextProgram, artwork),
+                // The channel's own picture, which is not the same question as what is on.
+                // A client drawing a channel card falls back to this when the program on air
+                // has no wide artwork - or when nothing is on air at all, which is when the
+                // card used to go black.
+                Image = ChannelImage(channel, window, artwork)
             });
         }
 
@@ -125,7 +133,7 @@ public class LiteTvController : ControllerBase
     [HttpGet("Channels/{channelId}/Now")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<ChannelNowDto> GetNow([FromRoute] Guid channelId, [FromQuery] int upcoming = 5)
+    public ActionResult<ChannelNowDto> GetNow([FromRoute] Guid channelId, [FromQuery] int upcoming = 5, [FromQuery] bool breaks = false)
     {
         var channel = ChannelGuide.Channel(channelId);
         if (channel is null)
@@ -141,8 +149,15 @@ public class LiteTvController : ControllerBase
             return NotFound();
         }
 
+        // Two lists, deliberately. "What is next" is always a program - a viewer asking that
+        // does not mean the advert break - but the schedule a guide draws is the whole
+        // schedule, breaks included, or the times in it do not add up. A client that wants to
+        // see the trailers land where the plugin actually put them asks for them.
         var following = window.Skip(1).Where(a => a.Kind == AiringKind.Program).ToList();
         var next = following.FirstOrDefault();
+        var listed = breaks
+            ? window.Skip(1).Where(a => a.Kind == AiringKind.Program || a.Kind == AiringKind.Interstitial).ToList()
+            : following;
 
         var artwork = NewArtworkCache();
         return new ChannelNowDto
@@ -159,8 +174,93 @@ public class LiteTvController : ControllerBase
             // address of - the usual case, since trailers are far more often linked than held.
             Trailers = next is null ? new List<TrailerDto>() : RemoteTrailers(next.Entry!.ItemId),
             ServerTimeUtc = at,
-            Upcoming = following.Take(Math.Clamp(upcoming, 0, 20)).Select(a => ToProgram(a, artwork)).ToList()
+            // The same fallback the overview gets. A channel screen with a black background is
+            // the commonest way for a genre channel to look broken, and it is at its blackest
+            // exactly when a break is on - which is when the screen has nothing else to draw.
+            Image = ChannelImage(channel, window, artwork),
+            Upcoming = listed.Take(Math.Clamp(upcoming, 0, 64)).Select(a => ToProgram(a, artwork)).ToList()
         };
+    }
+
+    /// <summary>
+    /// Stores a picture for a channel, uploaded from the configuration page.
+    /// <para>
+    /// A channel is not a library item, so there is nowhere in Jellyfin to put its artwork.
+    /// The alternative - pointing every channel at an address somewhere else - works right up
+    /// until the address stops working, which for a picture nobody else is looking after is a
+    /// matter of when. The plugin keeps the bytes itself.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel the picture belongs to.</param>
+    /// <param name="kind">Which picture: banner, backdrop or poster.</param>
+    /// <returns>The address the picture is now served from.</returns>
+    [HttpPost("Artwork/{channelId}/{kind}")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [RequestSizeLimit(16 * 1024 * 1024)]
+    public async Task<ActionResult<UploadedArtworkDto>> PostArtwork([FromRoute] Guid channelId, [FromRoute] string kind)
+    {
+        if (!ArtworkKinds.Contains(kind, StringComparer.OrdinalIgnoreCase))
+        {
+            return BadRequest("kind must be banner, backdrop or poster");
+        }
+
+        var directory = ArtworkDirectory();
+        if (directory is null)
+        {
+            return BadRequest("the plugin has nowhere to store artwork");
+        }
+
+        Directory.CreateDirectory(directory);
+
+        // One file per channel and kind, overwritten. Keeping the old ones would mean deciding
+        // when to delete them, and a picture nobody can see any more is only clutter.
+        var path = Path.Combine(directory, ArtworkFileName(channelId, kind));
+        await using (var file = System.IO.File.Create(path))
+        {
+            await Request.Body.CopyToAsync(file, HttpContext.RequestAborted).ConfigureAwait(false);
+        }
+
+        return new UploadedArtworkDto { Url = $"/LiteTv/Artwork/{channelId}/{kind.ToLowerInvariant()}" };
+    }
+
+    /// <summary>
+    /// Serves a channel picture.
+    /// <para>
+    /// Deliberately open, like Jellyfin's own item images. A television client draws these
+    /// through an image loader that carries no credentials - the same reason
+    /// <c>/Items/{id}/Images</c> is open - and a channel logo is not the library.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel the picture belongs to.</param>
+    /// <param name="kind">Which picture: banner, backdrop or poster.</param>
+    /// <returns>The image, or 404 when the channel has none of that kind.</returns>
+    [HttpGet("Artwork/{channelId}/{kind}")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult GetArtwork([FromRoute] Guid channelId, [FromRoute] string kind)
+    {
+        var directory = ArtworkDirectory();
+        if (directory is null || !ArtworkKinds.Contains(kind, StringComparer.OrdinalIgnoreCase))
+        {
+            return NotFound();
+        }
+
+        var path = Path.Combine(directory, ArtworkFileName(channelId, kind));
+        return System.IO.File.Exists(path)
+            ? PhysicalFile(path, "image/jpeg")
+            : NotFound();
+    }
+
+    private static string ArtworkFileName(Guid channelId, string kind) =>
+        $"{channelId:N}-{kind.ToLowerInvariant()}.img";
+
+    private static string? ArtworkDirectory()
+    {
+        var data = Plugin.Instance?.DataFolderPath;
+        return string.IsNullOrEmpty(data) ? null : Path.Combine(data, "artwork");
     }
 
     /// <summary>
@@ -423,6 +523,75 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
+    /// Names the artwork that stands for the channel itself.
+    /// <para>
+    /// Three sources in order. An address the channel was configured with wins, because
+    /// someone chose it. Failing that, a library item the channel was pointed at, whose
+    /// artwork it borrows and goes on borrowing when the item is re-scraped. Failing both,
+    /// the first thing in the channel's own lineup that has a picture at all - which is how a
+    /// channel nobody configured still has a face.
+    /// </para>
+    /// <para>
+    /// This is why it exists: a channel built from one series wears what is on air perfectly
+    /// well, and a channel built from a genre does not. What is on changes every hour, much of
+    /// it has no wide artwork, and during a break there is nothing on to borrow from at all.
+    /// </para>
+    /// </summary>
+    private ChannelImageDto ChannelImage(TvChannel channel, List<Airing> window, Dictionary<Guid, BaseItem?> cache)
+    {
+        var configured = channel.Artwork ?? new ChannelArtwork();
+        var dto = new ChannelImageDto
+        {
+            BannerUrl = NullIfBlank(configured.BannerUrl),
+            BackdropUrl = NullIfBlank(configured.BackdropUrl),
+            PosterUrl = NullIfBlank(configured.PosterUrl)
+        };
+
+        if (configured.ImageItemId != Guid.Empty && FillChannelImage(dto, Artwork(cache, configured.ImageItemId), null))
+        {
+            return dto;
+        }
+
+        foreach (var entry in window.Select(a => a.Entry ?? a.NextProgram).OfType<ScheduledEntry>())
+        {
+            var series = entry.SeriesId is { } seriesId && seriesId != Guid.Empty ? Artwork(cache, seriesId) : null;
+            if (FillChannelImage(dto, Artwork(cache, entry.ItemId), series))
+            {
+                break;
+            }
+        }
+
+        return dto;
+    }
+
+    /// <summary>
+    /// Puts whatever artwork the given items have onto the channel image, and says whether
+    /// that was enough to draw a channel card with.
+    /// <para>
+    /// A banner leads the wide search here, unlike a program's, because a banner is drawn to
+    /// be looked at with a name written over it - which is exactly what a channel card is.
+    /// </para>
+    /// </summary>
+    private static bool FillChannelImage(ChannelImageDto dto, BaseItem? item, BaseItem? series)
+    {
+        if (Pick(new[] { ImageType.Primary, ImageType.Thumb }, item, series) is { } poster)
+        {
+            dto.PosterItemId ??= poster.ItemId;
+            dto.PosterType ??= poster.Type.ToString();
+        }
+
+        if (Pick(new[] { ImageType.Banner, ImageType.Thumb, ImageType.Backdrop }, item, series) is { } wide)
+        {
+            dto.BackdropItemId ??= wide.ItemId;
+            dto.BackdropType ??= wide.Type.ToString();
+        }
+
+        return dto.BackdropItemId is not null;
+    }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
     /// Gets the first of the wanted image types that one of the items actually has, the item
     /// itself taking precedence over the series it belongs to.
     /// </summary>
@@ -588,6 +757,47 @@ public class ChannelSummaryDto
 
     /// <summary>Gets or sets the program block on air, when one is.</summary>
     public string? BlockName { get; set; }
+
+    /// <summary>Gets or sets the artwork standing for the channel itself, which a client falls
+    /// back to when what is on air has no picture worth drawing - or when nothing is on air at
+    /// all.</summary>
+    public ChannelImageDto Image { get; set; } = new();
+}
+
+/// <summary>
+/// Where an uploaded channel picture ended up.
+/// </summary>
+public class UploadedArtworkDto
+{
+    /// <summary>Gets or sets the address the picture is served from.</summary>
+    public string Url { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// The pictures a channel is drawn with, as addresses and as library artwork.
+/// </summary>
+public class ChannelImageDto
+{
+    /// <summary>Gets or sets the address of the wide picture for a channel card.</summary>
+    public string? BannerUrl { get; set; }
+
+    /// <summary>Gets or sets the address of the full-screen background.</summary>
+    public string? BackdropUrl { get; set; }
+
+    /// <summary>Gets or sets the address of the upright cover.</summary>
+    public string? PosterUrl { get; set; }
+
+    /// <summary>Gets or sets the item holding the channel's upright artwork.</summary>
+    public Guid? PosterItemId { get; set; }
+
+    /// <summary>Gets or sets the image type to ask <see cref="PosterItemId"/> for.</summary>
+    public string? PosterType { get; set; }
+
+    /// <summary>Gets or sets the item holding the channel's wide artwork.</summary>
+    public Guid? BackdropItemId { get; set; }
+
+    /// <summary>Gets or sets the image type to ask <see cref="BackdropItemId"/> for.</summary>
+    public string? BackdropType { get; set; }
 }
 
 /// <summary>
@@ -630,6 +840,10 @@ public class ChannelNowDto
 
     /// <summary>Gets or sets the upcoming programs.</summary>
     public List<ProgramDto> Upcoming { get; set; } = new();
+
+    /// <summary>Gets or sets the artwork standing for the channel itself, drawn when what is
+    /// on air has no picture of its own.</summary>
+    public ChannelImageDto Image { get; set; } = new();
 }
 
 /// <summary>
