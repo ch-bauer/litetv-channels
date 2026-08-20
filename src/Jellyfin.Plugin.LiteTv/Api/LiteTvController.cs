@@ -90,7 +90,7 @@ public class LiteTvController : ControllerBase
                 // A client drawing a channel card falls back to this when the program on air
                 // has no wide artwork - or when nothing is on air at all, which is when the
                 // card used to go black.
-                Image = ChannelImage(channel, window, artwork)
+                Image = ChannelImage(channel, artwork)
             });
         }
 
@@ -181,7 +181,7 @@ public class LiteTvController : ControllerBase
             // The same fallback the overview gets. A channel screen with a black background is
             // the commonest way for a genre channel to look broken, and it is at its blackest
             // exactly when a break is on - which is when the screen has nothing else to draw.
-            Image = ChannelImage(channel, window, artwork),
+            Image = ChannelImage(channel, artwork),
             Upcoming = listed.Take(Math.Clamp(upcoming, 0, 64)).Select(a => ToProgram(a, artwork)).ToList()
         };
     }
@@ -207,10 +207,48 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult GetPage()
     {
-        var stream = typeof(Plugin).Assembly
+        using var stream = typeof(Plugin).Assembly
             .GetManifestResourceStream("Jellyfin.Plugin.LiteTv.Configuration.configPage.html");
 
-        return stream is null ? NotFound() : File(stream, "text/html; charset=utf-8");
+        if (stream is null)
+        {
+            return NotFound();
+        }
+
+        using var reader = new StreamReader(stream);
+        return Content(AsFragment(reader.ReadToEnd()), "text/html; charset=utf-8");
+    }
+
+    /// <summary>
+    /// Turns the dashboard's configuration page into something that can be dropped into
+    /// another page.
+    /// <para>
+    /// Two things stop the file being served as it stands. It is a whole document, and the
+    /// host appends it as a fragment, so the doctype and the head are noise at best. And its
+    /// outermost element carries Jellyfin's own <c>page</c> class, which the web client's CSS
+    /// hides until its view manager decides to show it - and here nothing ever will, because
+    /// the markup was appended into a container by hand. Left alone the entire page is present
+    /// in the DOM and invisible, which is exactly what "the plugin page does not show up"
+    /// looks like from the sofa.
+    /// </para>
+    /// </summary>
+    private static string AsFragment(string html)
+    {
+        const string Open = "<body>";
+        const string Close = "</body>";
+
+        var start = html.IndexOf(Open, StringComparison.OrdinalIgnoreCase);
+        var end = html.LastIndexOf(Close, StringComparison.OrdinalIgnoreCase);
+        var body = start >= 0 && end > start
+            ? html.Substring(start + Open.Length, end - start - Open.Length)
+            : html;
+
+        return body
+            .Replace("data-role=\"page\"", string.Empty, StringComparison.Ordinal)
+            .Replace(
+                "class=\"page type-interior pluginConfigurationPage\"",
+                "class=\"pluginConfigurationPage\"",
+                StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -677,7 +715,7 @@ public class LiteTvController : ControllerBase
     /// it has no wide artwork, and during a break there is nothing on to borrow from at all.
     /// </para>
     /// </summary>
-    private ChannelImageDto ChannelImage(TvChannel channel, List<Airing> window, Dictionary<Guid, BaseItem?> cache)
+    private ChannelImageDto ChannelImage(TvChannel channel, Dictionary<Guid, BaseItem?> cache)
     {
         var configured = channel.Artwork ?? new ChannelArtwork();
         var dto = new ChannelImageDto
@@ -695,14 +733,18 @@ public class LiteTvController : ControllerBase
             return dto;
         }
 
-        // Kept going rather than stopped at the first hit. The three pictures are three
+        // Taken from what the channel is *made of*, not from what it happens to be showing.
+        // Read off the schedule it changed every time the programme did - a channel's face
+        // flickering between films as the clock moved, which is not a face at all. The sources
+        // are the channel's own definition and only change when somebody edits it.
+        //
+        // Kept going rather than stopped at the first hit: the three pictures are three
         // different shapes and one item rarely has all of them - a series with a banner and no
-        // backdrop is ordinary - so the scan takes what each entry can give and stops when the
-        // channel has a full set, or when the schedule runs out.
-        foreach (var entry in window.Select(a => a.Entry ?? a.NextProgram).OfType<ScheduledEntry>())
+        // backdrop is ordinary - so the scan takes what each source can give and stops when the
+        // channel has a full set, or when the sources run out.
+        foreach (var source in ChannelSources(channel))
         {
-            var series = entry.SeriesId is { } seriesId && seriesId != Guid.Empty ? Artwork(cache, seriesId) : null;
-            if (FillChannelImage(dto, Artwork(cache, entry.ItemId), series))
+            if (FillChannelImage(dto, Artwork(cache, source), null))
             {
                 break;
             }
@@ -710,6 +752,18 @@ public class LiteTvController : ControllerBase
 
         return dto;
     }
+
+    /// <summary>
+    /// Every library item a channel is built from, in the order it was configured: the channel's
+    /// own lineup first, then whatever its blocks air, then the titles it advertises.
+    /// </summary>
+    private static IEnumerable<Guid> ChannelSources(TvChannel channel) =>
+        channel.Sources
+            .Concat(channel.Blocks.SelectMany(b => b.Sources))
+            .Concat(channel.TrailerTitles)
+            .Select(s => s.ItemId)
+            .Where(id => id != Guid.Empty)
+            .Distinct();
 
     /// <summary>
     /// Puts whatever artwork the given items have onto the channel image, and says whether the
@@ -791,6 +845,16 @@ public class LiteTvController : ControllerBase
     private List<TrailerDto> RemoteTrailers(Guid itemId)
     {
         var item = _libraryManager.GetItemById(itemId);
+
+        // An episode almost never has trailers of its own - the providers attach them to the
+        // series - so a channel advertising "SpongeBob at 20:15" would find nothing to play
+        // for every break it scheduled. The series' trailer is the right answer anyway: what
+        // is being advertised is the programme, and nobody cuts a trailer per episode.
+        if (item is Episode episode && (item.RemoteTrailers is null || item.RemoteTrailers.Count == 0))
+        {
+            item = episode.SeriesId != Guid.Empty ? _libraryManager.GetItemById(episode.SeriesId) ?? item : item;
+        }
+
         return item?.RemoteTrailers
             .Where(t => !string.IsNullOrEmpty(t.Url))
             .Select(t => new TrailerDto { Name = t.Name ?? string.Empty, Url = t.Url })
