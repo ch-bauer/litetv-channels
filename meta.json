@@ -3,7 +3,7 @@
   "changelog": "Programme artwork now arrives in Jellyfin's own Live TV guide. The server records a programme's image from its path alone, leaving the modification date and the pixel dimensions blank, and each omission breaks the picture in its own way: with no dimensions every request is answered with the full-size original instead of a thumbnail, and the blank date reaches the browser as a date of year one, on the strength of which the server answers \"not modified\" with an empty body - so the card stays empty waiting for a cached copy it was never given. Both fields are now filled in from the artwork itself, after every guide refresh and once at startup.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
-  "imageUrl": "https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/images/icon.png",
+  "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
   "name": "LiteTV Channels",
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
