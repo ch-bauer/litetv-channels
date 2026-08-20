@@ -91,4 +91,4 @@ dotnet publish src/Jellyfin.Plugin.LiteTv -c Release
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
