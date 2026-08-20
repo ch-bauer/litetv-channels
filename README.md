@@ -41,15 +41,28 @@ comes straight from your library.
   like real TV.
 - Channel viewing leaves **no traces on the account**: no Continue Watching entries,
   no resume points, no watched flags, no Next Up progression. Nothing is recorded and
-  cleaned up afterwards — while a program airs on a channel its watch state is simply
-  never written, on every client, however playback was started.
+  cleaned up afterwards — a channel plays under a Jellyfin account of the plugin's own,
+  and the server records a playback against whoever the token belongs to. So the viewing
+  lands somewhere harmless no matter which client played it, or how.
 
 ## Clients
 
-| Client | Experience |
-| --- | --- |
-| Native apps (Android TV, iOS, …) | Browse the "TV-Sender" library entry and play a channel to join it live. The channels are deliberately not published to Jellyfin's own **Live TV** section: that route hands a client a stream rather than a position in one, so it could only ever start the current program from its beginning — a worse way in to the same channels |
-| Any client, driven remotely | Ask the server to start a channel on a device with `POST /LiteTv/Channels/{id}/PlayOn/{sessionId}` — playback starts at the live position and the schedule keeps being pushed |
+**The channels are not published to Jellyfin at all** — not as a library entry, not to the
+**Live TV** section. Both routes were tried and both are worse than nothing. A Live TV channel
+hands a client a stream rather than a position in one, so it could only ever start the current
+program from its beginning. A published channel item is stored once and never re-resolved, so
+its entries go stale at every changeover and a client that cached the listing holds dead ids.
+Either way the channel appears on clients that cannot really play it.
+
+Instead the plugin serves the schedule as data — `/LiteTv/Channels`, `/LiteTv/Guide` — and a
+client that knows what a channel is builds the queue itself. Today that means the
+**[Wholphin LiteTV fork](https://github.com/damontecres/Wholphin)** on Android TV. Every other
+client sees nothing, which is the intent: a channel should show up only where it works.
+
+Before playing anything, a client asks `GET /LiteTv/PlaybackUser` for the account to play
+under, and uses that token for playback info, the stream and progress reports — not for
+browsing. **A client that cannot get those credentials must refuse to start the channel**,
+or the whole schedule records against the viewer.
 
 The web client had an injected UI of its own — a home-screen channel row, a 📺 guide, playback
 overlays. It was removed to concentrate on the TV app; the history is in git if it is ever
@@ -81,6 +94,14 @@ Also per channel:
 - **Program blocks** — any number, each with a start time, a duration (which may run
   past midnight), the weekdays it applies to, and its own content and play order.
   Overlapping blocks resolve to the first one configured.
+
+And for the plugin as a whole: the **channel playback account**. Channel viewing is recorded
+against this account rather than yours; it is created on first use, hidden from the login
+screen, and stripped of everything but the ability to play. Two consequences worth knowing:
+anyone who can reach the API can ask for its token, so on a server with several people and
+restricted libraries this account should be restricted to match; and the same title watched
+deliberately on a client that is playing a channel is not recorded either, because it is the
+account that decides, not what is playing.
 
 ## Building
 

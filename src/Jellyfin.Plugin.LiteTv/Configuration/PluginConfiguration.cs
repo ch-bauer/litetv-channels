@@ -13,41 +13,24 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<TvChannel> Channels { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets a value indicating whether the channels are published as a Jellyfin
-    /// channel, which is what makes them browsable and playable on clients the plugin
-    /// cannot inject its web UI into - TV apps, phones, anything but the web client.
+    /// Gets or sets the name of the Jellyfin account channel playback runs under.
+    /// <para>
+    /// This is what keeps channel viewing off the account people watch under: the server
+    /// decides whose watch state a playback belongs to from the token the request carries,
+    /// so a channel played with this account's token records against this account and
+    /// leaves the real one untouched. The account is created on first use, hidden from the
+    /// login screen, and stripped of everything but the ability to play.
+    /// </para>
     /// </summary>
-    public bool PublishAsChannels { get; set; } = true;
+    public string ChannelUserName { get; set; } = PluginConfigurationDefaults.ChannelUserName;
 
     /// <summary>
-    /// Gets or sets a value indicating whether the published channel is kept out of My Media
-    /// on every client and every device.
-    /// <para>
-    /// A channel is not a library, and listed as one it is misleading: it sits beside the
-    /// film and series folders offering a flat list of schedule entries, and on a client the
-    /// plugin cannot reach, opening one of them plays a programme instead of tuning in. With
-    /// this on, the channels are reached where they mean something - the web client's own row
-    /// and guide, and the TV app, which asks for hidden views deliberately.
-    /// </para>
-    /// <para>
-    /// This does not unpublish anything: the channel is still there, still playable, still
-    /// reachable by direct link. Only the entry in My Media goes away.
-    /// </para>
+    /// Gets or sets the password of that account. Generated on first use and never typed
+    /// by anyone; it is stored so the plugin can authenticate as the account after a
+    /// restart. Anyone who can read this file can already read every other plugin's
+    /// configuration, so it is kept in plain sight rather than pretending otherwise.
     /// </summary>
-    public bool HideChannelFromMyMedia { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether episodes watched by carrying on with a series
-    /// instead of following the schedule are kept off the account like everything else a
-    /// channel plays.
-    /// <para>
-    /// On by default, because it is still the channel playing: the viewer chose what came
-    /// next, not to start watching the series deliberately. Turn it off and those episodes
-    /// record normally, so Next Up moves on and the series can be resumed elsewhere - which
-    /// is what someone who really is settling in to watch would want.
-    /// </para>
-    /// </summary>
-    public bool ShieldBingedEpisodes { get; set; } = true;
+    public string ChannelUserPassword { get; set; } = string.Empty;
 
 }
 
@@ -280,4 +263,14 @@ public enum ChannelSourceType
 
     /// <summary>A collection (box set), expanded to its children.</summary>
     Collection
+}
+
+/// <summary>
+/// Defaults that are needed before a configuration exists, or when the one on disk leaves
+/// a value blank.
+/// </summary>
+public static class PluginConfigurationDefaults
+{
+    /// <summary>The account channel playback runs under when none is configured.</summary>
+    public const string ChannelUserName = "LiteTV";
 }
