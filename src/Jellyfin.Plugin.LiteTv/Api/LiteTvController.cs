@@ -1,5 +1,4 @@
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.LiteTv.Channels;
 using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Core;
 using Jellyfin.Plugin.LiteTv.Sessions;
@@ -7,9 +6,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Session;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -29,31 +26,23 @@ public class LiteTvController : ControllerBase
     private const int DefaultGuideHours = 4;
 
     private readonly ChannelGuide _guide;
-    private readonly TunedSessionMonitor _sessionMonitor;
-    private readonly ISessionManager _sessionManager;
     private readonly ILibraryManager _libraryManager;
-    private readonly LiveOffsetResolver _liveOffset;
+    private readonly ChannelPlaybackUser _playbackUser;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
     /// </summary>
     /// <param name="guide">The channel guide.</param>
-    /// <param name="sessionMonitor">The tuned session monitor.</param>
-    /// <param name="sessionManager">The session manager.</param>
     /// <param name="libraryManager">The library manager.</param>
-    /// <param name="liveOffset">Recognises the published channel items.</param>
+    /// <param name="playbackUser">The account channel playback runs under.</param>
     public LiteTvController(
         ChannelGuide guide,
-        TunedSessionMonitor sessionMonitor,
-        ISessionManager sessionManager,
         ILibraryManager libraryManager,
-        LiveOffsetResolver liveOffset)
+        ChannelPlaybackUser playbackUser)
     {
         _guide = guide;
-        _sessionMonitor = sessionMonitor;
-        _sessionManager = sessionManager;
         _libraryManager = libraryManager;
-        _liveOffset = liveOffset;
+        _playbackUser = playbackUser;
     }
 
     /// <summary>
@@ -64,11 +53,7 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<GuideDto> GetChannels()
     {
-        var config = Plugin.Instance?.Configuration;
-        var result = new GuideDto
-        {
-            ShieldBingedEpisodes = config?.ShieldBingedEpisodes ?? true
-        };
+        var result = new GuideDto();
 
         var artwork = NewArtworkCache();
         foreach (var channel in ChannelGuide.Channels())
@@ -170,190 +155,30 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
-    /// Tells the web client whether what a session is playing is one of the published channel
-    /// items. That is how the injected UI recognises a channel started from the "TV-Sender"
-    /// library entry rather than from its own row, and takes it over.
+    /// Gets the credentials a client should play a channel with.
+    /// <para>
+    /// Channel playback runs as an account of the plugin's own, because the server decides
+    /// whose watch state a playback belongs to from the token the request carries. A client
+    /// asks once, then uses the token it gets back for everything it does to play the
+    /// schedule - resolving playback info, fetching the stream, and reporting progress. Not
+    /// for browsing: what the viewer sees should still come from their own account.
+    /// </para>
+    /// <para>
+    /// A client that cannot get these credentials must refuse to start the channel. Playing
+    /// anyway would record the whole schedule against the viewer's account, which is the one
+    /// thing this plugin exists to prevent.
+    /// </para>
     /// </summary>
-    /// <param name="itemId">The item the client is playing.</param>
-    /// <returns>The channel behind it, or 404 when the item is not a LiteTV channel item.</returns>
-    [HttpGet("Playing/{itemId}")]
+    /// <returns>The credentials, or 503 when the account could not be prepared.</returns>
+    [HttpGet("PlaybackUser")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<PlayingChannelDto> GetPlayingChannel([FromRoute] Guid itemId)
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<ChannelCredentials>> GetPlaybackUser()
     {
-        var item = _libraryManager.GetItemById(itemId);
-        if (item is null || _liveOffset.ChannelIdFor(item) is not { } channelId)
-        {
-            return NotFound();
-        }
-
-        var channel = ChannelGuide.Channel(channelId);
-        if (channel is null)
-        {
-            return NotFound();
-        }
-
-        return new PlayingChannelDto
-        {
-            ChannelId = channel.Id,
-            ChannelName = channel.Name,
-            ShieldBingedEpisodes = Plugin.Instance?.Configuration.ShieldBingedEpisodes ?? true
-        };
-    }
-
-    /// <summary>
-    /// Marks a session as tuned to a channel. The injected web script calls this when it
-    /// starts channel playback itself; the server then keeps the account's watch state
-    /// clean but does not push follow-up items (the script handles those).
-    /// </summary>
-    /// <param name="sessionId">The session id.</param>
-    /// <param name="channelId">The channel id.</param>
-    /// <param name="itemId">The item about to play, to shield it before playback; optional.</param>
-    /// <param name="itemIds">Several items to shield at once, comma separated. A client that
-    /// hands the player a whole queue shields the queue here, because once the player is
-    /// moving through it on its own there is no moment left to arm anything.</param>
-    /// <returns>No content when the items are shielded, 409 when they could not be.</returns>
-    [HttpPost("Tuned")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult Tune(
-        [FromQuery] string sessionId,
-        [FromQuery] Guid channelId,
-        [FromQuery] Guid? itemId = null,
-        [FromQuery] string? itemIds = null)
-    {
-        // The caller's own identity is handed over as well. Arming used to depend entirely on
-        // finding the client's SessionInfo on the server, and when that lookup came back empty
-        // the shield was simply not armed - silently, with the endpoint still answering 204,
-        // so the programme played and recorded like ordinary watching. Whoever the request
-        // authenticated as is always available, and it is the account being protected.
-        var wanted = new List<Guid>();
-        if (itemId.HasValue)
-        {
-            wanted.Add(itemId.Value);
-        }
-
-        foreach (var part in (itemIds ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (Guid.TryParse(part, out var parsed))
-            {
-                wanted.Add(parsed);
-            }
-        }
-
-        var armed = _sessionMonitor.Tune(
-            sessionId,
-            channelId,
-            followSchedule: false,
-            wanted,
-            RequestUserId(),
-            RequestDeviceId());
-
-        // Answered honestly so the client can refuse to play rather than record the viewing.
-        return armed ? NoContent() : Conflict();
-    }
-
-    /// <summary>
-    /// The user the request authenticated as, read from the token's own claims.
-    /// </summary>
-    private Guid RequestUserId()
-    {
-        foreach (var claim in new[] { "Jellyfin-UserId", "UserId" })
-        {
-            var value = HttpContext.User.FindFirst(claim)?.Value;
-            if (Guid.TryParse(value, out var userId) && userId != Guid.Empty)
-            {
-                return userId;
-            }
-        }
-
-        return Guid.Empty;
-    }
-
-    /// <summary>
-    /// The device the request came from: the claim where the token carries one, otherwise the
-    /// authorization header the client identifies itself in. This is what tells channel
-    /// playback apart from the same title watched deliberately somewhere else.
-    /// </summary>
-    private string? RequestDeviceId()
-    {
-        var claim = HttpContext.User.FindFirst("Jellyfin-DeviceId")?.Value;
-        if (!string.IsNullOrEmpty(claim))
-        {
-            return claim;
-        }
-
-        foreach (var header in new[] { "Authorization", "X-Emby-Authorization" })
-        {
-            if (Request.Headers.TryGetValue(header, out var values)
-                && AuthorizationHeader.DeviceId(values.ToString()) is { } deviceId)
-            {
-                return deviceId;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Removes the tuned mark from a session (the viewer left the channel).
-    /// </summary>
-    /// <param name="sessionId">The session id.</param>
-    /// <returns>No content.</returns>
-    [HttpDelete("Tuned")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public ActionResult Untune([FromQuery] string sessionId)
-    {
-        _sessionMonitor.Untune(sessionId);
-        return NoContent();
-    }
-
-    /// <summary>
-    /// Tunes another session (e.g. a native TV client) to a channel: sends it a play
-    /// command at the live position and lets the server push follow-up items so the
-    /// schedule keeps running without the injected script.
-    /// </summary>
-    /// <param name="channelId">The channel id.</param>
-    /// <param name="sessionId">The target session id.</param>
-    /// <returns>No content, or 404 when the channel is unknown, disabled or empty.</returns>
-    [HttpPost("Channels/{channelId}/PlayOn/{sessionId}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<ActionResult> PlayOn([FromRoute] Guid channelId, [FromRoute] string sessionId)
-    {
-        var channel = ChannelGuide.Channel(channelId);
-        if (channel is null)
-        {
-            return NotFound();
-        }
-
-        var at = DateTime.UtcNow;
-        var airing = _guide.NowOn(channel, at);
-        if (airing?.Entry is null)
-        {
-            return NotFound();
-        }
-
-        // The item is registered before the command goes out so its watch state is
-        // snapshotted while it is still untouched. Nothing is sent if that fails: the
-        // target would play the programme and record it as ordinary watching.
-        if (!_sessionMonitor.Tune(sessionId, channelId, followSchedule: true, airing.Entry.ItemId, RequestUserId(), RequestDeviceId()))
-        {
-            return Conflict();
-        }
-
-        await _sessionManager.SendPlayCommand(
-            sessionId,
-            sessionId,
-            new PlayRequest
-            {
-                ItemIds = new[] { airing.Entry.ItemId },
-                StartPositionTicks = airing.OffsetAt(at),
-                PlayCommand = PlayCommand.PlayNow
-            },
-            HttpContext.RequestAborted).ConfigureAwait(false);
-        return NoContent();
+        var credentials = await _playbackUser.GetAsync(HttpContext.RequestAborted).ConfigureAwait(false);
+        return credentials is null
+            ? StatusCode(StatusCodes.Status503ServiceUnavailable)
+            : credentials;
     }
 
     /// <summary>
@@ -633,10 +458,6 @@ public class GuideChannelDto
 /// </summary>
 public class GuideDto
 {
-    /// <summary>Gets or sets a value indicating whether episodes watched by carrying on with
-    /// a series are kept off the account like the rest of what a channel plays.</summary>
-    public bool ShieldBingedEpisodes { get; set; }
-
     /// <summary>Gets the enabled channels.</summary>
     public List<ChannelSummaryDto> Channels { get; } = new();
 }

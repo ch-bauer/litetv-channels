@@ -12,43 +12,21 @@
                     <h2 class="sectionTitle">LiteTV Channels</h2>
                 </div>
 
-                <div class="checkboxContainer">
-                    <label>
-                        <input is="emby-checkbox" type="checkbox" id="PublishAsChannels" />
-                        <span>Publish the channels to all clients (TV apps, phones)</span>
-                    </label>
-                </div>
-                <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
-                    Adds a "TV-Sender" entry to the library that every client can browse. Playing a
-                    channel there joins whatever is on air, at the live position.
-                </div>
-
-                <div class="checkboxContainer">
-                    <label>
-                        <input is="emby-checkbox" type="checkbox" id="HideChannelFromMyMedia" />
-                        <span>Hide "TV-Sender" from My Media on all devices</span>
-                    </label>
-                </div>
-                <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
-                    A channel is not a library, and listed beside the film and series folders it
-                    offers a flat list of schedule entries rather than a channel. This takes the
-                    entry out of My Media everywhere at once — it does not unpublish anything, and
-                    the channels stay playable. The TV app asks for hidden views on purpose, so it
-                    still lists them.
-                </div>
-
-
-                <div class="checkboxContainer">
-                    <label>
-                        <input is="emby-checkbox" type="checkbox" id="ShieldBingedEpisodes" />
-                        <span>Keep episodes watched by carrying on with a series off the account too</span>
-                    </label>
-                </div>
-                <div class="fieldDescription" style="margin: -0.6em 0 0.4em 2.6em;">
-                    On a channel you can choose to keep watching the series instead of following the
-                    schedule. Those episodes are still the channel playing, so by default they leave no
-                    trace either. Turn this off to record them normally, so Next Up moves on and the
-                    series can be resumed elsewhere.
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="ChannelUserName">Channel playback account</label>
+                    <input is="emby-input" type="text" id="ChannelUserName" />
+                    <div class="fieldDescription">
+                        Channel viewing is recorded against this Jellyfin account instead of yours, which
+                        is what keeps it out of Continue Watching, Next Up and the watched flags. The
+                        account is created on first use, hidden from the login screen, and can do nothing
+                        but play. Leave it as it is unless the name clashes with a real account.
+                        <br /><br />
+                        Two things worth knowing. Anyone who can reach this server's API can ask for this
+                        account's token, so on a server with several people and libraries not everyone may
+                        see, restrict this account to match in Dashboard &rarr; Users. And the same title
+                        watched deliberately while a channel is on will not be recorded either — it is the
+                        account that decides, not what is playing.
+                    </div>
                 </div>
 
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
@@ -585,9 +563,7 @@
                     ApiClient.getPluginConfiguration(pluginId).then(function (loaded) {
                         config = loaded;
                         config.Channels = config.Channels || [];
-                        q('#PublishAsChannels').checked = config.PublishAsChannels !== false;
-                        q('#HideChannelFromMyMedia').checked = config.HideChannelFromMyMedia === true;
-                        q('#ShieldBingedEpisodes').checked = config.ShieldBingedEpisodes !== false;
+                        q('#ChannelUserName').value = config.ChannelUserName || 'LiteTV';
                         currentIndex = config.Channels.length ? 0 : -1;
                         renderChannelSelect();
                         renderEditor();
@@ -699,9 +675,7 @@
                     e.preventDefault();
                     Dashboard.showLoadingMsg();
                     applyEditorToChannel();
-                    config.PublishAsChannels = q('#PublishAsChannels').checked;
-                    config.HideChannelFromMyMedia = q('#HideChannelFromMyMedia').checked;
-                    config.ShieldBingedEpisodes = q('#ShieldBingedEpisodes').checked;
+                    config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
                         renderBlockSelect();
