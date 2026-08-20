@@ -22,9 +22,6 @@ namespace Jellyfin.Plugin.LiteTv.Sessions;
 /// </summary>
 internal sealed class ShieldedUserDataManager : IUserDataManager
 {
-    /// <summary>Jellyfin accepts its authorization payload under either name.</summary>
-    private static readonly string[] AuthorizationHeaders = ["Authorization", "X-Emby-Authorization"];
-
     private static readonly PropertyInfo[] CopyableProperties = typeof(UserItemData)
         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
         .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0)
@@ -198,38 +195,16 @@ internal sealed class ShieldedUserDataManager : IUserDataManager
             return null;
         }
 
-        foreach (var header in AuthorizationHeaders)
+        foreach (var header in AuthorizationHeader.Names)
         {
             if (request.Headers.TryGetValue(header, out var values)
-                && ReadDeviceId(values.ToString()) is { } deviceId)
+                && AuthorizationHeader.DeviceId(values.ToString()) is { } deviceId)
             {
                 return deviceId;
             }
         }
 
         return null;
-    }
-
-    private static string? ReadDeviceId(string authorization)
-    {
-        // MediaBrowser Client="...", Device="...", DeviceId="...", Version="...", Token="..."
-        const string Field = "DeviceId=";
-        var start = authorization.IndexOf(Field, StringComparison.OrdinalIgnoreCase);
-        if (start < 0)
-        {
-            return null;
-        }
-
-        var value = authorization.AsSpan(start + Field.Length).TrimStart();
-        var quoted = value.Length > 0 && value[0] == '"';
-        if (quoted)
-        {
-            value = value[1..];
-        }
-
-        var end = value.IndexOf(quoted ? '"' : ',');
-        var deviceId = (end < 0 ? value : value[..end]).Trim().ToString();
-        return string.IsNullOrEmpty(deviceId) ? null : deviceId;
     }
 
     /// <summary>

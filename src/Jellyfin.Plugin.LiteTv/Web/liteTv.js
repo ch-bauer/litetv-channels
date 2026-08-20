@@ -21,17 +21,15 @@
     // in-place swap into a visible detour through the home screen.
     var END_MARGIN_SECONDS = 1;
 
-    // Tuned state for this browser tab. mode: 'schedule' | 'binge' | 'offschedule'
+    // Tuned state for this browser tab. mode: 'schedule' | 'binge'
     var tuned = null;
     var watchTimer = null;
-    var chainInProgress = false;
     // Set while the "Als Nächstes" overlay is up: feeds it the live remaining time so
     // the countdown follows the player instead of the wall clock.
     var nextOverlayCountdown = null;
-    // Set between a manual skip and the next program taking over. The player is still
-    // sitting on the old, paused item during that hand-off, which would otherwise bring
-    // the pause panel straight back up.
-    var skipInFlight = false;
+    // Set once the choice on that overlay has been acted on, so the buttons can go: the
+    // follow-up is queued in the player by then and there is no taking it back.
+    var nextOverlayCommit = null;
     var homeRowObserver = null;
     var lastHomeRowGuide = null;
     var interstitialTimer = null;
@@ -46,10 +44,13 @@
             flagsPromise = apiGet('LiteTv/Channels').then(function (guide) {
                 return {
                     enabled: !!guide.EnableWebUi,
-                    hideNativeLiveTv: !!guide.HideNativeLiveTvSections
+                    hideNativeLiveTv: !!guide.HideNativeLiveTvSections,
+                    shieldBingedEpisodes: guide.ShieldBingedEpisodes !== false
                 };
             }).catch(function () {
-                return { enabled: false, hideNativeLiveTv: false };
+                // Shielding stays on in the fallback: not knowing is not a reason to start
+                // writing channel viewing to the account.
+                return { enabled: false, hideNativeLiveTv: false, shieldBingedEpisodes: true };
             });
         }
         return flagsPromise;
@@ -226,7 +227,14 @@
             '#' + GUIDE_ID + ' .liteTvPanelWide { width: min(78em, 96vw); }' +
             '#' + GUIDE_ID + ' .liteTvGuideBar { display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.9em; flex-wrap: wrap; }' +
             '#' + GUIDE_ID + ' .liteTvGuideBar h2 { margin: 0; flex-grow: 1; }' +
-            '#' + GUIDE_ID + ' .liteTvGrid { overflow-x: auto; overflow-y: visible; scrollbar-width: thin; }' +
+            /* The bar is gone on purpose: the arrows move the guide, and on a touch screen it
+               swipes. A scrollbar under a time grid invites dragging it to a position
+               rather than to a time, which is not how anyone reads a schedule. */
+            '#' + GUIDE_ID + ' .liteTvGrid {' +
+            '  overflow-x: auto; overflow-y: visible; scroll-behavior: smooth;' +
+            '  scrollbar-width: none; -ms-overflow-style: none;' +
+            '}' +
+            '#' + GUIDE_ID + ' .liteTvGrid::-webkit-scrollbar { display: none; }' +
             '#' + GUIDE_ID + ' .liteTvAxis { display: flex; position: sticky; top: 0; z-index: 3; background: rgba(24, 27, 33, 0.97); }' +
             '#' + GUIDE_ID + ' .liteTvRow { display: flex; margin-top: 0.35em; }' +
             '#' + GUIDE_ID + ' .liteTvRowName, #' + GUIDE_ID + ' .liteTvAxisSpacer {' +
@@ -340,38 +348,112 @@
 
     // ---------------------------------------------------------------- playback
 
-    function playItem(itemId, positionTicks, channelId) {
-        channelId = channelId || (tuned && tuned.channelId);
-        return getOwnSession().then(function (session) {
-            if (!session) {
-                throw new Error('own session not found');
-            }
-            // Snapshot the item's watch state on the server before playback begins, so
-            // the played flag, play count and resume position can be restored afterwards
-            // (they are bumped around playback start, too late to catch at PlaybackStart).
-            var prepare = channelId
-                ? apiPost('LiteTv/Tuned?sessionId=' + encodeURIComponent(session.Id) + '&channelId=' + channelId + '&itemId=' + encodeURIComponent(itemId)).catch(function () { })
-                : Promise.resolve();
-            return prepare.then(function () {
-                var url = window.ApiClient.getUrl('Sessions/' + session.Id + '/Playing', {
-                    playCommand: 'PlayNow',
-                    itemIds: itemId,
-                    startPositionTicks: Math.max(0, Math.round(positionTicks || 0))
-                });
-                return window.ApiClient.fetch({ url: url, type: 'POST' }).then(function () {
-                    return session.Id;
-                });
-            });
+    // A channel is played as a playlist, not as one programme handed to the player after
+    // another. The schedule is fetched once, turned into a queue of the real library items
+    // it names, and given to the player in a single command with a start position for the
+    // first. From then on Jellyfin's own player moves through it: the gap between programmes
+    // is a normal track change, leaving the channel is the ordinary back button, and skipping
+    // is the player's own next-track. Chaining each item by remote-controlling our own
+    // session is what made all three of those misbehave.
+    //
+    // The whole queue is shielded up front, in one call. Once the player is moving through
+    // it by itself there is no later moment to arm anything: the first watch-state report of
+    // the next programme arrives before any script here could react to it.
+    var QUEUE_HOURS = 6;
+    var EMPTY_GUID = '00000000000000000000000000000000';
+
+    function playable(program) {
+        return !!program.ItemId && program.ItemId !== EMPTY_GUID
+            && (program.Kind === 'Program' || program.Kind === 'Interstitial');
+    }
+
+    function sendPlay(sessionId, itemIds, positionTicks, command) {
+        var url = window.ApiClient.getUrl('Sessions/' + sessionId + '/Playing', {
+            playCommand: command || 'PlayNow',
+            itemIds: itemIds.join(','),
+            startPositionTicks: Math.max(0, Math.round(positionTicks || 0))
         });
+        return window.ApiClient.fetch({ url: url, type: 'POST' });
+    }
+
+    // Splits the schedule into the longest runs that contain no repeat.
+    //
+    // A run can be handed to the player in one command; a repeat cannot. The ids are
+    // resolved through a lookup that returns each item once, so a command naming the same
+    // film twice comes back one item short and the rest of the schedule shifts up by one.
+    // Which matters here precisely because a channel loops: measured on this server, six
+    // hours of one channel is 72 entries drawn from 8 distinct films. Cut at every repeat
+    // it is 9 commands rather than 72.
+    function queueRuns(ids) {
+        var runs = [];
+        var run = [];
+        var seen = Object.create(null);
+        for (var i = 0; i < ids.length; i++) {
+            if (seen[ids[i]]) {
+                runs.push(run);
+                run = [];
+                seen = Object.create(null);
+            }
+            run.push(ids[i]);
+            seen[ids[i]] = true;
+        }
+        if (run.length) {
+            runs.push(run);
+        }
+        return runs;
+    }
+
+    // Appends the rest of the schedule behind what is already playing. Sequential on
+    // purpose: each command has to land before the next, or the queue ends up in whatever
+    // order the requests happened to complete in.
+    function appendToQueue(sessionId, runs, from) {
+        if (from >= runs.length || !tuned || tuned.sessionId !== sessionId) {
+            return Promise.resolve();
+        }
+        return sendPlay(sessionId, runs[from], 0, 'PlayLast').then(function () {
+            return appendToQueue(sessionId, runs, from + 1);
+        }, function (err) {
+            // A short channel is better than a broken one: whatever made it this far still
+            // plays, and the guide is re-read the next time the viewer tunes in.
+            console.warn('liteTv: could not finish queueing the schedule', err);
+        });
+    }
+
+    // The player's own transport controls, used rather than re-issuing playback ourselves.
+    function nextTrack() {
+        if (!tuned) {
+            return Promise.resolve();
+        }
+        return apiPost('Sessions/' + tuned.sessionId + '/Playing/NextTrack').catch(function () { });
+    }
+
+    function seekToStart() {
+        if (!tuned) {
+            return Promise.resolve();
+        }
+        return apiPost('Sessions/' + tuned.sessionId + '/Playing/Seek?seekPositionTicks=0').catch(function () { });
     }
 
     function tuneIn(channelId) {
         closeGuide();
-        return apiGet('LiteTv/Channels/' + channelId + '/Now?upcoming=1').then(function (now) {
-            // Nothing to play: either the slot is between programmes, or the channel is
-            // dark. The first is a gap to fill, the second is not something to sit in.
-            if (!now.Current) {
-                if (now.Kind === 'Interstitial') {
+        return Promise.all([
+            apiGet('LiteTv/Guide?hours=' + QUEUE_HOURS),
+            apiGet('LiteTv/Channels/' + channelId + '/Now?upcoming=1'),
+            getOwnSession()
+        ]).then(function (results) {
+            var guide = results[0];
+            var now = results[1];
+            var session = results[2];
+            if (!session) {
+                throw new Error('own session not found');
+            }
+
+            var row = (guide.Channels || []).filter(function (c) { return c.Id === channelId; })[0];
+            var airings = row ? (row.Programs || []).filter(playable) : [];
+            if (!airings.length) {
+                // Nothing to queue: either the slot is between programmes, or the channel is
+                // dark. The first is a gap to fill, the second is not something to sit in.
+                if (now && now.Kind === 'Interstitial') {
                     showInterstitial(now, channelId);
                 } else {
                     console.debug('liteTv: channel is off air');
@@ -379,21 +461,48 @@
                 return null;
             }
 
-            // Pass the channel id so playItem marks the session tuned and snapshots the
-            // first item's watch state before playback starts.
-            return playItem(now.Current.ItemId, now.OffsetTicks, channelId).then(function (sessionId) {
-                tuned = {
-                    channelId: channelId,
-                    channelName: now.ChannelName,
-                    sessionId: sessionId,
-                    mode: 'schedule',
-                    currentItemId: now.Current.ItemId,
-                    currentSeriesId: now.Current.SeriesId || null
-                };
-                chainInProgress = true; // survives the osd transition
-                document.body.classList.add(TUNED_BODY_CLASS);
-                showTuneOverlay(now);
-            });
+            var ids = airings.map(function (a) { return a.ItemId; });
+            // The offset belongs to whatever is on now, which is what the guide window starts
+            // with. If the schedule moved on between the two calls the queue simply starts at
+            // the top of its first item - a second's difference, not a wrong one.
+            var offset = (now && now.Current && now.Current.ItemId === ids[0]) ? now.OffsetTicks : 0;
+
+            return apiPost('LiteTv/Tuned?sessionId=' + encodeURIComponent(session.Id)
+                + '&channelId=' + channelId + '&itemIds=' + ids.join(','))
+                .then(function () {
+                    // The first programme starts straight away, at the live position.
+                    return sendPlay(session.Id, [ids[0]], offset, 'PlayNow');
+                }, function (err) {
+                    // The server answers 409 when it could not shield the queue. Playing it
+                    // then would write every programme into the watch history, so it is not
+                    // played at all - a channel that does not start is a fault someone
+                    // notices, a channel that rewrites their history is one they do not.
+                    console.warn('liteTv: the channel could not be shielded, not tuning in', err);
+                    throw err;
+                })
+                .then(function () {
+                    tuned = {
+                        channelId: channelId,
+                        channelName: row.Name,
+                        sessionId: session.Id,
+                        queue: ids,
+                        airings: airings,
+                        index: 0,
+                        mode: 'schedule',
+                        currentItemId: ids[0],
+                        currentName: null,
+                        currentSeriesId: airings[0].SeriesId || null,
+                        // Episodes already watched by carrying on with the series, so the
+                        // schedule does not air them again when the queue reaches them.
+                        bingedIds: [],
+                        bingePlayingId: null
+                    };
+                    document.body.classList.add(TUNED_BODY_CLASS);
+                    showTuneOverlay({ ChannelName: row.Name });
+                    startWatcher();
+                    // The rest is appended behind it while it plays.
+                    appendToQueue(session.Id, queueRuns(ids.slice(1)), 0);
+                });
         }).catch(function (err) {
             console.warn('liteTv: tune-in failed', err);
         });
@@ -412,7 +521,7 @@
     var adoptInFlight = false;
 
     function adoptChannelPlayback() {
-        if (tuned || chainInProgress || adoptInFlight) {
+        if (tuned || adoptInFlight) {
             return;
         }
         adoptInFlight = true;
@@ -524,7 +633,7 @@
         buttons.className = 'liteTvNextButtons';
         buttons.appendChild(makeButton('Sender verlassen', 'liteTvPill', function () {
             clearInterstitial();
-            untune();
+            leaveChannel();
         }));
         card.appendChild(buttons);
 
@@ -546,6 +655,17 @@
         overlay.classList.add('liteTvVisible');
     }
 
+    // What the "Sender verlassen" buttons do. The player holds the whole schedule now, so
+    // walking away from the channel without telling it would leave it quietly working
+    // through the rest of the evening.
+    function leaveChannel() {
+        var sessionId = tuned && tuned.sessionId;
+        untune();
+        if (sessionId) {
+            apiPost('Sessions/' + sessionId + '/Playing/Stop').catch(function () { });
+        }
+    }
+
     function untune() {
         clearInterstitial();
         if (!tuned) {
@@ -553,8 +673,6 @@
         }
         var sessionId = tuned.sessionId;
         tuned = null;
-        chainInProgress = false;
-        skipInFlight = false;
         stopWatcher();
         document.body.classList.remove(TUNED_BODY_CLASS);
         removeOverlay(TUNE_OVERLAY_ID);
@@ -617,11 +735,9 @@
             if (!tuned) {
                 return;
             }
-            tuned.mode = 'offschedule';
-            chainInProgress = true;
-            playItem(tuned.currentItemId, 0).catch(function (err) {
-                console.warn('liteTv: restart failed', err);
-            });
+            // A seek, not a re-issued playback: the programme is already the track the
+            // player is on, so starting it again is simply going back to its beginning.
+            seekToStart();
         }));
 
         getOsdContainer().appendChild(overlay);
@@ -749,17 +865,13 @@
             if (!tuned) {
                 return;
             }
-            tuned.mode = 'offschedule';
-            chainInProgress = true;
             removePausePanel();
-            playItem(tuned.currentItemId, 0).catch(function (err) {
-                console.warn('liteTv: restart failed', err);
-            });
+            seekToStart();
         }));
 
         buttons.appendChild(makeButton('Sender verlassen', 'liteTvPill', function () {
             removePausePanel();
-            untune();
+            leaveChannel();
         }));
 
         refresh();
@@ -770,7 +882,6 @@
                 return;
             }
             meta.innerHTML = '';
-            var next = resolveScheduleNext(now, tuned.currentItemId);
             function line(prefix, text) {
                 var el = document.createElement('div');
                 var time = document.createElement('span');
@@ -792,9 +903,15 @@
             if (now.BlockName) {
                 line('Sendung', now.BlockName);
             }
-            if (next.program) {
-                line('Danach', (next.program.SeriesName ? next.program.SeriesName + ': ' : '') + next.program.Name);
-            }
+            // What comes next is read off the queue rather than off the clock: once the
+            // viewer has skipped, the schedule and the player no longer agree, and the
+            // player is the one that decides what they are about to watch.
+            prepareNext().then(function (info) {
+                var next = info && (tuned.mode === 'binge' && info.binge ? info.binge : info.schedule);
+                if (next && document.getElementById(PAUSE_PANEL_ID)) {
+                    line('Danach', (next.SeriesName ? next.SeriesName + ': ' : '') + next.Name);
+                }
+            });
         }).catch(function () { });
     }
 
@@ -809,158 +926,209 @@
 
     function clearNextOverlay() {
         nextOverlayCountdown = null;
+        nextOverlayCommit = null;
         removeOverlay(NEXT_OVERLAY_ID);
+    }
+
+    function commitNextOverlay() {
+        if (nextOverlayCommit) {
+            nextOverlayCommit();
+            nextOverlayCommit = null;
+        }
+    }
+
+    // How long before the end the binge choice is acted on. The card is up for far longer,
+    // but the follow-up has to be queued while the current programme is still the one
+    // playing - queue it after the player has already moved on and it lands a programme too
+    // late. Once it is committed the choice buttons go, because there is no taking it back.
+    var BINGE_COMMIT_SECONDS = 6;
+
+    // How often the server is asked what the player is actually on. The player moves through
+    // the queue by itself, so this is the only thing that says which programme is running -
+    // and it is what makes an episode already watched by bingeing get stepped over when the
+    // schedule comes round to it.
+    var SESSION_POLL_MS = 3000;
+    var lastSessionPoll = 0;
+
+    function pollCurrentItem() {
+        var now = Date.now();
+        if (now - lastSessionPoll < SESSION_POLL_MS) {
+            return;
+        }
+        lastSessionPoll = now;
+        getOwnSession().then(function (session) {
+            var playing = session && session.NowPlayingItem;
+            if (!tuned || !playing || playing.Id === tuned.currentItemId) {
+                return;
+            }
+
+            var isTheBingedOne = playing.Id === tuned.bingePlayingId;
+            if (!isTheBingedOne && tuned.bingedIds.indexOf(playing.Id) >= 0) {
+                // The schedule has reached an episode the viewer already watched by
+                // carrying on with the series. Airing it again would be showing the same
+                // episode twice for no reason other than that the schedule was written
+                // before they chose otherwise.
+                console.debug('liteTv: stepping over', playing.Name, '- already watched by bingeing');
+                nextTrack();
+                return;
+            }
+            if (!isTheBingedOne) {
+                tuned.bingePlayingId = null;
+            }
+
+            tuned.currentItemId = playing.Id;
+            tuned.currentSeriesId = playing.SeriesId || null;
+            tuned.currentName = (playing.SeriesName ? playing.SeriesName + ': ' : '') + playing.Name;
+            // Follow the queue rather than searching it: a channel loops, so the same
+            // handful of titles come round repeatedly and the ids repeat with them.
+            for (var i = tuned.index; i < tuned.queue.length; i++) {
+                if (tuned.queue[i] === playing.Id) {
+                    tuned.index = i;
+                    break;
+                }
+            }
+            // Every programme asks again. Following the schedule is what a channel is, so
+            // that is what it always comes back to.
+            tuned.mode = 'schedule';
+        }).catch(function () { });
     }
 
     function startWatcher() {
         stopWatcher();
-        // The watcher runs continuously for the whole tuned session, not just one
-        // item. Jellyfin swaps the media in place on a chained PlayNow without
-        // firing another 'viewshow', so a per-item watcher that stopped after
-        // advancing would never restart and the channel would halt after one item.
-        // Instead this watcher re-arms itself whenever the current item changes.
+        // The watcher no longer drives playback - the player owns the queue. What is left is
+        // watching: the pause panel, the card for what is coming, and the one moment where a
+        // choice has to be acted on.
         var watchedItemId = null;
         var overlayShown = false;
-        var fired = false;
-        var settled = false;
-        var nextInfo = null; // { schedule: ProgramDto|null, binge: {Id, Name}|null }
-
-        function armForItem(itemId) {
-            watchedItemId = itemId;
-            overlayShown = false;
-            fired = false;
-            settled = false;
-            nextInfo = null;
-            skipInFlight = false;
-            clearNextOverlay();
-        }
+        var committed = false;
+        var nextInfo = null; // { schedule: ProgramDto|null, binge: ProgramDto|null }
 
         watchTimer = setInterval(function () {
             if (!tuned) {
                 stopWatcher();
                 return;
             }
-            // A new item took over (the previous one advanced, or a restart/binge
-            // switched items): reset the end-of-item state for it.
+            pollCurrentItem();
+
             if (tuned.currentItemId !== watchedItemId) {
-                armForItem(tuned.currentItemId);
+                watchedItemId = tuned.currentItemId;
+                overlayShown = false;
+                committed = false;
+                nextInfo = null;
+                clearNextOverlay();
             }
+
             var video = document.querySelector('#videoOsdPage video') || document.querySelector('video');
             if (!video || !video.duration || isNaN(video.duration)) {
                 return;
             }
 
             var paused = video.paused && !video.ended;
-            if (paused && !skipInFlight) {
+            if (paused) {
                 ensurePausePanel();
             } else {
                 removePausePanel();
             }
 
-            var remaining = video.duration - video.currentTime;
+            var remaining = (video.duration - END_MARGIN_SECONDS) - video.currentTime;
 
-            // A freshly-started item reports plenty of remaining time; until we have
-            // seen that, the <video> may still be the previous, already-ended item
-            // lingering through the hand-off. Firing the follow-up on that stale
-            // element would skip past the item that just started. So only arm the
-            // end-of-item logic once the current item is genuinely playing.
-            if (!video.ended && remaining > 2) {
-                settled = true;
-                // The item is genuinely playing, so any transition is complete: clear
-                // the chain guard even when Jellyfin swapped the media in place without
-                // a 'viewshow' (which is what would otherwise reset it). Otherwise
-                // leaving the channel later would not be detected and the tuned state
-                // would leak.
-                chainInProgress = false;
-            }
-            if (!settled) {
-                return;
-            }
-
-            var untilAdvance = (video.duration - END_MARGIN_SECONDS) - video.currentTime;
-
-            // Seeking back out of the window re-arms the overlay for the next approach.
-            if (overlayShown && untilAdvance > NEXT_OVERLAY_WINDOW_SECONDS + 10) {
+            // Seeking back out of the window re-arms the card for the next approach.
+            if (overlayShown && remaining > NEXT_OVERLAY_WINDOW_SECONDS + 10) {
                 overlayShown = false;
+                committed = false;
                 clearNextOverlay();
             }
 
-            if (untilAdvance <= NEXT_OVERLAY_WINDOW_SECONDS && !overlayShown) {
+            if (remaining <= NEXT_OVERLAY_WINDOW_SECONDS && !overlayShown && !video.ended) {
                 overlayShown = true;
                 prepareNext().then(function (info) {
                     nextInfo = info;
                     if (tuned && info) {
-                        showNextOverlay(info, untilAdvance);
+                        showNextOverlay(info, remaining);
                     }
                 });
             }
 
-            // The countdown is driven from the player, not from a wall-clock timer, so
-            // it holds while paused and follows along when the viewer seeks.
+            // The countdown is driven from the player, not from a wall-clock timer, so it
+            // holds while paused and follows along when the viewer seeks.
             if (nextOverlayCountdown) {
-                nextOverlayCountdown(untilAdvance, paused);
+                nextOverlayCountdown(remaining, paused);
             }
 
-            // Never while paused: the program is not over for the viewer until they
-            // let it play on, so the hand-off waits for them.
-            if ((untilAdvance <= 0 || video.ended) && !fired && !paused) {
-                // Do not stop the watcher: it keeps running so the next item, which
-                // Jellyfin swaps in without a 'viewshow', is picked up and advanced
-                // in turn. playNext updates tuned.currentItemId, which re-arms us.
-                fired = true;
-                playNext(nextInfo);
+            // Never while paused: the programme is not over for the viewer until they let it
+            // play on. With nothing chosen there is nothing to do here at all - the queue
+            // rolls on by itself, which is the whole point of playing one.
+            if (remaining <= BINGE_COMMIT_SECONDS && !committed && !paused) {
+                committed = true;
+                if (tuned.mode === 'binge' && nextInfo && nextInfo.binge) {
+                    queueBinged(nextInfo.binge);
+                }
+                commitNextOverlay();
             }
         }, 500);
     }
 
-    // Determines the follow-up program relative to the item the viewer is actually
-    // watching. The viewer may be ahead of the wall-clock schedule (skipping is
-    // allowed), so the reference item is searched in the lineup: the follow-up is
-    // whatever comes after it. Only when the reference item is no longer in the
-    // lineup (the clock moved past it, or after a binge detour) do we rejoin the
-    // live position.
-    function resolveScheduleNext(now, referenceItemId) {
-        // Current is missing while the channel is between programmes; the lineup is then
-        // simply what is still to come.
-        var lineup = (now.Current ? [now.Current] : []).concat(now.Upcoming || []);
-        for (var i = 0; i < lineup.length; i++) {
-            if (lineup[i].ItemId === referenceItemId && i + 1 < lineup.length) {
-                // Reference item has not fully aired yet per the clock, so the
-                // viewer finished it early: its follow-up starts from the top.
-                return { program: lineup[i + 1], offsetTicks: 0, live: false };
-            }
-        }
-        return now.Current
-            ? { program: now.Current, offsetTicks: now.OffsetTicks, live: true }
-            : { program: lineup[0] || null, offsetTicks: 0, live: false };
-    }
-
+    // What the queue plays next, and what carrying on with the series would play instead.
+    //
+    // Both come out of the queue itself rather than from a fresh request. The queue IS the
+    // schedule, so the next entry needs no asking; and the next episode of the series is
+    // whatever the channel airs of it next, which is not the same as what /Shows/{id}/Episodes
+    // would answer - that orders specials differently, and offering an episode the channel is
+    // not going to play is how the choice ends up naming the wrong one.
     function prepareNext() {
         if (!tuned) {
             return Promise.resolve(null);
         }
-        var schedulePromise = apiGet('LiteTv/Channels/' + tuned.channelId + '/Now?upcoming=8').then(function (now) {
-            return resolveScheduleNext(now, tuned.currentItemId).program;
-        }).catch(function () { return null; });
 
-        var bingePromise = Promise.resolve(null);
-        if (tuned.currentSeriesId) {
-            bingePromise = window.ApiClient.getEpisodes(tuned.currentSeriesId, {
-                userId: window.ApiClient.getCurrentUserId(),
-                fields: 'Id,Name'
-            }).then(function (result) {
-                var episodes = (result && result.Items) || [];
-                for (var i = 0; i < episodes.length; i++) {
-                    if (episodes[i].Id === tuned.currentItemId && i + 1 < episodes.length) {
-                        return episodes[i + 1];
-                    }
-                }
-                return null;
-            }).catch(function () { return null; });
+        var schedule = null;
+        var binge = null;
+        var seriesId = tuned.currentSeriesId;
+        for (var i = tuned.index + 1; i < tuned.airings.length; i++) {
+            var airing = tuned.airings[i];
+            if (tuned.bingedIds.indexOf(airing.ItemId) >= 0) {
+                continue; // already watched by bingeing; the queue will step over it
+            }
+            if (!schedule) {
+                schedule = airing;
+            }
+            if (!binge && seriesId && airing.SeriesId === seriesId) {
+                binge = airing;
+            }
+            if (schedule && (binge || !seriesId)) {
+                break;
+            }
         }
 
-        return Promise.all([schedulePromise, bingePromise]).then(function (results) {
-            return { schedule: results[0], binge: results[1] };
+        // Where the schedule's own next programme is the next episode anyway, there is no
+        // choice to offer - only one thing is going to happen either way.
+        if (binge && schedule && binge.ItemId === schedule.ItemId) {
+            binge = null;
+        }
+
+        return Promise.resolve({ schedule: schedule, binge: binge });
+    }
+
+    // Carrying on with the series: the episode is put into the queue right after the one
+    // playing, so the player moves to it by itself and then carries on with the schedule.
+    // Whether it leaves a trace is the plugin's decision, not this script's.
+    function queueBinged(episode) {
+        if (!tuned) {
+            return;
+        }
+        var sessionId = tuned.sessionId;
+        var channelId = tuned.channelId;
+        tuned.bingedIds.push(episode.ItemId);
+        tuned.bingePlayingId = episode.ItemId;
+
+        getFlags().then(function (flags) {
+            return flags.shieldBingedEpisodes
+                ? apiPost('LiteTv/Tuned?sessionId=' + encodeURIComponent(sessionId)
+                    + '&channelId=' + channelId + '&itemId=' + episode.ItemId)
+                : Promise.resolve();
+        }).then(function () {
+            return sendPlay(sessionId, [episode.ItemId], 0, 'PlayNext');
+        }).catch(function (err) {
+            console.warn('liteTv: could not queue the next episode', err);
         });
     }
 
@@ -1014,35 +1182,24 @@
         var isPaused = false;
         var scheduleBtn = null;
         var bingeBtn = null;
-        // Without a series to continue there is no real choice; the same goes for
-        // when the schedule's next program IS the next episode of this series.
-        // Then show only what comes next, no buttons.
-        var hasChoice = !!(info.binge && tuned && tuned.currentSeriesId
-            && (!info.schedule || info.schedule.ItemId !== info.binge.Id));
+        // Without a series to carry on with there is no real choice - prepareNext already
+        // drops the binge candidate where it is the same thing the schedule would play.
+        // Then the card just says what is coming, with no buttons to press.
+        var hasChoice = !!(info.binge && tuned && tuned.currentSeriesId);
 
-        function scheduleName() {
-            if (!info.schedule) {
+        function programName(program) {
+            if (!program) {
                 return 'Programm';
             }
-            return info.schedule.SeriesName
-                ? info.schedule.SeriesName + ': ' + info.schedule.Name
-                : info.schedule.Name;
+            return program.SeriesName ? program.SeriesName + ': ' + program.Name : program.Name;
         }
 
         function update() {
             var binging = tuned && tuned.mode === 'binge' && info.binge;
-            name.textContent = binging ? info.binge.Name : scheduleName();
+            var showing = binging ? info.binge : info.schedule;
+            name.textContent = programName(showing);
             art.innerHTML = '';
-            // The next episode comes from the library rather than from the schedule, so it
-            // is described the same way here: its own cover, the series' where it has none.
-            addImage(
-                art,
-                binging
-                    ? { PosterItemId: info.binge.Id, PosterType: 'Primary' }
-                    : info.schedule,
-                'poster',
-                220,
-                'liteTvArt');
+            addImage(art, showing, 'poster', 220, 'liteTvArt');
             countdownText.textContent = isPaused
                 ? 'startet, sobald du fortsetzt'
                 : (secondsLeft > 0 ? 'startet in ' + secondsLeft + ' Sekunden' : 'startet gleich');
@@ -1054,6 +1211,20 @@
                 bingeBtn.classList.toggle('liteTvPillActive', !!binging);
             }
         }
+
+        // Once the choice has been acted on the buttons go: the follow-up is in the player's
+        // queue by then, so a button that looked like it still decided something would be
+        // lying about what pressing it does.
+        nextOverlayCommit = function () {
+            if (bingeBtn && bingeBtn.parentNode) {
+                bingeBtn.parentNode.removeChild(bingeBtn);
+            }
+            if (scheduleBtn && scheduleBtn.parentNode) {
+                scheduleBtn.parentNode.removeChild(scheduleBtn);
+            }
+            bingeBtn = null;
+            scheduleBtn = null;
+        };
 
         if (hasChoice) {
             bingeBtn = makeButton('Serie weiterschauen', 'liteTvPill', function () {
@@ -1094,59 +1265,25 @@
         overlay.classList.add('liteTvVisible');
     }
 
-    // Manual "next program", from the pause panel or the end-of-item overlay. Resolves
-    // the follow-up first so the binge choice is honoured the same way the automatic
-    // hand-off does.
+    // Manual "next programme", from the pause panel or the card. The player owns the queue,
+    // so this is its own next-track button: whatever it would have played next, now.
+    // A binge choice made first is honoured, because it was queued as the next track.
     function skipToNext() {
-        if (!tuned || chainInProgress || skipInFlight) {
-            return;
-        }
-        skipInFlight = true;
-        clearNextOverlay();
-        removePausePanel();
-        prepareNext().then(function (info) {
-            if (tuned) {
-                playNext(info);
-            }
-        });
-    }
-
-    function playNext(info) {
-        clearNextOverlay();
         if (!tuned) {
             return;
         }
-
-        chainInProgress = true;
-        if (tuned.mode === 'binge' && info && info.binge) {
-            tuned.currentItemId = info.binge.Id;
-            playItem(info.binge.Id, 0).catch(function (err) {
-                console.warn('liteTv: binge next failed', err);
+        clearNextOverlay();
+        removePausePanel();
+        if (tuned.mode === 'binge') {
+            prepareNext().then(function (info) {
+                if (info && info.binge) {
+                    queueBinged(info.binge);
+                }
+                nextTrack();
             });
             return;
         }
-
-        // Follow the schedule. The just-ended item is the reference: if the viewer
-        // skipped ahead and finished early, the follow-up program starts from the
-        // beginning (running ahead of the live schedule); otherwise we rejoin the
-        // live position.
-        tuned.mode = 'schedule';
-        var endedItemId = tuned.currentItemId;
-        var channelId = tuned.channelId;
-        apiGet('LiteTv/Channels/' + channelId + '/Now?upcoming=8').then(function (now) {
-            var next = resolveScheduleNext(now, endedItemId);
-            if (!next.program) {
-                // The channel is between programmes: fill the gap rather than stopping.
-                showInterstitial(now, channelId);
-                return null;
-            }
-            tuned.currentItemId = next.program.ItemId;
-            tuned.currentSeriesId = next.program.SeriesId || null;
-            return playItem(next.program.ItemId, next.offsetTicks);
-        }).catch(function (err) {
-            console.warn('liteTv: schedule next failed', err);
-            untune();
-        });
+        nextTrack();
     }
 
     // ------------------------------------------------------------------ guide
@@ -1587,17 +1724,49 @@
         grid.className = 'liteTvGrid';
         panel.appendChild(grid);
 
-        function shift(hours) {
-            guideStartMs = (guideStartMs === null ? guideWindowStart() : guideStartMs) + (hours * 3600000);
-            loadGuide(grid).catch(function (err) { console.debug('liteTv: guide not available', err); });
+        function jumpTo(edge) {
+            grid.style.scrollBehavior = 'auto';
+            grid.scrollLeft = edge === 'end' ? grid.scrollWidth : 0;
+            grid.style.scrollBehavior = '';
         }
 
-        bar.appendChild(makeButton('◀', 'liteTvPill', function () { shift(-2); }));
+        // Moving through the guide is one gesture, not two: the arrows slide the grid a
+        // screenful at a time, and when there is no more of the loaded window in that
+        // direction they roll on to the next one and land at its near edge. So the schedule
+        // reads as one continuous strip rather than as a series of separate loads, and the
+        // same arrows keep working at the ends instead of quietly doing nothing.
+        function shift(hours, edge) {
+            guideStartMs = (guideStartMs === null ? guideWindowStart() : guideStartMs) + (hours * 3600000);
+            return loadGuide(grid).then(function () {
+                jumpTo(edge);
+            }).catch(function (err) { console.debug('liteTv: guide not available', err); });
+        }
+
+        function page(direction) {
+            var furthest = grid.scrollWidth - grid.clientWidth;
+            var step = Math.max(120, grid.clientWidth * 0.8);
+            // A couple of pixels of slack: sub-pixel layout means scrollLeft rarely lands
+            // exactly on the end, and an arrow that stops working there looks broken.
+            if (direction > 0 && grid.scrollLeft >= furthest - 2) {
+                return shift(GUIDE_HOURS, 'start');
+            }
+            if (direction < 0 && grid.scrollLeft <= 2) {
+                return shift(-GUIDE_HOURS, 'end');
+            }
+            grid.scrollTo({
+                left: Math.max(0, Math.min(furthest, grid.scrollLeft + (direction * step))),
+                behavior: 'smooth'
+            });
+            return Promise.resolve();
+        }
+
+        bar.appendChild(makeButton('◀', 'liteTvPill', function () { page(-1); }));
         bar.appendChild(makeButton('Jetzt', 'liteTvPill', function () {
             guideStartMs = null;
-            loadGuide(grid).catch(function (err) { console.debug('liteTv: guide not available', err); });
+            loadGuide(grid).then(function () { jumpTo('start'); })
+                .catch(function (err) { console.debug('liteTv: guide not available', err); });
         }));
-        bar.appendChild(makeButton('▶', 'liteTvPill', function () { shift(2); }));
+        bar.appendChild(makeButton('▶', 'liteTvPill', function () { page(1); }));
 
         document.body.appendChild(backdrop);
         void backdrop.offsetWidth;
@@ -1657,7 +1826,6 @@
 
         if (isVideoOsd(e)) {
             if (tuned) {
-                chainInProgress = false;
                 startWatcher();
                 return;
             }
@@ -1677,10 +1845,10 @@
         }
 
         // Landing anywhere that is not the video OSD means the viewer has left the
-        // channel, unless we are mid-chain (the OSD briefly hides while switching
-        // items, which can surface the home page for a moment). This includes the
-        // home page, so returning home does not leave the session marked tuned.
-        if (tuned && !chainInProgress) {
+        // channel. No mid-chain exception is needed any more: the player holds the whole
+        // queue, so it never leaves the OSD between programmes the way re-issuing playback
+        // for each one did.
+        if (tuned) {
             untune();
         }
     });

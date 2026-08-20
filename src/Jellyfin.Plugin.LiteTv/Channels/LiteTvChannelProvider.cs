@@ -43,8 +43,14 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
         _logger = logger;
     }
 
+    /// <summary>
+    /// The name the channel is published under, and therefore the name of the view it
+    /// appears as. Named once because <see cref="MyMediaVisibility"/> finds the view by it.
+    /// </summary>
+    internal const string ChannelName = "TV-Sender";
+
     /// <inheritdoc />
-    public string Name => "TV-Sender";
+    public string Name => ChannelName;
 
     /// <inheritdoc />
     public string Description => "Durchgehende TV-Sender aus der eigenen Bibliothek.";
@@ -287,14 +293,19 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
     /// </summary>
     private string? ArtworkPath(MediaBrowser.Controller.Entities.BaseItem? item, Guid? seriesId)
     {
+        // A series is recognised by its poster, so that is what the channel wears while it is
+        // airing one. An episode's own image is a still from the episode - a wide frame, which
+        // is not a poster and does not survive being drawn as one: it comes out cut about and
+        // stretched, and says less about what is on than the cover of the series does.
+        if (seriesId is { } id && id != Guid.Empty
+            && _libraryManager.GetItemById(id)?.PrimaryImagePath is { Length: > 0 } seriesArt)
+        {
+            return seriesArt;
+        }
+
         if (item?.PrimaryImagePath is { Length: > 0 } own)
         {
             return own;
-        }
-
-        if (seriesId is { } id && id != Guid.Empty)
-        {
-            return _libraryManager.GetItemById(id)?.PrimaryImagePath;
         }
 
         return null;
@@ -302,6 +313,12 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
 
     /// <summary>
     /// Writes out what is on and what follows, as the entry's description.
+    /// <para>
+    /// Written tightly, one thing per line and nothing blank between them: a client shows a
+    /// description in the few lines it has room for and cuts the rest. Spent on a heading and
+    /// an empty line, those few lines say "Jetzt", "", "Danach:" and stop right where the
+    /// answer would have been - so what is coming up is the one thing that never survives.
+    /// </para>
     /// </summary>
     private static string Schedule(Airing now, IReadOnlyList<Airing> upcoming)
     {
@@ -309,18 +326,19 @@ public class LiteTvChannelProvider : IChannel, IRequiresMediaInfoCallback, IHasC
         if (!string.IsNullOrEmpty(now.BlockName))
         {
             lines.Add(now.BlockName);
-            lines.Add(string.Empty);
         }
 
         lines.Add(now.Kind == AiringKind.Interstitial
-            ? "Werbepause bis " + Clock(now.EndUtc)
-            : "Jetzt: " + Title(now.Entry!));
-        lines.Add(string.Empty);
-        lines.Add("Danach:");
+            ? "Jetzt: Werbepause bis " + Clock(now.EndUtc)
+            : "Jetzt: " + Title(now.Entry!) + " (bis " + Clock(now.EndUtc) + ")");
 
-        foreach (var airing in upcoming)
+        if (upcoming.Count > 0)
         {
-            lines.Add(Clock(airing.StartUtc) + "  " + Title(airing.Entry!));
+            // All of it on one line: a reader wants to know what is coming, and a list that
+            // is cut off after its heading tells them less than a crowded line that is not.
+            lines.Add("Danach: " + string.Join(
+                " · ",
+                upcoming.Select(a => Clock(a.StartUtc) + " " + Title(a.Entry!))));
         }
 
         return string.Join('\n', lines);

@@ -5,7 +5,6 @@ using Jellyfin.Plugin.LiteTv.Web;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -42,19 +41,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Publishes the channels to every client, not just the injected web UI.
         serviceCollection.AddSingleton<IChannel, LiteTvChannelProvider>();
 
-        // And into the server's own Live TV section, so its guide - the one native clients
-        // already have - shows what the channels are airing. Registration is unconditional
-        // because it happens once at startup; the service itself reports no channels while
-        // the option is off, so the setting can be changed without a restart.
-        serviceCollection.AddSingleton<ILiveTvService, LiteTvLiveService>();
         serviceCollection.AddSingleton<LiveOffsetResolver>();
 
-        // Programme artwork only reaches a client once the image metadata the guide refresh
-        // leaves blank has been filled in. The repair runs at startup as a hosted service and
-        // again after every refresh, which is what the guide manager is wrapped for.
-        serviceCollection.AddSingleton<ProgramImageRepair>();
-        serviceCollection.AddHostedService(sp => sp.GetRequiredService<ProgramImageRepair>());
-        RepairProgramImages(serviceCollection);
+        // Keeps the channel out of My Media when the setting asks for it, on every client.
+        serviceCollection.AddHostedService<MyMediaVisibility>();
 
         // Preferred: register the script injection with the File Transformation
         // plugin when installed (same mechanism as Intro Skipper).
@@ -64,54 +54,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // even when the web directory on disk is read-only. Stands down when File
         // Transformation handles the injection.
         serviceCollection.AddSingleton<IStartupFilter, InjectionStartupFilter>();
-    }
-
-    /// <summary>
-    /// Puts <see cref="RepairingGuideManager"/> in front of the server's guide manager, so a
-    /// finished guide refresh is followed by the image metadata repair. The same reasoning as
-    /// <see cref="ShieldUserData"/> applies: the server registers its own services first, so
-    /// the registration replaced here is the real one, and if that ever stops being true
-    /// nothing is found and nothing is wrapped.
-    /// <para>
-    /// A refresh raises no event that a plugin could subscribe to instead - the server
-    /// suppresses item notifications for Live TV on purpose - so wrapping the call is what
-    /// makes the repair run at the only moment it needs to.
-    /// </para>
-    /// </summary>
-    private static void RepairProgramImages(IServiceCollection serviceCollection)
-    {
-        var registered = serviceCollection.LastOrDefault(d => d.ServiceType == typeof(IGuideManager));
-        if (registered is null)
-        {
-            return;
-        }
-
-        Func<IServiceProvider, IGuideManager>? resolveInner = null;
-        if (registered.ImplementationType is { } implementationType)
-        {
-            // Register the server's implementation under its own type so it is still built
-            // (and built only once) by the container, then wrap that instance.
-            serviceCollection.AddSingleton(implementationType);
-            resolveInner = sp => (IGuideManager)sp.GetRequiredService(implementationType);
-        }
-        else if (registered.ImplementationInstance is IGuideManager instance)
-        {
-            resolveInner = _ => instance;
-        }
-        else if (registered.ImplementationFactory is { } factory)
-        {
-            resolveInner = sp => (IGuideManager)factory(sp);
-        }
-
-        if (resolveInner is null)
-        {
-            return;
-        }
-
-        serviceCollection.Remove(registered);
-        serviceCollection.AddSingleton<IGuideManager>(sp => new RepairingGuideManager(
-            resolveInner(sp),
-            sp.GetRequiredService<ProgramImageRepair>()));
     }
 
     /// <summary>

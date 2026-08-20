@@ -47,13 +47,35 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool PublishAsChannels { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether the channels are also published to
-    /// Jellyfin's own Live TV section, which fills the server's real guide - the grid every
-    /// client already knows how to draw - with what the channels are airing. Switching a
-    /// channel on there starts the current program from its beginning rather than joining
-    /// it live, because Live TV hands a client a stream and not a position in one.
+    /// Gets or sets a value indicating whether the published channel is kept out of My Media
+    /// on every client and every device.
+    /// <para>
+    /// A channel is not a library, and listed as one it is misleading: it sits beside the
+    /// film and series folders offering a flat list of schedule entries, and on a client the
+    /// plugin cannot reach, opening one of them plays a programme instead of tuning in. With
+    /// this on, the channels are reached where they mean something - the web client's own row
+    /// and guide, and the TV app, which asks for hidden views deliberately.
+    /// </para>
+    /// <para>
+    /// This does not unpublish anything: the channel is still there, still playable, still
+    /// reachable by direct link. Only the entry in My Media goes away.
+    /// </para>
     /// </summary>
-    public bool PublishAsLiveTv { get; set; }
+    public bool HideChannelFromMyMedia { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether episodes watched by carrying on with a series
+    /// instead of following the schedule are kept off the account like everything else a
+    /// channel plays.
+    /// <para>
+    /// On by default, because it is still the channel playing: the viewer chose what came
+    /// next, not to start watching the series deliberately. Turn it off and those episodes
+    /// record normally, so Next Up moves on and the series can be resumed elsewhere - which
+    /// is what someone who really is settling in to watch would want.
+    /// </para>
+    /// </summary>
+    public bool ShieldBingedEpisodes { get; set; } = true;
+
 }
 
 /// <summary>
@@ -118,6 +140,39 @@ public class TvChannel
     public bool TrailersInGaps { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets how trailers are worked into the channel's own queue - as scheduled
+    /// programming in their own right, rather than as something used to fill a gap. A gap
+    /// only exists when programs start on a grid; a channel running back to back has none,
+    /// and would never show a trailer at all.
+    /// <para>
+    /// Only trailers the library holds as files can be scheduled. A library whose trailers
+    /// are links the client streams (usually YouTube) has nothing here to place, and those
+    /// are left to the web client, which can embed them.
+    /// </para>
+    /// </summary>
+    public TrailerMode Trailers { get; set; }
+
+    /// <summary>
+    /// Gets or sets how often a trailer is worked in, counted in programs. With the default
+    /// of three, one plays after every third program.
+    /// </summary>
+    public int TrailerEveryPrograms { get; set; } = 3;
+
+    /// <summary>
+    /// Gets or sets how far ahead a trailer advertises, counted in programs. A trailer for
+    /// the very next program announces rather than advertises; a few programs ahead is a
+    /// preview of something still to come, which is what a trailer is for.
+    /// </summary>
+    public int TrailerLookahead { get; set; } = 3;
+
+    /// <summary>
+    /// Gets or sets the titles whose trailers this channel advertises regardless of what it
+    /// is airing. Each entry names a movie or series, not a trailer file: the library knows
+    /// which trailers belong to a title, and naming the title is what a viewer means.
+    /// </summary>
+    public List<ChannelSource> TrailerTitles { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets the program blocks: parts of the week that air something other than
     /// the channel's own <see cref="Sources"/>. Whatever no block covers is aired from
     /// <see cref="Sources"/>, so a channel with no blocks behaves exactly as it always
@@ -174,6 +229,30 @@ public class ProgramBlock
     /// Gets or sets the order the block's queue is played in.
     /// </summary>
     public PlayOrder Order { get; set; }
+}
+
+/// <summary>
+/// How a channel works trailers into what it airs.
+/// </summary>
+public enum TrailerMode
+{
+    /// <summary>No trailers; the queue is programs only.</summary>
+    Off,
+
+    /// <summary>
+    /// Trailers for what this channel is about to air, taken a few programs ahead so they
+    /// advertise something still to come rather than announcing what is next.
+    /// </summary>
+    Preview,
+
+    /// <summary>Trailers for the titles named on the channel, whatever it happens to air.</summary>
+    Manual,
+
+    /// <summary>
+    /// Preview trailers where the upcoming program has one, and the channel's own titles
+    /// where it does not - so a trailer slot is never left empty.
+    /// </summary>
+    Both
 }
 
 /// <summary>

@@ -16,8 +16,11 @@ namespace Jellyfin.Plugin.LiteTv.Sessions;
 /// Tracks sessions that are tuned to a LiteTV channel and keeps channel viewing off the
 /// account: every item a channel is about to play is registered through <see cref="Tune"/>
 /// before playback starts, which shields it in the <see cref="WatchStateShield"/> so none
-/// of its watch state is ever written. The shield is released when the item stops and when
-/// the viewer leaves the channel.
+/// of its watch state is ever written. What a tuned session is airing stays shielded until
+/// the viewer leaves the channel - not until the item stops playing, because a stop is not
+/// the end of anything: a seek, a re-prepare after the library scan touched the file, or a
+/// player rebuilding itself all stop and start again, and a shield dropped in between leaves
+/// the rest of the programme recording as ordinary watching.
 /// Only registered items are covered: an item the viewer starts themselves in a session
 /// that is still marked tuned records its watch state as usual.
 /// For sessions tuned via the PlayOn endpoint (native clients without the injected script)
@@ -138,7 +141,50 @@ public class TunedSessionMonitor : IHostedService
     /// <param name="followSchedule">Whether the server should push the next scheduled item
     /// when an item finishes (native clients without the injected script).</param>
     /// <param name="itemId">The item about to play; optional.</param>
-    public void Tune(string sessionId, Guid channelId, bool followSchedule, Guid? itemId = null)
+    /// <param name="requestUserId">The user the tune request authenticated as, used when the
+    /// session itself cannot be found; <see cref="Guid.Empty"/> when unknown.</param>
+    /// <param name="requestDeviceId">The device the tune request came from, used when the
+    /// session itself cannot be found.</param>
+    /// <returns><c>true</c> when there is nothing left to shield or the item was shielded;
+    /// <c>false</c> when it could not be, and playing it would record it.</returns>
+    public bool Tune(
+        string sessionId,
+        Guid channelId,
+        bool followSchedule,
+        Guid? itemId = null,
+        Guid requestUserId = default,
+        string? requestDeviceId = null)
+        => Tune(
+            sessionId,
+            channelId,
+            followSchedule,
+            itemId.HasValue ? new[] { itemId.Value } : Array.Empty<Guid>(),
+            requestUserId,
+            requestDeviceId);
+
+    /// <summary>
+    /// Marks a session as tuned and shields a whole run of items at once.
+    /// <para>
+    /// A client that hands the player a queue rather than one programme at a time has no
+    /// later moment to arm anything: the player moves on by itself, and the first watch-state
+    /// report of the next item arrives before any client code could react to it. So the queue
+    /// is shielded in full up front, and released together when the viewer leaves.
+    /// </para>
+    /// </summary>
+    /// <param name="sessionId">The session id.</param>
+    /// <param name="channelId">The channel id.</param>
+    /// <param name="followSchedule">Whether the server pushes follow-up items.</param>
+    /// <param name="itemIds">The items to shield; may be empty.</param>
+    /// <param name="requestUserId">The user the request authenticated as.</param>
+    /// <param name="requestDeviceId">The device the request came from.</param>
+    /// <returns><c>true</c> when every item asked for is shielded.</returns>
+    public bool Tune(
+        string sessionId,
+        Guid channelId,
+        bool followSchedule,
+        IReadOnlyList<Guid> itemIds,
+        Guid requestUserId = default,
+        string? requestDeviceId = null)
     {
         // Preserve an existing session across the repeated calls the script makes; only
         // the first call establishes followSchedule.
@@ -146,18 +192,57 @@ public class TunedSessionMonitor : IHostedService
         tuned.Touch();
         tuned.MarkTuned();
 
-        if (itemId.HasValue && itemId.Value != Guid.Empty)
+        Prune();
+
+        var wanted = itemIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (wanted.Count == 0)
         {
-            var session = FindSession(sessionId);
-            foreach (var userId in GetSessionUserIds(session))
+            return true;
+        }
+
+        var session = FindSession(sessionId);
+        var userIds = GetSessionUserIds(session).ToList();
+
+        // The session list is the server's own record of connected clients, and a client can
+        // be missing from it - dropped after a reconnect, pruned, or simply never matched
+        // because the id the caller resolved has gone stale. That used to mean nothing was
+        // armed at all, without a word in the log, and every programme the channel then
+        // played was recorded as deliberate watching. The requesting account is the one
+        // being protected, so it stands in.
+        if (userIds.Count == 0 && requestUserId != Guid.Empty && _userManager.GetUserById(requestUserId) is not null)
+        {
+            userIds.Add(requestUserId);
+        }
+
+        if (userIds.Count == 0)
+        {
+            _logger.LogError(
+                "LiteTV: could not arm the watch-state shield for session {SessionId} - no user could be resolved, so {Count} item(s) are NOT being played.",
+                sessionId,
+                wanted.Count);
+            return false;
+        }
+
+        // The device is what tells this playback apart from the same title watched
+        // deliberately elsewhere, which must keep its watch state. Unknown means the shield
+        // cannot be narrowed down, and it then covers every device - the safe way round.
+        var deviceId = session?.DeviceId ?? requestDeviceId;
+        foreach (var userId in userIds)
+        {
+            foreach (var id in wanted)
             {
-                // The device is what tells this playback apart from the same title watched
-                // deliberately elsewhere, which must keep its watch state.
-                _shield.Arm(sessionId, session?.DeviceId, userId, itemId.Value);
+                _shield.Arm(sessionId, deviceId, userId, id);
             }
         }
 
-        Prune();
+        _logger.LogInformation(
+            "LiteTV: shielded {Count} item(s) for {Users} user(s) on device {Device}, session {SessionId}.",
+            wanted.Count,
+            userIds.Count,
+            deviceId ?? "(any)",
+            sessionId);
+
+        return true;
     }
 
     /// <summary>
@@ -259,8 +344,21 @@ public class TunedSessionMonitor : IHostedService
         }
 
         tuned.Touch();
-        _ = ReleaseUnlessResumedAsync(e.Session.Id, e.Users.Select(u => u.Id).ToList(), item.Id);
 
+        // Deliberately nothing is released here. A shield used to be dropped when the item
+        // it covered stopped playing, which looks tidy and is wrong twice over:
+        //
+        // - A stop followed by a start of the same item - a seek, a re-prepare after the
+        //   library scan touched the file, a client rebuilding its player - decremented the
+        //   arm belonging to the playback that had just begun, not the one that ended. The
+        //   settle delay was meant to catch that and cannot: whether the new playback has
+        //   reported itself yet is a race.
+        // - Anything the client starts without telling us is then unshielded, and a player
+        //   that re-prepares on its own does exactly that.
+        //
+        // So a tuned session holds what it is airing until the viewer leaves it, which is
+        // the moment that actually means something. Untune, the session ending and the
+        // hours-long prune all release in full, so nothing is held indefinitely.
         if (tuned.HasLeft)
         {
             // This is the stop the session was being kept alive for: the viewer left the
@@ -324,25 +422,6 @@ public class TunedSessionMonitor : IHostedService
     {
         var playing = FindSession(sessionId)?.NowPlayingItem;
         return playing is not null && (itemId is null || playing.Id == itemId.Value);
-    }
-
-    /// <summary>
-    /// Drops an item's cover once its playback has really ended. A seek stops and restarts the
-    /// stream, and releasing on that stop would leave the rest of the programme recording its
-    /// watch state as ordinary watching - the one thing a channel must never do.
-    /// </summary>
-    private async Task ReleaseUnlessResumedAsync(string sessionId, IReadOnlyList<Guid> userIds, Guid itemId)
-    {
-        await Task.Delay(StopSettleDelay).ConfigureAwait(false);
-        if (StillPlaying(sessionId, itemId))
-        {
-            return; // the same programme is running again: nothing ended, so nothing is released
-        }
-
-        foreach (var userId in userIds)
-        {
-            _shield.Release(sessionId, userId, itemId, ReleaseGracePeriod);
-        }
     }
 
     /// <summary>
@@ -440,8 +519,13 @@ public class TunedSessionMonitor : IHostedService
             }
 
             // Shield before the command goes out: the client can report playback the
-            // moment it receives it.
-            Tune(sessionId, channelId, followSchedule: true, now.Entry.ItemId);
+            // moment it receives it. Nothing is pushed if that fails - a channel that stops
+            // is a nuisance, a channel that writes itself into the watch history is not.
+            if (!Tune(sessionId, channelId, followSchedule: true, now.Entry.ItemId))
+            {
+                Untune(sessionId);
+                return;
+            }
 
             await _sessionManager.SendPlayCommand(
                 sessionId,
