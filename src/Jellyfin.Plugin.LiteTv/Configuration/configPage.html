@@ -121,9 +121,24 @@
                     </div>
                     <div class="paperList" id="ArtworkItemResults" style="margin-bottom: 1em;"></div>
 
-                    <button is="emby-button" type="button" id="LoadArtworkGallery" class="raised emby-button">
-                        <span>Show the pictures this channel's content has</span>
-                    </button>
+                    <div style="display: flex; gap: 0.5em; flex-wrap: wrap;">
+                        <button is="emby-button" type="button" id="LoadArtworkGallery" class="raised emby-button">
+                            <span>Pictures from this channel's own content</span>
+                        </button>
+                        <button is="emby-button" type="button" id="LoadWebArtwork" class="raised emby-button">
+                            <span>Pictures from the web</span>
+                        </button>
+                    </div>
+
+                    <div class="inputContainer" style="margin-top: 0.8em;">
+                        <input is="emby-input" type="text" id="ArtworkLibrarySearch" label="…or take a picture from anything else in the library" />
+                        <div class="fieldDescription">
+                            Search any title, then pick one of its pictures. The channel need not air it —
+                            a poster is a poster.
+                        </div>
+                    </div>
+                    <div class="paperList" id="ArtworkLibraryResults" style="margin-bottom: 0.6em;"></div>
+
                     <div id="ArtworkGallery" style="margin: 0.8em 0;"></div>
 
                     <h4>Trailers</h4>
@@ -167,6 +182,13 @@
                     <h4 style="margin-top: 1.5em;">Program blocks</h4>
                     <div class="fieldDescription" style="margin-bottom: 0.6em;">
                         Parts of the week that air something else — the kids' programming until noon, the film on Saturday evening. Whatever no block covers airs the channel's own program above. A block picks up where it left off the last time it was on.
+                    </div>
+
+                    <div id="Timeline" style="margin-bottom: 1em;"></div>
+                    <div class="fieldDescription" style="margin-bottom: 1em;">
+                        Click a bar to edit it, drag it to move it, drag its right edge to make it longer
+                        or shorter. Click an empty stretch to start a block there. Everything snaps to a
+                        quarter of an hour. Thin marks are trailer slots.
                     </div>
 
                     <div class="selectContainer">
@@ -237,6 +259,7 @@
             var currentBlockIndex = -1;
             var searchTimer = null;
             var artworkSearchTimer;
+            var artworkLibraryTimer;
             var EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
             var trailerSearchTimer;
             var blockSearchTimer = null;
@@ -283,11 +306,14 @@
                 q('#ItemSearch').value = '';
                 q('#ArtworkItemSearch').value = '';
                 q('#ArtworkItemResults').innerHTML = '';
+                q('#ArtworkLibrarySearch').value = '';
+                q('#ArtworkLibraryResults').innerHTML = '';
                 q('#ArtworkGallery').innerHTML = '';
                 channel.Blocks = channel.Blocks || [];
                 currentBlockIndex = channel.Blocks.length ? 0 : -1;
                 renderBlockSelect();
                 renderBlockEditor();
+                renderTimeline();
             }
 
             function renderSources() {
@@ -320,6 +346,42 @@
 
             var artworkTarget = 'BannerUrl';
 
+            /**
+             * What each channel is drawn with right now, straight from the endpoint the clients
+             * read.
+             *
+             * A slot nobody has set is not blank on the television - the plugin falls back to
+             * something out of the channel's own lineup - so showing an empty box here would be
+             * a lie about what is on screen, and would make "what am I replacing?" unanswerable.
+             * These are drawn faded and labelled, to keep the difference between a picture that
+             * was chosen and one that was found visible at a glance.
+             */
+            var effectiveArt = {};
+
+            function loadEffectiveArt() {
+                return ApiClient.getJSON(ApiClient.getUrl('LiteTv/Channels'))
+                    .then(function (guide) {
+                        effectiveArt = {};
+                        (guide.Channels || []).forEach(function (ch) {
+                            // Keyed with the dashes stripped. Jellyfin writes GUIDs without
+                            // them, the page generates them with, and the two have to meet.
+                            effectiveArt[String(ch.Id).replace(/-/g, '').toLowerCase()] = ch.Image || {};
+                        });
+                    })
+                    .catch(function () { effectiveArt = {}; });
+            }
+
+            /** The picture the plugin currently falls back to for one slot, or ''. */
+            function fallbackSrc(channel, key) {
+                var image = effectiveArt[String(channel.Id).replace(/-/g, '').toLowerCase()];
+                if (!image) { return ''; }
+                var wide = key !== 'PosterUrl';
+                var itemId = wide ? image.BackdropItemId : image.PosterItemId;
+                var type = wide ? image.BackdropType : image.PosterType;
+                if (!itemId || !type) { return ''; }
+                return ApiClient.serverAddress() + '/Items/' + itemId + '/Images/' + type + '?maxWidth=400';
+            }
+
             function artworkOf(channel) {
                 channel.Artwork = channel.Artwork || {};
                 return channel.Artwork;
@@ -346,7 +408,7 @@
                     row.style.marginBottom = '0.8em';
 
                     var preview = document.createElement('div');
-                    preview.style.flex = '0 0 9em';
+                    preview.style.width = '9em';
                     preview.style.height = '5em';
                     preview.style.borderRadius = '4px';
                     preview.style.background = 'rgba(255,255,255,0.08)';
@@ -354,8 +416,24 @@
                     preview.style.backgroundPosition = 'center';
                     preview.style.cursor = 'pointer';
                     preview.title = 'Pick this one to receive the next picture you choose';
+
+                    var note = document.createElement('div');
+                    note.style.fontSize = '0.75em';
+                    note.style.textAlign = 'center';
+                    note.style.marginTop = '0.2em';
+                    note.style.opacity = '0.75';
+
                     if (art[kind.key]) {
                         preview.style.backgroundImage = 'url("' + artworkSrc(art[kind.key]) + '")';
+                        preview.style.opacity = '1';
+                        note.textContent = 'set';
+                    } else {
+                        // Faded, because this is what the plugin found rather than what anyone
+                        // chose, and picking a new picture replaces it without warning.
+                        var found = fallbackSrc(channel, kind.key);
+                        preview.style.backgroundImage = found ? 'url("' + found + '")' : '';
+                        preview.style.opacity = found ? '0.55' : '1';
+                        note.textContent = found ? 'automatic' : 'nothing';
                     }
                     preview.addEventListener('click', function () {
                         artworkTarget = kind.key;
@@ -364,7 +442,11 @@
                     if (artworkTarget === kind.key) {
                         preview.style.outline = '2px solid #00a4dc';
                     }
-                    row.appendChild(preview);
+                    var previewCell = document.createElement('div');
+                    previewCell.style.flex = '0 0 9em';
+                    previewCell.appendChild(preview);
+                    previewCell.appendChild(note);
+                    row.appendChild(previewCell);
 
                     var right = document.createElement('div');
                     right.style.flexGrow = '1';
@@ -489,36 +571,167 @@
                 gallery.innerHTML = '<div class="fieldDescription">Loading…</div>';
                 ApiClient.getJSON(ApiClient.getUrl('Items', { ids: ids.join(','), limit: ids.length }))
                     .then(function (result) {
-                        gallery.innerHTML = '';
-                        var strip = document.createElement('div');
-                        strip.style.display = 'flex';
-                        strip.style.flexWrap = 'wrap';
-                        strip.style.gap = '0.5em';
-
-                        (result.Items || []).forEach(function (item) {
-                            var tags = item.ImageTags || {};
-                            ['Banner', 'Thumb', 'Primary', 'Logo'].forEach(function (type) {
-                                if (tags[type]) { strip.appendChild(artworkTile(item, type, 0)); }
-                            });
-                            (item.BackdropImageTags || []).forEach(function (_, i) {
-                                strip.appendChild(artworkTile(item, 'Backdrop', i));
-                            });
-                        });
-
-                        if (!strip.childNodes.length) {
-                            gallery.innerHTML = '<div class="fieldDescription">None of this channel\u2019s content has artwork yet.</div>';
-                            return;
-                        }
-
-                        var hint = document.createElement('div');
-                        hint.className = 'fieldDescription';
-                        hint.textContent = 'Click a picture to put it in the highlighted slot above.';
-                        gallery.appendChild(hint);
-                        gallery.appendChild(strip);
+                        showItemArtwork(result.Items || []);
                     })
                     .catch(function (err) {
                         gallery.innerHTML = '<div class="fieldDescription">Could not read the artwork: ' + err + '</div>';
                     });
+            }
+
+            /**
+             * The pictures the metadata providers hold for a title, which is the honest version
+             * of "from the web".
+             *
+             * Jellyfin already talks to TheMovieDB, TheTVDB and Fanart for every item it has;
+             * asking them is one request and gives artwork drawn for this exact title, at
+             * sizes made for the job. An image search would give neither, and would need a key
+             * and somebody's terms of service.
+             */
+            function loadWebArtwork() {
+                var channel = currentChannel();
+                var gallery = q('#ArtworkGallery');
+                if (!channel) { return; }
+
+                var itemId = artworkOf(channel).ImageItemId;
+                if (!itemId || itemId === EMPTY_GUID) {
+                    itemId = ((channel.Sources || [])[0] || {}).ItemId;
+                }
+                if (!itemId) {
+                    gallery.innerHTML = '<div class="fieldDescription">Pick a title first — search the library below, or give the channel some content.</div>';
+                    return;
+                }
+
+                gallery.innerHTML = '<div class="fieldDescription">Asking the metadata providers…</div>';
+                ApiClient.getJSON(ApiClient.getUrl('Items/' + itemId + '/RemoteImages', {
+                    includeAllLanguages: true,
+                    limit: 60
+                })).then(function (result) {
+                    var images = result.Images || [];
+                    gallery.innerHTML = '';
+                    if (!images.length) {
+                        gallery.innerHTML = '<div class="fieldDescription">The providers have no pictures for that title.</div>';
+                        return;
+                    }
+
+                    var hint = document.createElement('div');
+                    hint.className = 'fieldDescription';
+                    hint.textContent = 'Click a picture to put it in the highlighted slot above. These are addresses on the provider\u2019s own servers — use Upload if you would rather the picture lived here.';
+                    gallery.appendChild(hint);
+
+                    var strip = document.createElement('div');
+                    strip.style.display = 'flex';
+                    strip.style.flexWrap = 'wrap';
+                    strip.style.gap = '0.5em';
+                    images.forEach(function (image) {
+                        strip.appendChild(remoteArtworkTile(image));
+                    });
+                    gallery.appendChild(strip);
+                }).catch(function (err) {
+                    gallery.innerHTML = '<div class="fieldDescription">Could not reach the providers: ' + err + '</div>';
+                });
+            }
+
+            function remoteArtworkTile(image) {
+                var tile = document.createElement('div');
+                tile.style.width = '8em';
+                tile.style.height = '4.5em';
+                tile.style.borderRadius = '4px';
+                tile.style.cursor = 'pointer';
+                tile.style.backgroundSize = 'cover';
+                tile.style.backgroundPosition = 'center';
+                tile.style.backgroundImage = 'url("' + (image.ThumbnailUrl || image.Url) + '")';
+                tile.title = [image.ProviderName, image.Type, image.Width ? image.Width + '×' + image.Height : null]
+                    .filter(function (x) { return x; }).join(' — ');
+                tile.addEventListener('click', function () {
+                    var channel = currentChannel();
+                    if (!channel) { return; }
+                    artworkOf(channel)[artworkTarget] = image.Url;
+                    renderArtwork();
+                });
+                return tile;
+            }
+
+            /** Any title at all, not only the ones this channel airs. */
+            function runArtworkLibrarySearch(term) {
+                var results = q('#ArtworkLibraryResults');
+                results.innerHTML = '';
+                if (term.length < 2) { return; }
+
+                ApiClient.getJSON(ApiClient.getUrl('Items', {
+                    searchTerm: term,
+                    includeItemTypes: 'Movie,Series,BoxSet,Season,MusicArtist',
+                    recursive: true,
+                    limit: 10
+                })).then(function (result) {
+                    (result.Items || []).forEach(function (item) {
+                        var row = document.createElement('div');
+                        row.className = 'listItem';
+                        row.style.display = 'flex';
+                        row.style.alignItems = 'center';
+                        row.style.gap = '0.6em';
+
+                        var label = document.createElement('div');
+                        label.style.flexGrow = '1';
+                        label.textContent = '[' + item.Type + '] ' + item.Name;
+                        row.appendChild(label);
+
+                        var show = document.createElement('button');
+                        show.setAttribute('is', 'emby-button');
+                        show.type = 'button';
+                        show.className = 'raised emby-button';
+                        show.textContent = 'Its pictures';
+                        show.addEventListener('click', function () {
+                            showItemArtwork([item]);
+                        });
+                        row.appendChild(show);
+
+                        var web = document.createElement('button');
+                        web.setAttribute('is', 'emby-button');
+                        web.type = 'button';
+                        web.className = 'raised emby-button';
+                        web.textContent = 'From the web';
+                        web.addEventListener('click', function () {
+                            var keep = artworkOf(currentChannel()).ImageItemId;
+                            artworkOf(currentChannel()).ImageItemId = item.Id;
+                            loadWebArtwork();
+                            artworkOf(currentChannel()).ImageItemId = keep;
+                        });
+                        row.appendChild(web);
+
+                        results.appendChild(row);
+                    });
+                });
+            }
+
+            /** Draws the local artwork of some items into the gallery. */
+            function showItemArtwork(items) {
+                var gallery = q('#ArtworkGallery');
+                gallery.innerHTML = '';
+                var strip = document.createElement('div');
+                strip.style.display = 'flex';
+                strip.style.flexWrap = 'wrap';
+                strip.style.gap = '0.5em';
+
+                items.forEach(function (item) {
+                    var tags = item.ImageTags || {};
+                    ['Banner', 'Thumb', 'Primary', 'Logo', 'Art', 'Disc'].forEach(function (type) {
+                        if (tags[type]) { strip.appendChild(artworkTile(item, type, 0)); }
+                    });
+                    (item.BackdropImageTags || []).forEach(function (_, i) {
+                        strip.appendChild(artworkTile(item, 'Backdrop', i));
+                    });
+                });
+
+                if (!strip.childNodes.length) {
+                    gallery.innerHTML = '<div class="fieldDescription">Nothing there has artwork yet. Try “From the web”.</div>';
+                    return;
+                }
+
+                var hint = document.createElement('div');
+                hint.className = 'fieldDescription';
+                hint.textContent = 'Click a picture to put it in the highlighted slot above.';
+                gallery.appendChild(hint);
+                gallery.appendChild(strip);
             }
 
             function artworkTile(item, type, index) {
@@ -629,6 +842,278 @@
                     + ' for ' + (block.DurationMinutes || 0) + ' min, ' + days + (block.Enabled === false ? ' (off)' : '');
             }
 
+            // =========================================================================
+            // The week, drawn
+            //
+            // A block is a start time, a length and a set of days, and it was edited as three
+            // separate controls - which is fine for one block and hopeless for a schedule.
+            // Nothing in that form answers the question anybody actually has: does Saturday
+            // evening collide with the film, and what is the channel doing at eight on a
+            // Tuesday? A week drawn as seven tracks answers both by existing.
+            //
+            // The form below is still the truth and still edits everything. This draws the
+            // same objects and writes back to them; the two are always looking at one array.
+            // =========================================================================
+
+            /** Everything snaps to this, in minutes. Fine enough to place a programme, coarse
+             * enough that a drag lands where it looks like it landed. */
+            var SNAP_MINUTES = 15;
+
+            var TRACK_HEIGHT = 26;
+
+            /** A drag in progress: which block, which way, and where it started. */
+            var timelineDrag = null;
+
+            function timelineColour(index, selected) {
+                // Spread around the wheel so neighbouring blocks never read as the same thing.
+                var hue = (index * 67) % 360;
+                return selected
+                    ? 'hsl(' + hue + ', 70%, 58%)'
+                    : 'hsl(' + hue + ', 45%, 38%)';
+            }
+
+            function renderTimeline() {
+                var host = q('#Timeline');
+                host.innerHTML = '';
+                var channel = currentChannel();
+                if (!channel) { return; }
+                channel.Blocks = channel.Blocks || [];
+
+                var frame = document.createElement('div');
+                frame.style.border = '1px solid rgba(255,255,255,0.15)';
+                frame.style.borderRadius = '6px';
+                frame.style.overflow = 'hidden';
+
+                frame.appendChild(timelineHours());
+                DAYS.forEach(function (day) {
+                    frame.appendChild(timelineTrack(channel, day));
+                });
+                host.appendChild(frame);
+            }
+
+            /** The ruler along the top: every three hours, which is as dense as it can be
+             * before the labels collide on a narrow dashboard. */
+            function timelineHours() {
+                var row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.height = '1.4em';
+                row.style.fontSize = '0.75em';
+                row.style.opacity = '0.7';
+                row.style.background = 'rgba(255,255,255,0.04)';
+
+                var gutter = document.createElement('div');
+                gutter.style.flex = '0 0 3.2em';
+                row.appendChild(gutter);
+
+                var track = document.createElement('div');
+                track.style.position = 'relative';
+                track.style.flexGrow = '1';
+                for (var h = 0; h < 24; h += 3) {
+                    var tick = document.createElement('div');
+                    tick.style.position = 'absolute';
+                    tick.style.left = (h / 24 * 100) + '%';
+                    tick.style.paddingLeft = '2px';
+                    tick.style.borderLeft = '1px solid rgba(255,255,255,0.12)';
+                    tick.textContent = ('0' + h).slice(-2);
+                    track.appendChild(tick);
+                }
+                row.appendChild(track);
+                return row;
+            }
+
+            function timelineTrack(channel, day) {
+                var row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'stretch';
+                row.style.borderTop = '1px solid rgba(255,255,255,0.08)';
+
+                var label = document.createElement('div');
+                label.style.flex = '0 0 3.2em';
+                label.style.fontSize = '0.8em';
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.paddingLeft = '0.4em';
+                label.style.opacity = '0.8';
+                label.textContent = day.slice(0, 3);
+                row.appendChild(label);
+
+                var track = document.createElement('div');
+                track.style.position = 'relative';
+                track.style.flexGrow = '1';
+                track.style.height = TRACK_HEIGHT + 'px';
+                // The channel's own lineup shows through wherever no block covers, which is
+                // exactly what the server does with the time.
+                track.style.background =
+                    'repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 6px, transparent 6px 12px)';
+                track.dataset.day = day;
+
+                // Clicking bare track starts a block there. The commonest thing anybody wants
+                // to do with an empty Tuesday evening is put something in it.
+                track.addEventListener('click', function (ev) {
+                    if (ev.target !== track) { return; }
+                    addBlockAt(day, minutesAt(track, ev.clientX));
+                });
+
+                (channel.Blocks || []).forEach(function (block, index) {
+                    if (!appliesOn(block, day)) { return; }
+                    track.appendChild(timelineBar(block, index, track));
+                });
+
+                (channel.TrailerSlots || []).forEach(function (slot) {
+                    if (!appliesOn(slot, day)) { return; }
+                    track.appendChild(timelineSlotMark(slot));
+                });
+
+                row.appendChild(track);
+                return row;
+            }
+
+            /** A block with no days named runs every day, which is what the server does. */
+            function appliesOn(thing, day) {
+                return thing.Enabled !== false && (!thing.Days || !thing.Days.length || thing.Days.indexOf(day) >= 0);
+            }
+
+            function timelineBar(block, index, track) {
+                var start = Math.max(0, Math.min(1439, block.StartMinutes || 0));
+                var length = Math.max(SNAP_MINUTES, block.DurationMinutes || 0);
+                var selected = index === currentBlockIndex;
+
+                var bar = document.createElement('div');
+                bar.style.position = 'absolute';
+                bar.style.top = '2px';
+                bar.style.bottom = '2px';
+                bar.style.left = (start / 1440 * 100) + '%';
+                // Clipped at midnight rather than wrapped: a block that runs past it is drawn
+                // to the end of its day, which is where the schedule stops looking too.
+                bar.style.width = (Math.min(length, 1440 - start) / 1440 * 100) + '%';
+                bar.style.background = timelineColour(index, selected);
+                bar.style.borderRadius = '3px';
+                bar.style.outline = selected ? '2px solid #fff' : 'none';
+                bar.style.cursor = 'grab';
+                bar.style.overflow = 'hidden';
+                bar.style.whiteSpace = 'nowrap';
+                bar.style.fontSize = '0.72em';
+                bar.style.lineHeight = (TRACK_HEIGHT - 4) + 'px';
+                bar.style.paddingLeft = '4px';
+                bar.style.userSelect = 'none';
+                bar.textContent = block.Name || '(unnamed)';
+                bar.title = (block.Name || '(unnamed)') + '  ' + clockOf(start) + '–' + clockOf((start + length) % 1440);
+
+                // The right eighth, at least four pixels and at most twelve, resizes. Any more
+                // and a short block is nothing but handle; any less and nobody can hit it.
+                var handle = document.createElement('div');
+                handle.style.position = 'absolute';
+                handle.style.top = '0';
+                handle.style.right = '0';
+                handle.style.bottom = '0';
+                handle.style.width = '8px';
+                handle.style.cursor = 'ew-resize';
+                handle.style.background = 'rgba(255,255,255,0.25)';
+                bar.appendChild(handle);
+
+                bar.addEventListener('mousedown', function (ev) {
+                    ev.preventDefault();
+                    selectBlock(index);
+                    timelineDrag = {
+                        index: index,
+                        mode: ev.target === handle ? 'resize' : 'move',
+                        track: track,
+                        grabbedAt: minutesAt(track, ev.clientX),
+                        start: start,
+                        length: length,
+                        moved: false
+                    };
+                });
+
+                return bar;
+            }
+
+            /** A trailer slot: a moment rather than a stretch, so it is drawn as one. */
+            function timelineSlotMark(slot) {
+                var mark = document.createElement('div');
+                mark.style.position = 'absolute';
+                mark.style.top = '0';
+                mark.style.bottom = '0';
+                mark.style.width = '2px';
+                mark.style.left = (Math.max(0, Math.min(1439, slot.StartMinutes || 0)) / 1440 * 100) + '%';
+                mark.style.background = '#ffd54f';
+                mark.style.pointerEvents = 'none';
+                mark.title = 'Trailer slot: ' + (slot.Name || '') + ' at ' + clockOf(slot.StartMinutes);
+                return mark;
+            }
+
+            /** Where in the day a pointer is, snapped. */
+            function minutesAt(track, clientX) {
+                var box = track.getBoundingClientRect();
+                var fraction = (clientX - box.left) / Math.max(1, box.width);
+                var minutes = Math.round(fraction * 1440 / SNAP_MINUTES) * SNAP_MINUTES;
+                return Math.max(0, Math.min(1440 - SNAP_MINUTES, minutes));
+            }
+
+            function selectBlock(index) {
+                applyEditorToBlock();
+                currentBlockIndex = index;
+                renderBlockSelect();
+                renderBlockEditor();
+                renderTimeline();
+            }
+
+            function addBlockAt(day, startMinutes) {
+                var channel = currentChannel();
+                if (!channel) { return; }
+                applyEditorToBlock();
+                channel.Blocks = channel.Blocks || [];
+                channel.Blocks.push({
+                    Name: 'Block',
+                    Enabled: true,
+                    StartMinutes: startMinutes,
+                    // Two hours: long enough to hold a film's slot, short enough that it is
+                    // obviously a starting point rather than a decision.
+                    DurationMinutes: 120,
+                    Days: [day],
+                    Sources: [],
+                    Order: 'Sequential',
+                    EpisodesPerBlock: 0
+                });
+                currentBlockIndex = channel.Blocks.length - 1;
+                renderBlockSelect();
+                renderBlockEditor();
+                renderTimeline();
+            }
+
+            // The drag itself lives on the document, so letting go outside the track still
+            // ends it - otherwise a bar dragged off the edge stays stuck to the pointer.
+            document.addEventListener('mousemove', function (ev) {
+                if (!timelineDrag) { return; }
+                var channel = currentChannel();
+                var block = channel && (channel.Blocks || [])[timelineDrag.index];
+                if (!block) { return; }
+
+                var here = minutesAt(timelineDrag.track, ev.clientX);
+                var delta = here - timelineDrag.grabbedAt;
+                if (delta === 0 && !timelineDrag.moved) { return; }
+                timelineDrag.moved = true;
+
+                if (timelineDrag.mode === 'move') {
+                    block.StartMinutes = Math.max(0, Math.min(1440 - SNAP_MINUTES, timelineDrag.start + delta));
+                } else {
+                    block.DurationMinutes = Math.max(SNAP_MINUTES, timelineDrag.length + delta);
+                }
+                renderTimeline();
+            });
+
+            document.addEventListener('mouseup', function () {
+                if (!timelineDrag) { return; }
+                var moved = timelineDrag.moved;
+                timelineDrag = null;
+                if (moved) {
+                    // The form has the same numbers in it and would write the old ones back
+                    // over the drag the next time anything called applyEditorToBlock.
+                    renderBlockSelect();
+                    renderBlockEditor();
+                }
+            });
+
             function renderBlockSelect() {
                 var channel = currentChannel();
                 var select = q('#BlockSelect');
@@ -693,6 +1178,14 @@
                 block.Days = Array.prototype.slice.call(document.querySelectorAll('.blockDay'))
                     .filter(function (box) { return box.checked; })
                     .map(function (box) { return box.value; });
+            }
+
+            /** Writes the form back into the block and redraws the week, for the controls that
+             * change where a block sits rather than what it plays. */
+            function applyBlockAndRedraw() {
+                applyEditorToBlock();
+                renderBlockSelect();
+                renderTimeline();
             }
 
             function newGuid() {
@@ -828,20 +1321,38 @@
                 }
             }
 
-            document.querySelector('#LiteTvConfigPage')
-                .addEventListener('pageshow', function () {
-                    Dashboard.showLoadingMsg();
-                    ApiClient.getPluginConfiguration(pluginId).then(function (loaded) {
-                        config = loaded;
-                        config.Channels = config.Channels || [];
-                        q('#ChannelUserName').value = config.ChannelUserName || 'LiteTV';
-                        currentIndex = config.Channels.length ? 0 : -1;
-                        renderChannelSelect();
-                        renderEditor();
-                        loadSuggestions();
-                        Dashboard.hideLoadingMsg();
-                    });
+            /**
+             * Loads everything the editor needs.
+             *
+             * Called from `pageshow` in the dashboard, and directly when the page is opened
+             * some other way - through the sidebar link, where nothing fires that event at all
+             * and the page would otherwise sit there empty. The guard keeps the two from
+             * fighting: whichever arrives first does the work.
+             */
+            var loading = false;
+
+            function loadPage() {
+                if (loading || config) { return; }
+                loading = true;
+                Dashboard.showLoadingMsg();
+                return ApiClient.getPluginConfiguration(pluginId).then(function (loaded) {
+                    config = loaded;
+                    config.Channels = config.Channels || [];
+                    q('#ChannelUserName').value = config.ChannelUserName || 'LiteTV';
+                    currentIndex = config.Channels.length ? 0 : -1;
+                    renderChannelSelect();
+                    loadEffectiveArt().then(renderEditor);
+                    loadSuggestions();
+                    Dashboard.hideLoadingMsg();
+                    loading = false;
                 });
+            }
+
+            document.querySelector('#LiteTvConfigPage').addEventListener('pageshow', loadPage);
+
+            // Opened outside the dashboard, there is no `pageshow` and never will be. A tick
+            // later, so the dashboard gets first refusal on a page it is about to show anyway.
+            setTimeout(loadPage, 0);
 
             q('#ChannelSelect').addEventListener('change', function () {
                 applyEditorToChannel();
@@ -897,6 +1408,15 @@
             });
 
             q('#LoadArtworkGallery').addEventListener('click', loadArtworkGallery);
+            q('#LoadWebArtwork').addEventListener('click', loadWebArtwork);
+
+            q('#ArtworkLibrarySearch').addEventListener('input', function () {
+                var term = this.value.trim();
+                if (artworkLibraryTimer) { clearTimeout(artworkLibraryTimer); }
+                artworkLibraryTimer = setTimeout(function () {
+                    runArtworkLibrarySearch(term);
+                }, 350);
+            });
 
             q('#ArtworkItemSearch').addEventListener('input', function () {
                 var term = this.value.trim();
@@ -987,6 +1507,11 @@
                 }, 350);
             });
 
+            ['#BlockStart', '#BlockDuration', '#BlockName', '#BlockEnabled'].forEach(function (id) {
+                q(id).addEventListener('change', applyBlockAndRedraw);
+            });
+            q('#BlockDays').addEventListener('change', applyBlockAndRedraw);
+
             q('#BlockSelect').addEventListener('change', function () {
                 applyEditorToBlock();
                 currentBlockIndex = parseInt(this.value, 10);
@@ -1014,6 +1539,7 @@
                 currentBlockIndex = channel.Blocks.length - 1;
                 renderBlockSelect();
                 renderBlockEditor();
+                renderTimeline();
             });
 
             q('#DeleteBlock').addEventListener('click', function () {
@@ -1023,6 +1549,7 @@
                 currentBlockIndex = channel.Blocks.length ? 0 : -1;
                 renderBlockSelect();
                 renderBlockEditor();
+                renderTimeline();
             });
 
             document.querySelector('#LiteTvConfigForm')

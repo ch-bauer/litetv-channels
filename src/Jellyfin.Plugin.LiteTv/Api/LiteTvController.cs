@@ -183,6 +183,33 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
+    /// Serves the configuration page as an ordinary web page.
+    /// <para>
+    /// The dashboard already has this page; this is the same bytes at an address anything can
+    /// link to. It exists for the Plugin Pages plugin, which puts a link in the web client's
+    /// own sidebar and loads whatever URL the entry names - so that configuring a channel does
+    /// not mean going to Dashboard, Plugins, LiteTV every time.
+    /// </para>
+    /// <para>
+    /// Open, because it is markup: every number on it is fetched afterwards through endpoints
+    /// that do check, and the page is useless to anyone those refuse.
+    /// </para>
+    /// </summary>
+    /// <returns>The configuration page.</returns>
+    [HttpGet("Page")]
+    [AllowAnonymous]
+    [Produces("text/html")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult GetPage()
+    {
+        var stream = typeof(Plugin).Assembly
+            .GetManifestResourceStream("Jellyfin.Plugin.LiteTv.Configuration.configPage.html");
+
+        return stream is null ? NotFound() : File(stream, "text/html; charset=utf-8");
+    }
+
+    /// <summary>
     /// Stores a picture for a channel, uploaded from the configuration page.
     /// <para>
     /// A channel is not a library item, so there is nowhere in Jellyfin to put its artwork.
