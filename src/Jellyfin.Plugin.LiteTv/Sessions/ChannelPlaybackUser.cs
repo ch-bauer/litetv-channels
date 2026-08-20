@@ -200,6 +200,13 @@ public sealed class ChannelPlaybackUser
         policy.EnableLiveTvAccess = false;
         policy.EnableLiveTvManagement = false;
 
+        // No transcoding, ever. That is the plugin's founding claim - a channel plays the
+        // library's own files, straight - and enforcing it on the account is what makes it
+        // true rather than merely intended. A client that cannot direct play a programme now
+        // fails loudly instead of quietly putting the server to work on a transcode nobody
+        // asked for and nobody would see was happening.
+        policy.EnableVideoPlaybackTranscoding = false;
+
         await _userManager.UpdatePolicyAsync(userId, policy).ConfigureAwait(false);
     }
 
