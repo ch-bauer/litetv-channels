@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Breaks now advertise a programme a few slots further on rather than the one that starts when the break ends - television says \"at eight, the film\" an hour beforehand, and a trailer butted against its own programme tells the viewer nothing. How far ahead is the channel's Trailer lookahead, which had been in the configuration all along and was never read. The guide names the programme a break is advertising outright, so a client no longer has to guess it from what follows.\n\nChannels can place trailers themselves: a trailer slot is a standing instruction - this thing, at this time, on these days - claiming the break its start time falls inside. It can name a library item or an address.\n\nLinked trailers, which is nearly all of them, can be resolved into something a television can actually play: GET /LiteTv/Trailer/{itemId} answers with a stream URL and the headers to fetch it with. Trailers are ranked official first, teaser last.\n\nA break is no longer reported as \"off air\", which made the channel list announce dead air every time a gap came round. The playback account is now forbidden from transcoding, so a channel that cannot direct play fails where it can be seen rather than quietly putting the server to work.",
+  "changelog": "Channels have artwork of their own. A channel built from one series wears what is on air perfectly well; a channel built from a genre does not - what is on changes every hour, much of it has no wide picture, and during a break there is nothing on air to borrow from at all, which is how a channel card ends up a black rectangle. Each channel can now be given a card picture, a background and a cover, chosen from its own content, pasted as an address, or uploaded. A channel that sets none of them falls back to the first thing in its own lineup that has a picture, so no channel is faceless any more.\n\nThe guide can be asked for the breaks as well: GET /LiteTv/Channels/{id}/Now?breaks=true lists interstitials alongside programmes, each naming the programme it advertises. Without it there is no way to see, from the sofa, that trailer scheduling works at all. The upcoming list now goes to 64 entries rather than 20.\n\nNew: POST and GET /LiteTv/Artwork/{channelId}/{kind} store and serve an uploaded channel picture. The GET is open, like Jellyfin's own item images, because television clients draw these through an image loader that carries no credentials.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-20T00:00:00.000Z",
-  "version": "1.0.27.0",
+  "version": "1.0.28.0",
   "status": "Active",
   "autoUpdate": false
 }

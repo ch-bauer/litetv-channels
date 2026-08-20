@@ -102,6 +102,30 @@
                     </div>
 
 
+                    <h4>Channel artwork</h4>
+                    <div class="fieldDescription" style="margin-bottom: 0.8em;">
+                        What a client draws the channel with. Left empty, a channel wears whatever it is
+                        airing — which suits a channel built from one series and does not suit one built
+                        from a genre, where what is on changes every hour and half of it has no wide
+                        picture at all. Pick from the channel's own content, paste an address, or upload
+                        a file.
+                    </div>
+                    <div id="ArtworkRows"></div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="ArtworkItemSearch" label="Or borrow every picture from one title (search movies, series, collections)" />
+                        <div class="fieldDescription">
+                            Follows the title rather than copying it: re-scrape the series and the channel
+                            picks up the new artwork with it. Anything set above still wins.
+                        </div>
+                    </div>
+                    <div class="paperList" id="ArtworkItemResults" style="margin-bottom: 1em;"></div>
+
+                    <button is="emby-button" type="button" id="LoadArtworkGallery" class="raised emby-button">
+                        <span>Show the pictures this channel's content has</span>
+                    </button>
+                    <div id="ArtworkGallery" style="margin: 0.8em 0;"></div>
+
                     <h4>Trailers</h4>
                     <div class="selectContainer">
                         <select is="emby-select" id="TrailerMode" label="Work trailers into the schedule">
@@ -212,6 +236,8 @@
             var currentIndex = -1;
             var currentBlockIndex = -1;
             var searchTimer = null;
+            var artworkSearchTimer;
+            var EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
             var trailerSearchTimer;
             var blockSearchTimer = null;
 
@@ -252,8 +278,12 @@
                 q('#TrailerLookahead').value = channel.TrailerLookahead || 3;
                 q('#ResetAnchor').checked = false;
                 renderSources();
+                renderArtwork();
                 q('#SearchResults').innerHTML = '';
                 q('#ItemSearch').value = '';
+                q('#ArtworkItemSearch').value = '';
+                q('#ArtworkItemResults').innerHTML = '';
+                q('#ArtworkGallery').innerHTML = '';
                 channel.Blocks = channel.Blocks || [];
                 currentBlockIndex = channel.Blocks.length ? 0 : -1;
                 renderBlockSelect();
@@ -271,6 +301,247 @@
                     currentChannel(),
                     'TrailerTitles',
                     'Nothing named yet. These are advertised whatever the channel is airing.');
+            }
+
+            // -------------------------------------------------------------------------
+            // Channel artwork
+            //
+            // Three pictures, each from any of three places: a picture the channel's own
+            // content already has, an address anywhere, or a file uploaded here. They are
+            // one control rather than three because a channel that has a banner and no
+            // backdrop looks broken in exactly the way a channel with neither does not.
+            // -------------------------------------------------------------------------
+
+            var ARTWORK = [
+                { key: 'BannerUrl', label: 'Card picture (wide, seen in the channel list)', ratio: '16 / 6' },
+                { key: 'BackdropUrl', label: 'Background (fills the screen behind the channel)', ratio: '16 / 9' },
+                { key: 'PosterUrl', label: 'Cover (upright)', ratio: '2 / 3' }
+            ];
+
+            var artworkTarget = 'BannerUrl';
+
+            function artworkOf(channel) {
+                channel.Artwork = channel.Artwork || {};
+                return channel.Artwork;
+            }
+
+            /** An address as stored: server-relative, so it survives the server moving. */
+            function artworkSrc(url) {
+                if (!url) { return ''; }
+                return /^https?:/i.test(url) ? url : ApiClient.serverAddress() + url;
+            }
+
+            function renderArtwork() {
+                var host = q('#ArtworkRows');
+                host.innerHTML = '';
+                var channel = currentChannel();
+                if (!channel) { return; }
+                var art = artworkOf(channel);
+
+                ARTWORK.forEach(function (kind) {
+                    var row = document.createElement('div');
+                    row.style.display = 'flex';
+                    row.style.alignItems = 'flex-start';
+                    row.style.gap = '0.8em';
+                    row.style.marginBottom = '0.8em';
+
+                    var preview = document.createElement('div');
+                    preview.style.flex = '0 0 9em';
+                    preview.style.height = '5em';
+                    preview.style.borderRadius = '4px';
+                    preview.style.background = 'rgba(255,255,255,0.08)';
+                    preview.style.backgroundSize = 'cover';
+                    preview.style.backgroundPosition = 'center';
+                    preview.style.cursor = 'pointer';
+                    preview.title = 'Pick this one to receive the next picture you choose';
+                    if (art[kind.key]) {
+                        preview.style.backgroundImage = 'url("' + artworkSrc(art[kind.key]) + '")';
+                    }
+                    preview.addEventListener('click', function () {
+                        artworkTarget = kind.key;
+                        renderArtwork();
+                    });
+                    if (artworkTarget === kind.key) {
+                        preview.style.outline = '2px solid #00a4dc';
+                    }
+                    row.appendChild(preview);
+
+                    var right = document.createElement('div');
+                    right.style.flexGrow = '1';
+
+                    var field = document.createElement('div');
+                    field.className = 'inputContainer';
+                    // A plain input with the dashboard's class rather than <input is="emby-input">:
+                    // a custom built-in element only upgrades when the parser sees the attribute,
+                    // and one created here never would, leaving a control with no label at all.
+                    var caption = document.createElement('label');
+                    caption.className = 'inputLabel';
+                    caption.textContent = kind.label;
+                    field.appendChild(caption);
+                    var input = document.createElement('input');
+                    input.className = 'emby-input';
+                    input.type = 'text';
+                    input.value = art[kind.key] || '';
+                    input.addEventListener('input', function () {
+                        art[kind.key] = this.value.trim();
+                        preview.style.backgroundImage = art[kind.key]
+                            ? 'url("' + artworkSrc(art[kind.key]) + '")'
+                            : '';
+                    });
+                    input.addEventListener('focus', function () { artworkTarget = kind.key; });
+                    field.appendChild(input);
+                    right.appendChild(field);
+
+                    var buttons = document.createElement('div');
+                    buttons.style.display = 'flex';
+                    buttons.style.gap = '0.5em';
+
+                    var upload = document.createElement('input');
+                    upload.type = 'file';
+                    upload.accept = 'image/*';
+                    upload.style.display = 'none';
+                    upload.addEventListener('change', function () {
+                        if (this.files && this.files[0]) {
+                            uploadArtwork(channel, kind, this.files[0], input, preview);
+                        }
+                        this.value = '';
+                    });
+
+                    var pick = document.createElement('button');
+                    pick.setAttribute('is', 'emby-button');
+                    pick.type = 'button';
+                    pick.className = 'raised emby-button';
+                    pick.textContent = 'Upload a file…';
+                    pick.addEventListener('click', function () { upload.click(); });
+
+                    var clear = document.createElement('button');
+                    clear.setAttribute('is', 'emby-button');
+                    clear.type = 'button';
+                    clear.className = 'raised emby-button';
+                    clear.textContent = 'Clear';
+                    clear.addEventListener('click', function () {
+                        art[kind.key] = '';
+                        renderArtwork();
+                    });
+
+                    buttons.appendChild(pick);
+                    buttons.appendChild(clear);
+                    buttons.appendChild(upload);
+                    right.appendChild(buttons);
+                    row.appendChild(right);
+                    host.appendChild(row);
+                });
+            }
+
+            function uploadArtwork(channel, kind, file, input, preview) {
+                var slot = kind.key.replace('Url', '').toLowerCase();
+                Dashboard.showLoadingMsg();
+                fetch(ApiClient.getUrl('LiteTv/Artwork/' + channel.Id + '/' + slot), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/octet-stream',
+                        'Authorization': 'MediaBrowser Token="' + ApiClient.accessToken() + '"'
+                    },
+                    body: file
+                }).then(function (res) {
+                    if (!res.ok) { throw new Error('upload failed: ' + res.status); }
+                    return res.json();
+                }).then(function (result) {
+                    // A cache-buster, because the address never changes: the next upload for
+                    // this channel and slot overwrites the same file, and the browser would go
+                    // on showing the old one.
+                    var url = result.Url + '?v=' + Date.now();
+                    artworkOf(channel)[kind.key] = url;
+                    input.value = url;
+                    preview.style.backgroundImage = 'url("' + artworkSrc(url) + '")';
+                    Dashboard.hideLoadingMsg();
+                }).catch(function (err) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert(String(err));
+                });
+            }
+
+            /**
+             * Every picture the channel's own content has, to choose from.
+             *
+             * Asked of the sources rather than of the schedule: the schedule is episodes, and
+             * an episode's still is a poor thing to stand for a whole channel, where the series
+             * it belongs to has artwork made for the job.
+             */
+            function loadArtworkGallery() {
+                var channel = currentChannel();
+                var gallery = q('#ArtworkGallery');
+                if (!channel) { return; }
+
+                var ids = [];
+                (channel.Sources || []).forEach(function (s) { ids.push(s.ItemId); });
+                (channel.Blocks || []).forEach(function (b) {
+                    (b.Sources || []).forEach(function (s) { ids.push(s.ItemId); });
+                });
+                (channel.TrailerTitles || []).forEach(function (s) { ids.push(s.ItemId); });
+                ids = ids.filter(function (id, i) { return id && ids.indexOf(id) === i; });
+
+                if (!ids.length) {
+                    gallery.innerHTML = '<div class="fieldDescription">This channel has no content yet, so there are no pictures to choose from.</div>';
+                    return;
+                }
+
+                gallery.innerHTML = '<div class="fieldDescription">Loading…</div>';
+                ApiClient.getJSON(ApiClient.getUrl('Items', { ids: ids.join(','), limit: ids.length }))
+                    .then(function (result) {
+                        gallery.innerHTML = '';
+                        var strip = document.createElement('div');
+                        strip.style.display = 'flex';
+                        strip.style.flexWrap = 'wrap';
+                        strip.style.gap = '0.5em';
+
+                        (result.Items || []).forEach(function (item) {
+                            var tags = item.ImageTags || {};
+                            ['Banner', 'Thumb', 'Primary', 'Logo'].forEach(function (type) {
+                                if (tags[type]) { strip.appendChild(artworkTile(item, type, 0)); }
+                            });
+                            (item.BackdropImageTags || []).forEach(function (_, i) {
+                                strip.appendChild(artworkTile(item, 'Backdrop', i));
+                            });
+                        });
+
+                        if (!strip.childNodes.length) {
+                            gallery.innerHTML = '<div class="fieldDescription">None of this channel\u2019s content has artwork yet.</div>';
+                            return;
+                        }
+
+                        var hint = document.createElement('div');
+                        hint.className = 'fieldDescription';
+                        hint.textContent = 'Click a picture to put it in the highlighted slot above.';
+                        gallery.appendChild(hint);
+                        gallery.appendChild(strip);
+                    })
+                    .catch(function (err) {
+                        gallery.innerHTML = '<div class="fieldDescription">Could not read the artwork: ' + err + '</div>';
+                    });
+            }
+
+            function artworkTile(item, type, index) {
+                // Stored server-relative. An absolute address would be baked in from whichever
+                // hostname the dashboard happened to be open on, which is rarely the one a
+                // television on the same network reaches the server by.
+                var path = '/Items/' + item.Id + '/Images/' + type + (index ? '/' + index : '');
+                var tile = document.createElement('div');
+                tile.style.width = '8em';
+                tile.style.height = '4.5em';
+                tile.style.borderRadius = '4px';
+                tile.style.cursor = 'pointer';
+                tile.style.backgroundSize = 'cover';
+                tile.style.backgroundPosition = 'center';
+                tile.style.backgroundImage = 'url("' + ApiClient.serverAddress() + path + '?maxWidth=400")';
+                tile.title = (item.Name || '') + ' — ' + type;
+                tile.addEventListener('click', function () {
+                    var channel = currentChannel();
+                    if (!channel) { return; }
+                    artworkOf(channel)[artworkTarget] = path;
+                    renderArtwork();
+                });
+                return tile;
             }
 
             function renderBlockSources() {
@@ -593,7 +864,8 @@
                     Trailers: 'Off',
                     TrailerEveryPrograms: 3,
                     TrailerLookahead: 3,
-                    TrailerTitles: []
+                    TrailerTitles: [],
+                    Artwork: {}
                 });
                 currentIndex = config.Channels.length - 1;
                 renderChannelSelect();
@@ -623,6 +895,89 @@
                     runSearch(term, q('#TrailerSearchResults'), currentChannel, renderTrailerTitles, 'TrailerTitles');
                 }, 350);
             });
+
+            q('#LoadArtworkGallery').addEventListener('click', loadArtworkGallery);
+
+            q('#ArtworkItemSearch').addEventListener('input', function () {
+                var term = this.value.trim();
+                if (artworkSearchTimer) { clearTimeout(artworkSearchTimer); }
+                artworkSearchTimer = setTimeout(function () {
+                    runArtworkSearch(term);
+                }, 350);
+            });
+
+            /**
+             * Pointing the channel at a title, rather than at one of its pictures.
+             *
+             * A separate search because it stores something different: the item's id, not an
+             * address, so the channel keeps following it. Every picture the item has is used -
+             * its banner on the card, its backdrop behind the screen - which is what "borrow
+             * the artwork of" means.
+             */
+            function runArtworkSearch(term) {
+                var results = q('#ArtworkItemResults');
+                results.innerHTML = '';
+                var channel = currentChannel();
+                if (!channel) { return; }
+
+                var current = artworkOf(channel).ImageItemId;
+                if (current && current !== EMPTY_GUID) {
+                    var chosen = document.createElement('div');
+                    chosen.className = 'listItem';
+                    chosen.style.display = 'flex';
+                    chosen.style.gap = '0.6em';
+                    var label = document.createElement('div');
+                    label.style.flexGrow = '1';
+                    label.textContent = 'Borrowing artwork from ' + (artworkOf(channel).ImageItemName || current);
+                    chosen.appendChild(label);
+                    var drop = document.createElement('button');
+                    drop.setAttribute('is', 'emby-button');
+                    drop.type = 'button';
+                    drop.className = 'raised emby-button';
+                    drop.textContent = 'Stop';
+                    drop.addEventListener('click', function () {
+                        artworkOf(channel).ImageItemId = EMPTY_GUID;
+                        artworkOf(channel).ImageItemName = '';
+                        runArtworkSearch(q('#ArtworkItemSearch').value.trim());
+                    });
+                    chosen.appendChild(drop);
+                    results.appendChild(chosen);
+                }
+
+                if (term.length < 2) { return; }
+
+                ApiClient.getJSON(ApiClient.getUrl('Items', {
+                    searchTerm: term,
+                    includeItemTypes: 'Movie,Series,BoxSet',
+                    recursive: true,
+                    limit: 12
+                })).then(function (result) {
+                    (result.Items || []).forEach(function (item) {
+                        var row = document.createElement('div');
+                        row.className = 'listItem';
+                        row.style.display = 'flex';
+                        row.style.gap = '0.6em';
+                        var label = document.createElement('div');
+                        label.style.flexGrow = '1';
+                        label.textContent = '[' + item.Type + '] ' + item.Name;
+                        row.appendChild(label);
+                        var use = document.createElement('button');
+                        use.setAttribute('is', 'emby-button');
+                        use.type = 'button';
+                        use.className = 'raised emby-button';
+                        use.textContent = 'Use';
+                        use.addEventListener('click', function () {
+                            var art = artworkOf(currentChannel());
+                            art.ImageItemId = item.Id;
+                            art.ImageItemName = item.Name;
+                            q('#ArtworkItemSearch').value = '';
+                            runArtworkSearch('');
+                        });
+                        row.appendChild(use);
+                        results.appendChild(row);
+                    });
+                });
+            }
 
             q('#BlockItemSearch').addEventListener('input', function () {
                 var term = this.value.trim();

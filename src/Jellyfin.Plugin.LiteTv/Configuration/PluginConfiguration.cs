@@ -1,4 +1,4 @@
-using MediaBrowser.Model.Plugins;
+﻿using MediaBrowser.Model.Plugins;
 
 namespace Jellyfin.Plugin.LiteTv.Configuration;
 
@@ -190,6 +190,18 @@ public class TvChannel
     /// </summary>
     public List<TrailerSlot> TrailerSlots { get; set; } = new();
 
+    /// <summary>
+    /// Gets or sets the artwork a client draws the channel with, when the channel should not
+    /// simply wear whatever is on air.
+    /// <para>
+    /// A channel built from one series looks after itself: what is on has a banner, and the
+    /// banner is a fair picture of the channel. A channel built from a genre does not - what is
+    /// on changes every hour, half of it has no wide artwork at all, and during a break there
+    /// is nothing on to borrow from, which is what left "Action-Kanal" a black rectangle.
+    /// </para>
+    /// </summary>
+    public ChannelArtwork Artwork { get; set; } = new();
+
 }
 
 /// <summary>
@@ -328,4 +340,46 @@ public static class PluginConfigurationDefaults
 {
     /// <summary>The account channel playback runs under when none is configured.</summary>
     public const string ChannelUserName = "LiteTV";
+}
+
+/// <summary>
+/// Where a channel's own pictures come from.
+/// <para>
+/// Three sources, tried in the order they are written: an address, which covers anything at
+/// all including an image uploaded to the server; a library item, whose artwork the channel
+/// borrows; and, failing both, whatever the channel happens to be airing. The last is the
+/// behaviour every channel had before this existed, so a channel that sets nothing here is
+/// unchanged.
+/// </para>
+/// </summary>
+public class ChannelArtwork
+{
+    /// <summary>
+    /// Gets or sets the address of the wide picture drawn behind the channel in a list. Any
+    /// URL the client can reach: an image on the server, or one anywhere else.
+    /// </summary>
+    public string? BannerUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the address of the picture filling the screen behind the channel.
+    /// </summary>
+    public string? BackdropUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the address of the channel's upright cover.
+    /// </summary>
+    public string? PosterUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the library item whose artwork the channel borrows when no address is
+    /// set. Naming an item rather than an image lets the channel follow it: re-scrape the
+    /// series and the channel picks up the new picture with it.
+    /// </summary>
+    public Guid ImageItemId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of that item, so the configuration page can say which title a
+    /// channel is borrowing from without looking it up again.
+    /// </summary>
+    public string? ImageItemName { get; set; }
 }
