@@ -174,6 +174,15 @@
                     <h4>Program (looping forever)</h4>
                     <div class="paperList" id="SourceList" style="margin-bottom: 1em;"></div>
 
+                    <button is="emby-button" type="button" id="LoadSchedule" class="raised emby-button">
+                        <span>Save and show what this channel will air</span>
+                    </button>
+                    <div class="fieldDescription" style="margin: 0.4em 0 0.6em 0;">
+                        The schedule is worked out on the server from the saved configuration, so this
+                        saves first — otherwise it would show you the channel you had before the edit.
+                    </div>
+                    <div class="paperList" id="SchedulePreview" style="margin-bottom: 1.5em;"></div>
+
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="ItemSearch" label="Add content (search movies, series, collections)" />
                     </div>
@@ -309,6 +318,7 @@
                 q('#ArtworkLibrarySearch').value = '';
                 q('#ArtworkLibraryResults').innerHTML = '';
                 q('#ArtworkGallery').innerHTML = '';
+                q('#SchedulePreview').innerHTML = '';
                 channel.Blocks = channel.Blocks || [];
                 currentBlockIndex = channel.Blocks.length ? 0 : -1;
                 renderBlockSelect();
@@ -341,7 +351,7 @@
             var ARTWORK = [
                 { key: 'BannerUrl', label: 'Card picture (wide, seen in the channel list)', ratio: '16 / 6' },
                 { key: 'BackdropUrl', label: 'Background (fills the screen behind the channel)', ratio: '16 / 9' },
-                { key: 'PosterUrl', label: 'Cover (upright)', ratio: '2 / 3' }
+                { key: 'PosterUrl', label: 'Cover (upright, shown beside the channel name)', ratio: '2 / 3' }
             ];
 
             var artworkTarget = 'BannerUrl';
@@ -375,9 +385,15 @@
             function fallbackSrc(channel, key) {
                 var image = effectiveArt[String(channel.Id).replace(/-/g, '').toLowerCase()];
                 if (!image) { return ''; }
-                var wide = key !== 'PosterUrl';
-                var itemId = wide ? image.BackdropItemId : image.PosterItemId;
-                var type = wide ? image.BackdropType : image.PosterType;
+                // One slot, one fallback. Showing the same picture under all three would hide
+                // exactly the thing this preview exists to show - that the card and the
+                // background are, or are not, the same file.
+                var itemId = key === 'PosterUrl' ? image.PosterItemId
+                    : key === 'BannerUrl' ? image.BannerItemId
+                        : image.BackdropItemId;
+                var type = key === 'PosterUrl' ? image.PosterType
+                    : key === 'BannerUrl' ? image.BannerType
+                        : image.BackdropType;
                 if (!itemId || !type) { return ''; }
                 return ApiClient.serverAddress() + '/Items/' + itemId + '/Images/' + type + '?maxWidth=400';
             }
@@ -408,11 +424,16 @@
                     row.style.marginBottom = '0.8em';
 
                     var preview = document.createElement('div');
-                    preview.style.width = '9em';
-                    preview.style.height = '5em';
+                    // Each slot is drawn in its own shape, and the whole picture is shown
+                    // rather than a crop of it. A cover squeezed into a 16:9 box looks like a
+                    // still of one scene, which is precisely the mistake this preview is meant
+                    // to let somebody catch.
+                    preview.style.width = kind.key === 'PosterUrl' ? '6.4em' : '11em';
+                    preview.style.aspectRatio = kind.ratio;
                     preview.style.borderRadius = '4px';
                     preview.style.background = 'rgba(255,255,255,0.08)';
-                    preview.style.backgroundSize = 'cover';
+                    preview.style.backgroundSize = 'contain';
+                    preview.style.backgroundRepeat = 'no-repeat';
                     preview.style.backgroundPosition = 'center';
                     preview.style.cursor = 'pointer';
                     preview.title = 'Pick this one to receive the next picture you choose';
@@ -443,7 +464,7 @@
                         preview.style.outline = '2px solid #00a4dc';
                     }
                     var previewCell = document.createElement('div');
-                    previewCell.style.flex = '0 0 9em';
+                    previewCell.style.flex = '0 0 11em';
                     previewCell.appendChild(preview);
                     previewCell.appendChild(note);
                     row.appendChild(previewCell);
@@ -496,6 +517,16 @@
                     pick.textContent = 'Upload a file…';
                     pick.addEventListener('click', function () { upload.click(); });
 
+                    var keep = document.createElement('button');
+                    keep.setAttribute('is', 'emby-button');
+                    keep.type = 'button';
+                    keep.className = 'raised emby-button';
+                    keep.textContent = 'Keep a copy';
+                    keep.title = 'Download this picture and serve it from here, so it cannot go away';
+                    keep.addEventListener('click', function () {
+                        fetchArtwork(channel, kind, art[kind.key]);
+                    });
+
                     var clear = document.createElement('button');
                     clear.setAttribute('is', 'emby-button');
                     clear.type = 'button';
@@ -507,6 +538,7 @@
                     });
 
                     buttons.appendChild(pick);
+                    buttons.appendChild(keep);
                     buttons.appendChild(clear);
                     buttons.appendChild(upload);
                     right.appendChild(buttons);
@@ -540,6 +572,47 @@
                 }).catch(function (err) {
                     Dashboard.hideLoadingMsg();
                     Dashboard.alert(String(err));
+                });
+            }
+
+            /**
+             * Downloads whatever is in a slot and keeps it here.
+             *
+             * A picture from a metadata provider is an address on somebody else's server, and
+             * an address nobody here looks after stops working sooner or later - at which
+             * point the channel is a blank rectangle again and nothing says why. A television
+             * on the far side of a household firewall may not reach it even while it works.
+             *
+             * Done automatically for anything picked off the web, and on request for anything
+             * else: a copy of a library picture stops following the item, which is what
+             * somebody wants only when they mean it.
+             */
+            function fetchArtwork(channel, kind, url) {
+                if (!url) {
+                    Dashboard.alert('Nothing in that slot to download yet.');
+                    return Promise.resolve();
+                }
+
+                var slot = kind.key.replace('Url', '').toLowerCase();
+                var absolute = /^https?:/i.test(url) ? url : ApiClient.serverAddress() + url;
+
+                Dashboard.showLoadingMsg();
+                return ApiClient.fetch({
+                    url: ApiClient.getUrl('LiteTv/Artwork/' + channel.Id + '/' + slot + '/Fetch'),
+                    type: 'POST',
+                    data: JSON.stringify({ Url: absolute }),
+                    contentType: 'application/json',
+                    dataType: 'json'
+                }).then(function (result) {
+                    // Cache-busted, because the address never changes: the next fetch for this
+                    // channel and slot overwrites the same file and the browser would go on
+                    // showing the old one.
+                    artworkOf(channel)[kind.key] = result.Url + '?v=' + Date.now();
+                    Dashboard.hideLoadingMsg();
+                    renderArtwork();
+                }).catch(function (err) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not download that picture: ' + err);
                 });
             }
 
@@ -632,23 +705,61 @@
             }
 
             function remoteArtworkTile(image) {
-                var tile = document.createElement('div');
-                tile.style.width = '8em';
-                tile.style.height = '4.5em';
-                tile.style.borderRadius = '4px';
-                tile.style.cursor = 'pointer';
-                tile.style.backgroundSize = 'cover';
-                tile.style.backgroundPosition = 'center';
-                tile.style.backgroundImage = 'url("' + (image.ThumbnailUrl || image.Url) + '")';
-                tile.title = [image.ProviderName, image.Type, image.Width ? image.Width + '×' + image.Height : null]
-                    .filter(function (x) { return x; }).join(' — ');
-                tile.addEventListener('click', function () {
+                var caption = [image.ProviderName, image.Type].filter(function (x) { return x; }).join(' · ');
+                if (image.Width) { caption += '  ' + image.Width + '×' + image.Height; }
+
+                return galleryTile(image.ThumbnailUrl || image.Url, caption, function () {
                     var channel = currentChannel();
                     if (!channel) { return; }
+                    // Downloaded straight away. A provider address is exactly the kind that
+                    // rots, and somebody who just picked a picture has decided they want it -
+                    // not that they want to depend on TheMovieDB still being reachable.
+                    var kind = ARTWORK.filter(function (k) { return k.key === artworkTarget; })[0];
                     artworkOf(channel)[artworkTarget] = image.Url;
                     renderArtwork();
+                    fetchArtwork(channel, kind, image.Url);
                 });
-                return tile;
+            }
+
+            /**
+             * One picture to choose from, shown whole.
+             *
+             * Big enough and uncropped, because the previous version drew everything as a
+             * small 16:9 crop - which turns a poster into a slice of somebody's face and makes
+             * the gallery impossible to choose from. The shape of a picture is half of what
+             * you are picking.
+             */
+            function galleryTile(src, caption, onPick) {
+                var cell = document.createElement('div');
+                cell.style.width = '11em';
+                cell.style.cursor = 'pointer';
+                cell.addEventListener('click', onPick);
+
+                var tile = document.createElement('div');
+                tile.style.width = '100%';
+                tile.style.height = '7.5em';
+                tile.style.borderRadius = '4px';
+                tile.style.background = 'rgba(255,255,255,0.06)';
+                tile.style.backgroundImage = 'url("' + src + '")';
+                tile.style.backgroundSize = 'contain';
+                tile.style.backgroundRepeat = 'no-repeat';
+                tile.style.backgroundPosition = 'center';
+                cell.appendChild(tile);
+
+                var label = document.createElement('div');
+                label.style.fontSize = '0.72em';
+                label.style.opacity = '0.7';
+                label.style.textAlign = 'center';
+                label.style.marginTop = '0.2em';
+                label.style.overflow = 'hidden';
+                label.style.textOverflow = 'ellipsis';
+                label.style.whiteSpace = 'nowrap';
+                label.textContent = caption;
+                label.title = caption;
+                cell.appendChild(label);
+
+                cell.title = caption;
+                return cell;
             }
 
             /** Any title at all, not only the ones this channel airs. */
@@ -739,22 +850,128 @@
                 // hostname the dashboard happened to be open on, which is rarely the one a
                 // television on the same network reaches the server by.
                 var path = '/Items/' + item.Id + '/Images/' + type + (index ? '/' + index : '');
-                var tile = document.createElement('div');
-                tile.style.width = '8em';
-                tile.style.height = '4.5em';
-                tile.style.borderRadius = '4px';
-                tile.style.cursor = 'pointer';
-                tile.style.backgroundSize = 'cover';
-                tile.style.backgroundPosition = 'center';
-                tile.style.backgroundImage = 'url("' + ApiClient.serverAddress() + path + '?maxWidth=400")';
-                tile.title = (item.Name || '') + ' — ' + type;
-                tile.addEventListener('click', function () {
+                var caption = type + (index ? ' ' + (index + 1) : '') + ' · ' + (item.Name || '');
+
+                return galleryTile(ApiClient.serverAddress() + path + '?maxWidth=600', caption, function () {
                     var channel = currentChannel();
                     if (!channel) { return; }
+                    // Kept as a reference rather than copied: this one is already on this
+                    // server, and following the item means a re-scrape improves the channel
+                    // too. "Keep a copy" is there for anyone who would rather it did not.
                     artworkOf(channel)[artworkTarget] = path;
                     renderArtwork();
                 });
-                return tile;
+            }
+
+            // =========================================================================
+            // What the channel actually airs
+            //
+            // Everything above this describes a channel; none of it says what comes out. A
+            // loop of three series with a fifteen-minute grid and trailers in the gaps is not
+            // something anybody can hold in their head, and until now the only way to find out
+            // was to go and look at a television.
+            // =========================================================================
+
+            function loadSchedule() {
+                var list = q('#SchedulePreview');
+                var channel = currentChannel();
+                if (!channel) { return; }
+
+                applyEditorToChannel();
+                config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
+
+                list.innerHTML = '<div class="listItem">Saving, then asking the server…</div>';
+                ApiClient.updatePluginConfiguration(pluginId, config)
+                    .then(function () {
+                        // Breaks included: they take up real time in the schedule, and a
+                        // listing that dropped them would have gaps nobody could account for.
+                        return ApiClient.getJSON(ApiClient.getUrl(
+                            'LiteTv/Channels/' + channel.Id + '/Now?upcoming=40&breaks=true'));
+                    })
+                    .then(function (now) {
+                        renderSchedule(now);
+                    })
+                    .catch(function () {
+                        list.innerHTML = '<div class="listItem">This channel has nothing to air. '
+                            + 'Add some content above, or check that it is switched on.</div>';
+                    });
+            }
+
+            function renderSchedule(now) {
+                var list = q('#SchedulePreview');
+                list.innerHTML = '';
+
+                var airings = [];
+                if (now.Current) { airings.push({ program: now.Current, onAir: true }); }
+                (now.Upcoming || []).forEach(function (p) { airings.push({ program: p, onAir: false }); });
+
+                if (!airings.length) {
+                    list.innerHTML = '<div class="listItem">Nothing scheduled.</div>';
+                    return;
+                }
+
+                var lastDay = '';
+                airings.forEach(function (airing) {
+                    var program = airing.program;
+                    var start = new Date(program.StartUtc);
+                    var day = start.toLocaleDateString();
+
+                    // A day heading wherever the date turns over, so "20:15" is never
+                    // ambiguous about which evening it means.
+                    if (day !== lastDay) {
+                        lastDay = day;
+                        var heading = document.createElement('div');
+                        heading.className = 'listItem';
+                        heading.style.opacity = '0.6';
+                        heading.style.fontWeight = 'bold';
+                        heading.textContent = start.toLocaleDateString(undefined, {
+                            weekday: 'long', day: 'numeric', month: 'long'
+                        });
+                        list.appendChild(heading);
+                    }
+
+                    list.appendChild(scheduleRow(program, start, airing.onAir));
+                });
+            }
+
+            function scheduleRow(program, start, onAir) {
+                var row = document.createElement('div');
+                row.className = 'listItem';
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.gap = '0.8em';
+
+                var clock = document.createElement('div');
+                clock.style.flex = '0 0 4em';
+                clock.style.fontWeight = 'bold';
+                clock.textContent = start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                row.appendChild(clock);
+
+                var body = document.createElement('div');
+                body.style.flexGrow = '1';
+
+                var title = document.createElement('div');
+                var isBreak = program.Kind === 'Interstitial';
+                title.textContent = isBreak
+                    ? 'Vorschau: ' + (program.TrailsName || program.Name)
+                    : [program.SeriesName, program.Name].filter(function (x) {
+                        return x && x !== program.Name;
+                    }).concat([program.Name]).join(' — ');
+                if (isBreak) { title.style.opacity = '0.75'; }
+                body.appendChild(title);
+
+                var minutes = Math.round((program.RuntimeTicks || 0) / 10000 / 1000 / 60);
+                var note = document.createElement('div');
+                note.className = 'fieldDescription';
+                note.textContent = [
+                    minutes > 0 ? minutes + ' min' : null,
+                    program.BlockName || null,
+                    onAir ? 'on air now' : null
+                ].filter(function (x) { return x; }).join('  ·  ');
+                body.appendChild(note);
+
+                row.appendChild(body);
+                return row;
             }
 
             function renderBlockSources() {
@@ -1230,6 +1447,9 @@
                             add.textContent = 'Add';
                             add.addEventListener('click', function () {
                                 applyEditorToChannel();
+                                // The same shape a hand-made channel gets. Half-filled, it
+                                // came up with nulls where the editor expected numbers, and the
+                                // first save wrote a channel subtly unlike every other one.
                                 config.Channels.push({
                                     Id: newGuid(),
                                     Name: s.Name,
@@ -1237,7 +1457,18 @@
                                     AnchorUtc: new Date().toISOString(),
                                     Sources: s.Sources.map(function (src) {
                                         return { Type: src.Type, ItemId: src.ItemId, Name: src.Name };
-                                    })
+                                    }),
+                                    Blocks: [],
+                                    Order: 'Sequential',
+                                    EpisodesPerBlock: 0,
+                                    SlotMinutes: 0,
+                                    TrailersInGaps: true,
+                                    Trailers: 'Off',
+                                    TrailerEveryPrograms: 3,
+                                    TrailerLookahead: 3,
+                                    TrailerTitles: [],
+                                    TrailerSlots: [],
+                                    Artwork: {}
                                 });
                                 currentIndex = config.Channels.length - 1;
                                 renderChannelSelect();
@@ -1376,6 +1607,7 @@
                     TrailerEveryPrograms: 3,
                     TrailerLookahead: 3,
                     TrailerTitles: [],
+                    TrailerSlots: [],
                     Artwork: {}
                 });
                 currentIndex = config.Channels.length - 1;
@@ -1407,6 +1639,7 @@
                 }, 350);
             });
 
+            q('#LoadSchedule').addEventListener('click', loadSchedule);
             q('#LoadArtworkGallery').addEventListener('click', loadArtworkGallery);
             q('#LoadWebArtwork').addEventListener('click', loadWebArtwork);
 
