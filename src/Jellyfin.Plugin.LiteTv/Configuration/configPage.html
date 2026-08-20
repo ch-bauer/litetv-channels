@@ -141,6 +141,29 @@
 
                     <div id="ArtworkGallery" style="margin: 0.8em 0;"></div>
 
+                    <div id="CropPanel" style="display: none; margin: 0.8em 0; padding: 0.8em; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;">
+                        <div style="font-weight: bold; margin-bottom: 0.4em;" id="CropTitle">Crop</div>
+                        <div class="fieldDescription" style="margin-bottom: 0.6em;">
+                            Drag inside the picture to move the frame, and use the slider to zoom. The
+                            frame is the shape the slot wants, so what you see is what the television
+                            will show — nothing is cropped for you afterwards.
+                        </div>
+                        <canvas id="CropCanvas" width="640" height="360"
+                                style="max-width: 100%; border-radius: 4px; cursor: grab; background: #000;"></canvas>
+                        <div style="display: flex; align-items: center; gap: 0.8em; margin-top: 0.6em;">
+                            <span style="font-size: 0.85em; opacity: 0.7;">Zoom</span>
+                            <input type="range" id="CropZoom" min="100" max="400" value="100" style="flex-grow: 1;" />
+                        </div>
+                        <div style="display: flex; gap: 0.5em; margin-top: 0.6em;">
+                            <button is="emby-button" type="button" id="CropSave" class="raised emby-button">
+                                <span>Use this crop</span>
+                            </button>
+                            <button is="emby-button" type="button" id="CropCancel" class="raised emby-button">
+                                <span>Cancel</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <h4>Trailers</h4>
                     <div class="selectContainer">
                         <select is="emby-select" id="TrailerMode" label="Work trailers into the schedule">
@@ -319,6 +342,8 @@
                 q('#ArtworkLibraryResults').innerHTML = '';
                 q('#ArtworkGallery').innerHTML = '';
                 q('#SchedulePreview').innerHTML = '';
+                q('#CropPanel').style.display = 'none';
+                cropState = null;
                 channel.Blocks = channel.Blocks || [];
                 currentBlockIndex = channel.Blocks.length ? 0 : -1;
                 renderBlockSelect();
@@ -517,6 +542,21 @@
                     pick.textContent = 'Upload a file…';
                     pick.addEventListener('click', function () { upload.click(); });
 
+                    var crop = document.createElement('button');
+                    crop.setAttribute('is', 'emby-button');
+                    crop.type = 'button';
+                    crop.className = 'raised emby-button';
+                    crop.textContent = 'Crop…';
+                    crop.title = 'Choose what part of this picture the slot shows';
+                    crop.addEventListener('click', function () {
+                        var current = art[kind.key];
+                        if (!current) {
+                            Dashboard.alert('Put a picture in this slot first, then crop it.');
+                            return;
+                        }
+                        beginCrop(artworkSrc(current), kind);
+                    });
+
                     var keep = document.createElement('button');
                     keep.setAttribute('is', 'emby-button');
                     keep.type = 'button';
@@ -538,6 +578,7 @@
                     });
 
                     buttons.appendChild(pick);
+                    buttons.appendChild(crop);
                     buttons.appendChild(keep);
                     buttons.appendChild(clear);
                     buttons.appendChild(upload);
@@ -550,7 +591,7 @@
             function uploadArtwork(channel, kind, file, input, preview) {
                 var slot = kind.key.replace('Url', '').toLowerCase();
                 Dashboard.showLoadingMsg();
-                fetch(ApiClient.getUrl('LiteTv/Artwork/' + channel.Id + '/' + slot), {
+                return fetch(ApiClient.getUrl('LiteTv/Artwork/' + channel.Id + '/' + slot), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/octet-stream',
@@ -566,13 +607,129 @@
                     // on showing the old one.
                     var url = result.Url + '?v=' + Date.now();
                     artworkOf(channel)[kind.key] = url;
-                    input.value = url;
-                    preview.style.backgroundImage = 'url("' + artworkSrc(url) + '")';
+                    if (input) { input.value = url; }
+                    if (preview) { preview.style.backgroundImage = 'url("' + artworkSrc(url) + '")'; }
                     Dashboard.hideLoadingMsg();
                 }).catch(function (err) {
                     Dashboard.hideLoadingMsg();
                     Dashboard.alert(String(err));
                 });
+            }
+
+            // =========================================================================
+            // Cropping
+            //
+            // A banner is about five and a half to one and almost nothing else is. Every
+            // picture that is not already a banner therefore has to lose most of its height to
+            // become one, and until now the television did that itself, from the middle, with
+            // no idea where the faces or the lettering are. That is fine for a backdrop and
+            // ruinous for a poster.
+            //
+            // This does the cropping once, here, where somebody can see it, and uploads the
+            // result - so the picture the plugin stores is already the right shape and nothing
+            // downstream has to guess.
+            // =========================================================================
+
+            /** The shape each slot wants. A banner is the reason this exists. */
+            var CROP_RATIOS = {
+                BannerUrl: 1000 / 185,
+                BackdropUrl: 16 / 9,
+                PosterUrl: 2 / 3
+            };
+
+            var cropState = null;
+
+            function beginCrop(src, kind) {
+                var canvas = q('#CropCanvas');
+                var image = new Image();
+                image.crossOrigin = 'anonymous';
+                image.onload = function () {
+                    var ratio = CROP_RATIOS[kind.key] || 16 / 9;
+                    canvas.width = 640;
+                    canvas.height = Math.round(640 / ratio);
+
+                    // Start at the smallest zoom that still covers the frame, centred. That is
+                    // exactly what the automatic crop would have done, so the first thing shown
+                    // is the old behaviour - and every drag from there is an improvement on it.
+                    var cover = Math.max(canvas.width / image.width, canvas.height / image.height);
+                    cropState = {
+                        image: image,
+                        kind: kind,
+                        base: cover,
+                        zoom: 1,
+                        x: 0,
+                        y: 0,
+                        dragging: false
+                    };
+                    centreCrop();
+                    q('#CropZoom').value = 100;
+                    q('#CropTitle').textContent = 'Crop for: ' + kind.label;
+                    q('#CropPanel').style.display = 'block';
+                    drawCrop();
+                    q('#CropPanel').scrollIntoView({ block: 'nearest' });
+                };
+                image.onerror = function () {
+                    Dashboard.alert('That picture could not be loaded for cropping. '
+                        + 'Pictures on other servers sometimes refuse to be read this way — download a copy first.');
+                };
+                image.src = src;
+            }
+
+            function cropScale() {
+                return cropState.base * cropState.zoom;
+            }
+
+            function centreCrop() {
+                var canvas = q('#CropCanvas');
+                var scale = cropScale();
+                cropState.x = (canvas.width - cropState.image.width * scale) / 2;
+                cropState.y = (canvas.height - cropState.image.height * scale) / 2;
+            }
+
+            /** Keeps the picture covering the frame; a crop with a hole in it is never wanted. */
+            function clampCrop() {
+                var canvas = q('#CropCanvas');
+                var scale = cropScale();
+                var w = cropState.image.width * scale;
+                var h = cropState.image.height * scale;
+                cropState.x = Math.min(0, Math.max(canvas.width - w, cropState.x));
+                cropState.y = Math.min(0, Math.max(canvas.height - h, cropState.y));
+            }
+
+            function drawCrop() {
+                if (!cropState) { return; }
+                var canvas = q('#CropCanvas');
+                var ctx = canvas.getContext('2d');
+                var scale = cropScale();
+                clampCrop();
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(
+                    cropState.image,
+                    cropState.x,
+                    cropState.y,
+                    cropState.image.width * scale,
+                    cropState.image.height * scale);
+            }
+
+            function saveCrop() {
+                if (!cropState) { return; }
+                var channel = currentChannel();
+                if (!channel) { return; }
+                var kind = cropState.kind;
+
+                q('#CropCanvas').toBlob(function (blob) {
+                    if (!blob) {
+                        Dashboard.alert('The crop could not be read back. This usually means the '
+                            + 'picture came from another server — download a copy first, then crop it.');
+                        return;
+                    }
+                    uploadArtwork(channel, kind, blob, null, null).then(function () {
+                        q('#CropPanel').style.display = 'none';
+                        cropState = null;
+                        renderArtwork();
+                    });
+                }, 'image/jpeg', 0.92);
             }
 
             /**
@@ -1638,6 +1795,58 @@
                     runSearch(term, q('#TrailerSearchResults'), currentChannel, renderTrailerTitles, 'TrailerTitles');
                 }, 350);
             });
+
+            q('#CropSave').addEventListener('click', saveCrop);
+            q('#CropCancel').addEventListener('click', function () {
+                q('#CropPanel').style.display = 'none';
+                cropState = null;
+            });
+
+            q('#CropZoom').addEventListener('input', function () {
+                if (!cropState) { return; }
+                var canvas = q('#CropCanvas');
+                // Zoom about the middle of the frame, so the thing somebody has just centred
+                // stays centred instead of sliding away as they zoom in on it.
+                var before = cropScale();
+                cropState.zoom = parseInt(this.value, 10) / 100;
+                var after = cropScale();
+                var factor = after / before;
+                cropState.x = canvas.width / 2 - (canvas.width / 2 - cropState.x) * factor;
+                cropState.y = canvas.height / 2 - (canvas.height / 2 - cropState.y) * factor;
+                drawCrop();
+            });
+
+            (function () {
+                var canvas = q('#CropCanvas');
+                var last = null;
+
+                canvas.addEventListener('mousedown', function (ev) {
+                    if (!cropState) { return; }
+                    ev.preventDefault();
+                    cropState.dragging = true;
+                    last = { x: ev.clientX, y: ev.clientY };
+                    canvas.style.cursor = 'grabbing';
+                });
+
+                document.addEventListener('mousemove', function (ev) {
+                    if (!cropState || !cropState.dragging) { return; }
+                    // The canvas is drawn at its own pixel size and displayed at whatever width
+                    // the dashboard gives it, so a pointer moved by ten screen pixels is not ten
+                    // canvas pixels.
+                    var shown = canvas.getBoundingClientRect();
+                    var factor = canvas.width / Math.max(1, shown.width);
+                    cropState.x += (ev.clientX - last.x) * factor;
+                    cropState.y += (ev.clientY - last.y) * factor;
+                    last = { x: ev.clientX, y: ev.clientY };
+                    drawCrop();
+                });
+
+                document.addEventListener('mouseup', function () {
+                    if (!cropState) { return; }
+                    cropState.dragging = false;
+                    canvas.style.cursor = 'grab';
+                });
+            })();
 
             q('#LoadSchedule').addEventListener('click', loadSchedule);
             q('#LoadArtworkGallery').addEventListener('click', loadArtworkGallery);
