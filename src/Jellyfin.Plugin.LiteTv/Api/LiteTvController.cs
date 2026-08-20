@@ -528,8 +528,31 @@ public class LiteTvController : ControllerBase
         var item = Artwork(cache, entry.ItemId);
         var series = entry.SeriesId is { } seriesId && seriesId != Guid.Empty ? Artwork(cache, seriesId) : null;
 
-        // Portrait: the cover the item is known by.
-        if (Pick(new[] { ImageType.Primary, ImageType.Thumb }, item, series) is { } poster)
+        // The picture a guide row draws. It wants one wide, specific picture of this
+        // programme - and which image that is depends on what the programme is.
+        //
+        // An episode's Primary *is* its still: already the right shape, and the one thing that
+        // tells two episodes of the same series apart. A film's Primary is its upright poster,
+        // and cropping that into a wide row is what left the films looking wrong next to the
+        // episodes. A film's Thumb - "Miniaturansicht" - is the same artwork drawn wide, which
+        // is exactly what the row is asking for.
+        //
+        // Primary stays last rather than being dropped: it is the one image nearly everything
+        // has, and a badly-shaped picture of the right programme beats an empty rectangle.
+        // Wide artwork, in the order a row would like it. Primary is last here because for
+        // everything except an episode it is the upright one.
+        var wideOrder = new[] { ImageType.Thumb, ImageType.Backdrop, ImageType.Primary };
+
+        // The episode's own still is asked for on its own first. Rolled into one call it would
+        // fall through to the *series* Primary - an upright poster - before ever reaching the
+        // series' Thumb, because Pick tries every item for a type before moving to the next
+        // one. That trades one rung of specificity for the wrong shape, which is the whole
+        // thing being fixed here.
+        var chosen = item is Episode
+            ? Pick(new[] { ImageType.Primary }, item) ?? Pick(wideOrder, item, series)
+            : Pick(wideOrder, item, series);
+
+        if (chosen is { } poster)
         {
             dto.PosterItemId = poster.ItemId;
             dto.PosterType = poster.Type.ToString();
