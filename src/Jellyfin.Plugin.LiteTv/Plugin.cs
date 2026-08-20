@@ -49,14 +49,6 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     System.Globalization.CultureInfo.InvariantCulture,
                     "{0}.Configuration.configPage.html",
                     GetType().Namespace)
-            },
-            new PluginPageInfo
-            {
-                Name = "liteTv.js",
-                EmbeddedResourcePath = string.Format(
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    "{0}.Web.liteTv.js",
-                    GetType().Namespace)
             }
         };
     }

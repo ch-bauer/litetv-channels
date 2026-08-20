@@ -13,33 +13,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<TvChannel> Channels { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets a value indicating whether the injected web UI (home row, guide button,
-    /// playback overlays) is enabled.
-    /// </summary>
-    public bool EnableWebUi { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether a "TV" row with channel cards is added
-    /// to the web client's home screen.
-    /// </summary>
-    public bool ShowHomeRow { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the "📺" channel-guide button is added
-    /// to the web client's header. Independent of the home row and overlays, so the
-    /// button can be hidden while those stay on.
-    /// </summary>
-    public bool ShowHeaderButton { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether Jellyfin's own Live TV rows on the web home
-    /// screen ("Live TV" and "On Now") are hidden, leaving the channel row as the single
-    /// place TV is watched from. Only affects the web client, and only the home screen: the
-    /// Live TV section itself stays where it is.
-    /// </summary>
-    public bool HideNativeLiveTvSections { get; set; }
-
-    /// <summary>
     /// Gets or sets a value indicating whether the channels are published as a Jellyfin
     /// channel, which is what makes them browsable and playable on clients the plugin
     /// cannot inject its web UI into - TV apps, phones, anything but the web client.

@@ -20,7 +20,7 @@ comes straight from your library.
 - **Fixed slot times** start programs on a grid (say every 30 minutes) instead of back
   to back, so a block can promise the film at 20:15. The time a slot leaves over is
   filled with trailers for what is coming up — from the library where it has them, and
-  in the web client from the linked (usually YouTube) ones where it does not.
+  the library where it has them.
 - Tuning in simply starts regular playback (direct play when the client supports the
   file) at the live offset. A small overlay offers "restart from the beginning".
 - At the end of an episode an overlay counts down to the next scheduled program — or
@@ -35,9 +35,12 @@ comes straight from your library.
 
 | Client | Experience |
 | --- | --- |
-| Web browser / apps embedding the web UI | Full: home-screen channel row, 📺 guide as a time grid, overlays, autoplay, trailers between programs. A channel switched on from the "TV-Sender" library entry is taken over by the same UI, so it plays the program itself — with its own artwork, plot and pause screen — rather than the bare channel entry |
 | Native apps (Android TV, iOS, …) | Browse the "TV-Sender" library entry and play a channel to join it live. The channels are deliberately not published to Jellyfin's own **Live TV** section: that route hands a client a stream rather than a position in one, so it could only ever start the current program from its beginning — a worse way in to the same channels |
-| Any client, driven from a browser | Open the guide on any browser (e.g. your phone) and "Auf Gerät…" — the server starts channel playback on the device at the live position and keeps pushing the next program |
+| Any client, driven remotely | Ask the server to start a channel on a device with `POST /LiteTv/Channels/{id}/PlayOn/{sessionId}` — playback starts at the live position and the schedule keeps being pushed |
+
+The web client had an injected UI of its own — a home-screen channel row, a 📺 guide, playback
+overlays. It was removed to concentrate on the TV app; the history is in git if it is ever
+wanted back.
 
 ## Installation
 
@@ -45,11 +48,6 @@ comes straight from your library.
    `https://raw.githubusercontent.com/ch-bauer/jellyfin-plugin-litetv/main/manifest.json`
 2. Install **LiteTV Channels** from the catalog and restart Jellyfin.
 3. Configure channels under Dashboard → Plugins → LiteTV Channels.
-4. Hard-refresh the browser once (Ctrl+F5).
-
-Installing the [File Transformation plugin](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation)
-is recommended (LiteTV integrates with it like Intro Skipper does); without it, LiteTV
-falls back to injecting its script at request time via middleware.
 
 ## Configuration
 
@@ -70,11 +68,6 @@ Also per channel:
 - **Program blocks** — any number, each with a start time, a duration (which may run
   past midnight), the weekdays it applies to, and its own content and play order.
   Overlapping blocks resolve to the first one configured.
-
-And for the web client as a whole: the channel row and the 📺 guide button can each be
-turned off, and Jellyfin's own **"Live TV" and "On Now" home rows can be hidden** — they
-list the same channels a second time once the channel row is there. The Live TV section
-itself stays where it is; only the home screen changes.
 
 ## Building
 
