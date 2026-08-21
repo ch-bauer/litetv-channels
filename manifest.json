@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.48.0",
+        "changelog": "Clearing a channel's borrowed artwork no longer breaks the save. The page wrote the empty guid with dashes, and Jellyfin's own converter reads guids in the dash-less form and only that one - so the configuration came back 500, \"Unrecognized Guid format\", and nothing on the page was saved. Found while building a channel through the API, where the same rule bites: an empty string is not a guid either, so a field like this can never be blanked.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.48.0/litetv-channels_1.0.48.0.zip",
+        "checksum": "91d97f611b7a14f25380faa4ee2f6d2c",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
         "version": "1.0.47.0",
         "changelog": "An address the schedule names can be resolved. GET /LiteTv/Resolve?url= turns any address a break names - an advert, a bumper, a clip the library does not hold - into a stream the client can play, with the headers it has to be fetched with. It is the same resolving the trailer endpoint does; only where the address comes from differs.\n\nWithout it adverts were a schedule that could not be aired: the plugin placed them, the guide reported them, and the app had no way to turn one into anything playable, so it dropped them and ran the programmes together.",
         "targetAbi": "10.11.0.0",
