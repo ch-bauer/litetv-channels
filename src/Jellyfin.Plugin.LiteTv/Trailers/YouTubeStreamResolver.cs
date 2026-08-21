@@ -9,13 +9,12 @@ namespace Jellyfin.Plugin.LiteTv.Trailers;
 /// <summary>
 /// Turns a YouTube link into a URL a player can actually be handed.
 /// <para>
-/// <b>Quality is capped at what the muxed list offers</b> - 360p for most videos, 720p where
-/// itag 22 survives. The good renditions are all in <c>adaptiveFormats</c>, and those URLs
-/// serve about a megabyte and then answer 403 to every further request, whatever the offset
-/// and however fresh the URL: YouTube expects a proof-of-origin token this plugin cannot mint.
-/// Measured 21 Aug 2026 against ANDROID and IOS. Do not "fix" the resolver by preferring
-/// adaptive formats again without checking that a window past the first megabyte still comes
-/// back 206.
+/// <b>What the answer is good for, measured 21 Aug 2026.</b> An adaptive URL will serve any
+/// window of a megabyte or so, at any offset - but only while it is fresh, and never the whole
+/// file at once. A URL a few minutes old answers 403 to everything past its first window; a
+/// request for tens of megabytes is refused outright even on a URL seconds old. So the cache
+/// here is two minutes rather than forty-five, and a client is expected to read in windows.
+/// Muxed streams have neither restriction and are the floor when adaptive cannot be had.
 /// </para>
 /// <para>
 /// Most of a library's trailers are links rather than files - here, 15 of 19 films have only
@@ -47,11 +46,16 @@ public sealed class YouTubeStreamResolver
     public sealed record ResolvedStream(string Url, string? AudioUrl);
 
     /// <summary>
-    /// How long a resolved URL is offered again before it is looked up afresh. Google's
-    /// stream URLs carry an expiry of their own, usually some hours; this stays well inside
-    /// that, because a URL that dies mid-trailer is worse than a second's delay.
+    /// How long a resolved URL is offered again before it is looked up afresh.
+    /// <para>
+    /// Two minutes, and it used to be forty-five. The <c>expire</c> on a googlevideo URL is
+    /// hours away and means nothing: measured on 21 Aug 2026, an adaptive URL a few minutes
+    /// old answers 403 to everything past its first window while a fresh one serves any window
+    /// asked for. Resolution costs a fifth of a second, so there is nothing to protect - the
+    /// cache exists now only to stop a break asking twice while it is starting.
+    /// </para>
     /// </summary>
-    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(45);
+    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(2);
 
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
@@ -370,18 +374,28 @@ public sealed class YouTubeStreamResolver
                 }
             }
 
-            // Muxed only - video and audio in one file. The adaptive lists hold everything
-            // worth watching, and **they will not play**: measured on 21 Aug 2026, an adaptive
-            // URL serves its first megabyte or so and answers 403 to everything after it, from
-            // any offset, on a URL seconds old, from ANDROID and IOS alike. That is YouTube's
-            // proof-of-origin regime, and getting past it means generating a token by running
-            // their JavaScript - which is a different project from this one.
+            // Adaptive first, muxed as the floor. The muxed list holds itag 18 and little
+            // else - 360p - so everything worth watching is in adaptiveFormats, as a video
+            // stream and an audio stream that have to be played together.
             //
-            // So the muxed list it is, and the ceiling comes back with it: usually itag 18,
-            // 360p, occasionally itag 22 at 720p. BestOf takes the best of what is there.
-            return streaming.TryGetProperty("formats", out var formats)
+            // Those streams come with two conditions, both measured on 21 Aug 2026 and both
+            // the caller's to keep. **Read them in windows**: a request for the whole file, or
+            // for tens of megabytes, is answered 403 while a megabyte at any offset is fine.
+            // And **use them soon**: a URL minutes old starts refusing everything past its
+            // first window, which is why nothing here is cached for long any more.
+            var adaptive = streaming.TryGetProperty("adaptiveFormats", out var adaptiveFormats)
+                ? BestPair(adaptiveFormats, client.Name)
+                : null;
+            var muxed = streaming.TryGetProperty("formats", out var formats)
                 ? BestOf(formats, client.Name)
                 : null;
+
+            if (adaptive is null || (muxed is not null && muxed.Quality > adaptive.Quality))
+            {
+                return muxed ?? adaptive;
+            }
+
+            return adaptive;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
@@ -428,6 +442,90 @@ public sealed class YouTubeStreamResolver
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Picks a video stream and an audio stream to be played together.
+    /// <para>
+    /// This is where the quality is: YouTube keeps H.264 at 1080p, and AAC at 128 kbps, in the
+    /// adaptive lists only. The muxed list a single-URL player wants is 360p.
+    /// </para>
+    /// <para>
+    /// H.264 in MP4 is preferred and nothing above 1080p is taken: a television decodes that
+    /// combination in hardware. The preference is deliberately small - a hundred points against
+    /// a height in the hundreds - so it decides between two streams of the same size and never
+    /// lets 360p H.264 beat 720p VP9. AV1 is skipped outright: hardware support for it is the
+    /// one thing a set-top box of unknown vintage most often lacks.
+    /// </para>
+    /// <para>
+    /// Audio is AAC, preferring stereo - a 5.1 track would be remixed by whatever the set is
+    /// plugged into, which for a thirty-second trailer is a poor trade.
+    /// </para>
+    /// </summary>
+    private static StreamCandidate? BestPair(JsonElement streams, string source)
+    {
+        if (streams.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        string? video = null;
+        var videoHeight = 0;
+        var videoScore = int.MinValue;
+        string? audio = null;
+        var audioScore = int.MinValue;
+
+        foreach (var stream in streams.EnumerateArray())
+        {
+            if (!stream.TryGetProperty("url", out var urlElement) || urlElement.GetString() is not { Length: > 0 } url)
+            {
+                // A stream whose URL has to be un-ciphered by running YouTube's own JavaScript
+                // is not worth the machinery; the clients we claim to be hand back plain URLs.
+                continue;
+            }
+
+            var mime = stream.TryGetProperty("mimeType", out var m) ? m.GetString() ?? string.Empty : string.Empty;
+
+            if (mime.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            {
+                var height = Height(stream);
+                if (height is 0 or > 1080 || mime.Contains("av01", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var score = height;
+                if (mime.Contains("avc1", StringComparison.OrdinalIgnoreCase)) score += 100;
+                if (mime.Contains("mp4", StringComparison.OrdinalIgnoreCase)) score += 30;
+                if (score > videoScore)
+                {
+                    videoScore = score;
+                    videoHeight = height;
+                    video = url;
+                }
+            }
+            else if (mime.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+            {
+                var score = 0;
+                if (mime.Contains("mp4a", StringComparison.OrdinalIgnoreCase)) score += 4000;
+                var channels = stream.TryGetProperty("audioChannels", out var c) && c.TryGetInt32(out var count)
+                    ? count
+                    : 2;
+                if (channels <= 2) score += 2000;
+                if (stream.TryGetProperty("bitrate", out var b) && b.TryGetInt32(out var bitrate))
+                {
+                    score += Math.Min(bitrate / 1000, 320);
+                }
+
+                if (score > audioScore)
+                {
+                    audioScore = score;
+                    audio = url;
+                }
+            }
+        }
+
+        return video is null || audio is null ? null : new StreamCandidate(video, videoHeight, source, audio);
     }
 
     /// <summary>
