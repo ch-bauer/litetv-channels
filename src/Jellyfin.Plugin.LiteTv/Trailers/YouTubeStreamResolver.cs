@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -171,7 +173,8 @@ public sealed class YouTubeStreamResolver
             DeviceModel = "Pixel 6",
             OsName = "Android",
             OsVersion = "11",
-            AndroidSdkVersion = 30
+            AndroidSdkVersion = 30,
+            AcceptsAccount = true
         },
 
         new("ANDROID_CREATOR", "14", "23.47.101", "MOBILE",
@@ -181,7 +184,8 @@ public sealed class YouTubeStreamResolver
             DeviceModel = "Pixel 9 Pro Fold",
             OsName = "Android",
             OsVersion = "15",
-            AndroidSdkVersion = 35
+            AndroidSdkVersion = 35,
+            AcceptsAccount = true
         },
 
         new("VISIONOS", "101", "0.1", "MOBILE",
@@ -199,12 +203,13 @@ public sealed class YouTubeStreamResolver
             DeviceMake = "Apple",
             DeviceModel = "iPhone16,2",
             OsName = "iOS",
-            OsVersion = "18.3.2.22D82"
+            OsVersion = "18.3.2.22D82",
+            AcceptsAccount = true
         },
 
         new("TVHTML5", "7", "7.20250101.10.00", "TV",
             "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version"),
-        new("WEB", "1", "2.20250312.04.00", "DESKTOP", UserAgent)
+        new("WEB", "1", "2.20250312.04.00", "DESKTOP", UserAgent) { AcceptsAccount = true }
     };
 
     private readonly IHttpClientFactory _httpClientFactory;
@@ -384,6 +389,84 @@ public sealed class YouTubeStreamResolver
     /// YouTube expects it. The device fields are only sent when the client has them, because an
     /// empty deviceModel is worse than no deviceModel.
     /// </summary>
+    /// <summary>
+    /// The origin a request signed with a Google session is bound to. The signature covers it,
+    /// so it has to be sent as well as hashed.
+    /// </summary>
+    public const string AccountOrigin = "https://www.youtube.com";
+
+    /// <summary>
+    /// Pulls the session id out of a pasted cookie header - the one value in it that the
+    /// signature is built from.
+    /// <para>
+    /// Google mints two of these. <c>__Secure-3PAPISID</c> is the third-party one and is what
+    /// the web player signs with, so it is preferred; plain <c>SAPISID</c> is the same secret
+    /// for first-party use and is the fallback for a cookie copied from a context that has
+    /// only that. Anything else in the header is passed through untouched but not read here.
+    /// </para>
+    /// </summary>
+    /// <param name="cookie">The whole <c>Cookie</c> header, as it was pasted.</param>
+    /// <returns>The session id, or null when the paste does not contain one.</returns>
+    internal static string? Sapisid(string? cookie)
+    {
+        if (string.IsNullOrWhiteSpace(cookie))
+        {
+            return null;
+        }
+
+        foreach (var name in new[] { "__Secure-3PAPISID", "SAPISID" })
+        {
+            foreach (var part in cookie.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var split = part.IndexOf('=', StringComparison.Ordinal);
+                if (split <= 0)
+                {
+                    continue;
+                }
+
+                if (part.AsSpan(0, split).Trim().SequenceEqual(name)
+                    && part.AsSpan(split + 1).Trim() is { Length: > 0 } value)
+                {
+                    return value.ToString();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Builds the <c>Authorization</c> header a signed-in YouTube session sends.
+    /// <para>
+    /// This is Google's SAPISIDHASH, the same thing the web player computes on every request:
+    /// the seconds since the epoch, the session id and the origin, joined by spaces and
+    /// hashed, with the seconds repeated in front of the hash so the far side can check the
+    /// window. It carries no password - the secret is the cookie the browser already holds -
+    /// and it is bound to <see cref="AccountOrigin"/>, so it cannot be replayed elsewhere.
+    /// </para>
+    /// <para>
+    /// SHA-1 is not a choice here. It is what the scheme specifies, and the hash is a session
+    /// proof rather than anything relying on collision resistance.
+    /// </para>
+    /// </summary>
+    /// <param name="cookie">The whole <c>Cookie</c> header, as it was pasted.</param>
+    /// <param name="now">The moment to stamp the signature with.</param>
+    /// <returns>The header value, or null when the cookie names no session.</returns>
+    internal static string? AuthorizationFor(string? cookie, DateTimeOffset now)
+    {
+        if (Sapisid(cookie) is not { } sapisid)
+        {
+            return null;
+        }
+
+        var seconds = now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        var hash = Convert
+            .ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes($"{seconds} {sapisid} {AccountOrigin}")))
+            .ToLowerInvariant();
+
+        return string.Create(CultureInfo.InvariantCulture, $"SAPISIDHASH {seconds}_{hash}");
+    }
+
     private static Dictionary<string, object?> Context(InnertubeClient client)
     {
         var context = new Dictionary<string, object?>
@@ -466,6 +549,26 @@ public sealed class YouTubeStreamResolver
 
             request.Headers.TryAddWithoutValidation("X-YouTube-Client-Name", client.NameId);
             request.Headers.TryAddWithoutValidation("X-YouTube-Client-Version", client.Version);
+
+            // An account, when one has been pasted and this client is one that carries it.
+            // Anonymous is still the default and still the only thing that happens with an
+            // empty setting: nothing below runs, and ANDROID_VR never signs at all.
+            //
+            // What it is for: an anonymous asker now gets one 360p muxed address and nineteen
+            // renditions with no address on them, and ANDROID_VR - the client that does return
+            // the full ladder - is refused a good part of the time with "Sign in to confirm
+            // you're not a bot". A signed session is the literal answer to that sentence.
+            // Whether it actually brings the addresses back is a measurement nobody has run;
+            // this is the plumbing that lets it be run from the configuration page.
+            var cookie = Plugin.Instance?.Configuration.YouTubeCookie;
+            if (client.AcceptsAccount && !string.IsNullOrWhiteSpace(cookie)
+                && AuthorizationFor(cookie, DateTimeOffset.UtcNow) is { } authorization)
+            {
+                request.Headers.TryAddWithoutValidation("Cookie", cookie.Trim());
+                request.Headers.TryAddWithoutValidation("Authorization", authorization);
+                request.Headers.TryAddWithoutValidation("X-Origin", AccountOrigin);
+                request.Headers.TryAddWithoutValidation("X-Goog-AuthUser", "0");
+            }
 
             using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
@@ -887,6 +990,19 @@ public sealed class YouTubeStreamResolver
 
         /// <summary>The Android API level, for the Android clients that send one.</summary>
         public int? AndroidSdkVersion { get; init; }
+
+        /// <summary>
+        /// Whether this client may carry a signed-in session.
+        /// <para>
+        /// Not every client can. ReVanced's roster marks ANDROID_VR logout-only and skips the
+        /// <c>Authorization</c> header for it, which is not a style choice: a headset client
+        /// that has never had an account behind it is not a shape YouTube expects one from,
+        /// and signing it is a good way to turn a working anonymous request into a refused
+        /// one. So a pasted account is offered only to the clients that are signed in in real
+        /// life, and ANDROID_VR keeps asking exactly the way it does today.
+        /// </para>
+        /// </summary>
+        public bool AcceptsAccount { get; init; }
     }
 
     private sealed record CachedStream(ResolvedStream Stream, DateTime ExpiresUtc);
