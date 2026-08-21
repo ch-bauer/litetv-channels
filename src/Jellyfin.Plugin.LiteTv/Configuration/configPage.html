@@ -29,6 +29,21 @@
                     </div>
                 </div>
 
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="SkipTrailerSegments" />
+                        <span>Skip the parts of a trailer that are not the trailer</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Uses SponsorBlock's public database to seek past an uploader's branded card, a
+                        plea to subscribe, or a read for something unrelated — the things German trailer
+                        channels wrap a trailer in, and which a minute-long break has no room for. The
+                        lookup asks about a four-character hash of the video id rather than the id
+                        itself, so the service is never told what is playing; switching this off stops
+                        the request being made at all.
+                    </div>
+                </div>
+
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
                 <div class="fieldDescription" style="margin-bottom: 0.6em;">
                     Based on the media in your library. Adding a suggestion creates a channel you can still edit below.
@@ -1213,6 +1228,7 @@
 
                 applyEditorToChannel();
                 config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
+                config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
 
                 list.innerHTML = '<div class="listItem">Saving, then asking the server…</div>';
                 ApiClient.updatePluginConfiguration(pluginId, config)
@@ -1904,6 +1920,7 @@
                     config = loaded;
                     config.Channels = config.Channels || [];
                     q('#ChannelUserName').value = config.ChannelUserName || 'LiteTV';
+                    q('#SkipTrailerSegments').checked = config.SkipTrailerSegments !== false;
                     currentIndex = config.Channels.length ? 0 : -1;
                     renderChannelSelect();
                     loadEffectiveArt().then(renderEditor);
@@ -2191,6 +2208,7 @@
                     Dashboard.showLoadingMsg();
                     applyEditorToChannel();
                     config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
+                config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
                         renderBlockSelect();
