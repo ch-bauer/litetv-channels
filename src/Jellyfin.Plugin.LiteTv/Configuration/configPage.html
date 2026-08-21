@@ -218,6 +218,33 @@
                     <h4>Program (looping forever)</h4>
                     <div class="paperList" id="SourceList" style="margin-bottom: 1em;"></div>
 
+                    <h4>Adverts in the breaks</h4>
+                    <div class="fieldDescription" style="margin-bottom: 0.6em;">
+                        Addresses the client resolves and plays, exactly as it does a linked trailer —
+                        a YouTube link to an old advert is the intended use. They go at the front of a
+                        break and the trailer goes last, so a break ends on what the channel is about
+                        to show. A decade is preferred over the pool at large when it matches the year
+                        the trailed programme was made, which is the whole joke; leave it at 0 for one
+                        that fits anywhere. Nothing is reported to Jellyfin — an advert is not library
+                        content and has no item to record against.
+                    </div>
+                    <div class="paperList" id="AdvertList" style="margin-bottom: 0.8em;"></div>
+                    <div style="display: flex; gap: 0.6em; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5em;">
+                        <div class="inputContainer" style="flex: 2 1 22em; margin: 0;">
+                            <input is="emby-input" type="text" id="AdvertUrl" label="Address" />
+                        </div>
+                        <div class="inputContainer" style="flex: 1 1 12em; margin: 0;">
+                            <input is="emby-input" type="text" id="AdvertName" label="Name (optional)" />
+                        </div>
+                        <div class="inputContainer" style="flex: 0 1 8em; margin: 0;">
+                            <input is="emby-input" type="number" id="AdvertSeconds" min="1" step="1" value="30" label="Seconds" />
+                        </div>
+                        <div class="inputContainer" style="flex: 0 1 8em; margin: 0;">
+                            <input is="emby-input" type="number" id="AdvertDecade" min="0" step="10" value="0" label="Decade" />
+                        </div>
+                        <button is="emby-button" type="button" id="AddAdvert" class="raised emby-button"><span>Add advert</span></button>
+                    </div>
+
                     <button is="emby-button" type="button" id="LoadSchedule" class="raised emby-button">
                         <span>Save and show what this channel will air</span>
                     </button>
@@ -383,6 +410,7 @@
                     return;
                 }
                 renderScheduleEdits();
+                renderAdverts();
                 q('#ChannelName').value = channel.Name || '';
                 q('#ChannelEnabled').checked = channel.Enabled !== false;
                 q('#EpisodesPerBlock').value = channel.EpisodesPerBlock || 0;
@@ -1566,6 +1594,83 @@
             }
 
             // =========================================================================
+            // Adverts
+            //
+            // A break already plays trailers for what is coming up; an advert is the same
+            // machinery pointed at something the library does not hold. The charm is in the
+            // vintage - a 1980s advert before a 1980s film - so each one can name a decade,
+            // and the schedule prefers the ones that match what it is about to show.
+            // =========================================================================
+
+            function channelAdverts() {
+                var channel = currentChannel();
+                if (!channel) { return []; }
+                if (!channel.Adverts) { channel.Adverts = []; }
+                return channel.Adverts;
+            }
+
+            function renderAdverts() {
+                var host = q('#AdvertList');
+                if (!host) { return; }
+                var list = channelAdverts();
+                host.innerHTML = '';
+
+                if (!list.length) {
+                    host.innerHTML = '<div class="fieldDescription">No adverts. Breaks are trailers only.</div>';
+                    return;
+                }
+
+                list.forEach(function (advert, index) {
+                    var row = document.createElement('div');
+                    row.className = 'listItem';
+                    row.style.display = 'flex';
+                    row.style.alignItems = 'center';
+                    row.style.gap = '0.8em';
+
+                    var label = document.createElement('div');
+                    label.style.flexGrow = '1';
+                    label.style.minWidth = '0';
+                    var title = document.createElement('div');
+                    title.textContent = advert.Name || advert.Url;
+                    var note = document.createElement('div');
+                    note.className = 'fieldDescription';
+                    note.style.margin = '0';
+                    note.textContent = [
+                        (advert.DurationSeconds || 30) + ' s',
+                        advert.Decade ? advert.Decade + 's' : 'any decade',
+                        advert.Url
+                    ].join('  ·  ');
+                    label.appendChild(title);
+                    label.appendChild(note);
+                    row.appendChild(label);
+
+                    row.appendChild(scheduleButton('Remove', function () {
+                        channelAdverts().splice(index, 1);
+                        renderAdverts();
+                    }));
+
+                    host.appendChild(row);
+                });
+            }
+
+            function addAdvert() {
+                var url = (q('#AdvertUrl').value || '').trim();
+                if (!url) { return; }
+
+                channelAdverts().push({
+                    Name: (q('#AdvertName').value || '').trim(),
+                    Url: url,
+                    DurationSeconds: Math.max(1, parseInt(q('#AdvertSeconds').value, 10) || 30),
+                    Decade: Math.max(0, parseInt(q('#AdvertDecade').value, 10) || 0),
+                    Enabled: true
+                });
+
+                q('#AdvertUrl').value = '';
+                q('#AdvertName').value = '';
+                renderAdverts();
+            }
+
+            // =========================================================================
             // Editing the schedule
             //
             // A LiteTV schedule is generated from the anchor and the queue, so there is no
@@ -2560,6 +2665,7 @@
                 });
             })();
 
+            q('#AddAdvert').addEventListener('click', addAdvert);
             q('#LoadSchedule').addEventListener('click', loadSchedule);
 
             var scheduleEditTimer = null;

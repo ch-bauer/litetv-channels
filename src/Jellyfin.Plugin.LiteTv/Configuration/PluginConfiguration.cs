@@ -90,6 +90,45 @@ public class TrailerSlot
 }
 
 /// <summary>
+/// An advert the channel plays in its breaks.
+/// <para>
+/// A break is already filled with trailers for what is coming up; an advert is the same
+/// machinery pointed at something that is not in the library at all. Which is the joke: a
+/// 1980s advert before a 1980s film is what makes a made-up channel feel like a channel, and
+/// a current one is just noise. Hence <see cref="Decade"/>.
+/// </para>
+/// <para>
+/// An address rather than a file, resolved by the client the same way a linked trailer is. The
+/// server never fetches it and nothing is reported to Jellyfin: an advert is not library
+/// content and has no item to record against.
+/// </para>
+/// </summary>
+public class Advert
+{
+    /// <summary>Gets or sets what to call it in the guide.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the address to play - a YouTube link, or anything the client can resolve.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets how long to give it, in seconds. An address has no runtime the server can
+    /// read, and a break is a fixed number of minutes that the arithmetic has to fit.
+    /// </summary>
+    public int DurationSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Gets or sets the decade this advert belongs to - 1980 for the eighties - or zero when it
+    /// belongs to none. Adverts of the decade the programme was made in are preferred, which is
+    /// the whole charm of the thing.
+    /// </summary>
+    public int Decade { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether it is in rotation.</summary>
+    public bool Enabled { get; set; } = true;
+}
+
+/// <summary>
 /// What a channel does instead of what it would have done, at one fixed moment.
 /// <para>
 /// A LiteTV schedule is generated rather than stored: the anchor plus the queue decide what is
@@ -198,6 +237,13 @@ public class TvChannel
     /// what its queue and anchor say it is.
     /// </summary>
     public List<ScheduleEdit> ScheduleEdits { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the adverts this channel plays in its breaks, drawn from in television's
+    /// order: adverts first, the trailer last, so a break ends on what the channel is about to
+    /// show. Empty - the usual case - means breaks are trailers only.
+    /// </summary>
+    public List<Advert> Adverts { get; set; } = new();
 
     /// <summary>
     /// Gets or sets how many consecutive items are taken from each source before
