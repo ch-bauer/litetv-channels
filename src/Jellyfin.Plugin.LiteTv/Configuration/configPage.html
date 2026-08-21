@@ -63,25 +63,6 @@
                     </div>
                 </div>
 
-                <div class="inputContainer">
-                    <input is="emby-input" type="text" id="YouTubeCookie" label="YouTube session cookie (optional)" />
-                    <div class="fieldDescription">
-                        Paste the whole <code>Cookie</code> header from a logged-in YouTube tab to ask
-                        as that account instead of anonymously. An anonymous asker is handed one 360p
-                        address and nineteen renditions with no address at all, and the client that
-                        does return the full ladder is refused a good part of the time with "Sign in to
-                        confirm you're not a bot" — an account is the literal answer to that.
-                        <br /><br />
-                        <strong>Use an account you do not care about.</strong> This is a server asking
-                        YouTube for streams on a schedule, which is the shape of thing accounts get
-                        rate-limited and banned for. It is stored in plain text like every other
-                        setting here and anybody who can read this configuration can act as that
-                        account, so never post a dump of it. Leave it empty to keep asking
-                        anonymously — nothing is sent when it is blank, and the Android VR client
-                        never carries it either way.
-                    </div>
-                </div>
-
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
                 <div class="fieldDescription" style="margin-bottom: 0.6em;">
                     Based on the media in your library. Adding a suggestion creates a channel you can still edit below.
@@ -1512,7 +1493,6 @@
                 config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
                 config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
                 config.YouTubeClient = q('#YouTubeClient').value || '';
-                config.YouTubeCookie = q('#YouTubeCookie').value || '';
 
                 list.innerHTML = '<div class="listItem">Saving, then asking the server…</div>';
                 ApiClient.updatePluginConfiguration(pluginId, config)
@@ -2457,7 +2437,6 @@
                     q('#ChannelUserName').value = config.ChannelUserName || 'LiteTV';
                     q('#SkipTrailerSegments').checked = config.SkipTrailerSegments !== false;
                     q('#YouTubeClient').value = config.YouTubeClient || '';
-                    q('#YouTubeCookie').value = config.YouTubeCookie || '';
                     currentIndex = config.Channels.length ? 0 : -1;
                     renderChannelSelect();
                     loadEffectiveArt().then(function () { renderEditor(); renderScheduleEdits(); });
@@ -2886,7 +2865,6 @@
                     config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
                 config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
                 config.YouTubeClient = q('#YouTubeClient').value || '';
-                config.YouTubeCookie = q('#YouTubeCookie').value || '';
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
                         renderBlockSelect();
