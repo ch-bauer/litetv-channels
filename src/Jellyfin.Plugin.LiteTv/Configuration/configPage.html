@@ -980,6 +980,9 @@
                 // which is what left "Marathon: Fünf Freunde Filmreihe" with an empty gallery.
                 // So ask about the collection, and if that comes back empty ask about the films
                 // inside it: they are what the channel actually airs.
+                webArtworkIds = [itemId];
+                webArtworkByShape = {};
+
                 remoteImages(itemId)
                     .then(function (images) {
                         // A collection is asked about *and* opened, every time. A film series
@@ -997,6 +1000,9 @@
                             .then(function (result) {
                                 var children = result.Items || [];
                                 if (!children.length) { return images; }
+                                // The films count as titles of this gallery too, so asking for
+                                // a shape by name later asks about all of them.
+                                webArtworkIds = [itemId].concat(children.map(function (c) { return c.Id; }));
                                 return Promise
                                     .all(children.map(function (child) { return remoteImages(child.Id); }))
                                     .then(function (lists) {
@@ -1021,22 +1027,64 @@
                     });
             }
 
-            /** What the providers hold for one title, German first. Never rejects. */
-            function remoteImages(itemId) {
-                // The providers hold two to four hundred pictures for a well-known film and
-                // this asks for a fixed slice of them, so the limit decides which languages are
-                // even in the room before germanFirst gets to order them. It is generous now
-                // that the strip draws a page at a time: the answer is one request and some
-                // JSON, and it is the tiles - a fetch each - that used to make this expensive.
-                return ApiClient.getJSON(ApiClient.getUrl('Items/' + itemId + '/RemoteImages', {
-                    includeAllLanguages: true,
-                    limit: 200
-                })).then(function (result) {
-                    return germanFirst(result.Images || []);
-                }).catch(function () {
-                    // One title having no providers attached is not a failure of the gallery.
-                    return [];
-                });
+            /**
+             * What the providers hold for one title, German first. Never rejects.
+             *
+             * The shape has to be asked for by name when a particular one is wanted, and this
+             * is not a nicety. Measured on the test server: an untyped request for "Marvel's
+             * Agents of S.H.I.E.L.D." answers with 430 pictures of which the first few hundred
+             * are TheMovieDB posters, and the **21 banners TheTVDB holds for it are past the
+             * end of any sane slice** - so a gallery that asks once and filters what came back
+             * will tell you there are no banners while the provider is holding twenty-one of
+             * them. Asked by type, the same series answers with all 21 and nothing else.
+             */
+            function remoteImages(itemId, type) {
+                var query = { includeAllLanguages: true, limit: type ? 60 : 200 };
+                if (type) { query.type = type; }
+
+                return ApiClient.getJSON(ApiClient.getUrl('Items/' + itemId + '/RemoteImages', query))
+                    .then(function (result) {
+                        return germanFirst(result.Images || []);
+                    }).catch(function () {
+                        // One title having no providers attached is not a failure of the gallery.
+                        return [];
+                    });
+            }
+
+            /**
+             * The shapes worth asking for by name, widest first.
+             *
+             * Banner leads because it is the slot that cannot be filled any other way: it is
+             * about five and a half to one, nothing else is, and TheTVDB is the only provider
+             * here that draws them - eight to twenty-one per series, and none at all for a
+             * film, which is why the film-shaped slots fall to Backdrop and Thumb.
+             */
+            var ARTWORK_SHAPES = ['Banner', 'Backdrop', 'Thumb', 'Primary', 'Logo'];
+
+            /** The titles the gallery is currently drawing from: a title, or a collection and its films. */
+            var webArtworkIds = [];
+
+            /** Pictures already fetched, keyed by shape. Asking twice for the same shape is waste. */
+            var webArtworkByShape = {};
+
+            /** Every title's pictures of one shape, interleaved so a collection opens on a spread. */
+            function remoteImagesOfShape(type) {
+                if (webArtworkByShape[type]) { return Promise.resolve(webArtworkByShape[type]); }
+
+                return Promise
+                    .all(webArtworkIds.map(function (id) { return remoteImages(id, type); }))
+                    .then(function (lists) {
+                        var merged = [];
+                        for (var i = 0; ; i++) {
+                            var any = false;
+                            for (var j = 0; j < lists.length; j++) {
+                                if (i < lists[j].length) { merged.push(lists[j][i]); any = true; }
+                            }
+                            if (!any) { break; }
+                        }
+                        webArtworkByShape[type] = merged;
+                        return merged;
+                    });
             }
 
             /** How many provider pictures are drawn at once. */
@@ -1065,24 +1113,16 @@
                     return;
                 }
 
+                webArtworkByShape = { All: images };
+
                 var hint = document.createElement('div');
                 hint.className = 'fieldDescription';
                 hint.textContent = 'German pictures first, then untitled ones. Click a picture to put it in the highlighted slot above. These are addresses on the provider\u2019s own servers — use Upload if you would rather the picture lived here.';
                 gallery.appendChild(hint);
 
-                // The shapes actually present, in the order they are useful for a channel.
-                var order = ['Backdrop', 'Thumb', 'Banner', 'Primary', 'Logo', 'Disc', 'Art'];
-                var kinds = [];
-                images.forEach(function (image) {
-                    if (image.Type && kinds.indexOf(image.Type) < 0) { kinds.push(image.Type); }
-                });
-                kinds.sort(function (a, b) {
-                    var ai = order.indexOf(a), bi = order.indexOf(b);
-                    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-                });
-
                 var filter = 'All';
                 var shown = 0;
+                var current = images;
 
                 var chips = document.createElement('div');
                 chips.style.display = 'flex';
@@ -1104,52 +1144,63 @@
                 more.style.marginTop = '0.7em';
                 gallery.appendChild(more);
 
-                function matching() {
-                    return filter === 'All'
-                        ? images
-                        : images.filter(function (image) { return image.Type === filter; });
-                }
-
                 function drawMore() {
-                    var list = matching();
-                    var upto = Math.min(shown + WEB_ARTWORK_PAGE, list.length);
+                    var upto = Math.min(shown + WEB_ARTWORK_PAGE, current.length);
                     for (var i = shown; i < upto; i++) {
-                        strip.appendChild(remoteArtworkTile(list[i]));
+                        strip.appendChild(remoteArtworkTile(current[i]));
                     }
                     shown = upto;
-                    more.style.display = shown < list.length ? '' : 'none';
-                    more.textContent = 'Load more (' + (list.length - shown) + ' left)';
+                    more.style.display = shown < current.length ? '' : 'none';
+                    more.textContent = 'Load more (' + (current.length - shown) + ' left)';
                 }
 
-                function redraw() {
+                function show(list) {
+                    current = list;
                     strip.innerHTML = '';
                     shown = 0;
+                    if (!list.length) {
+                        strip.innerHTML = '<div class="fieldDescription">No ' + filter.toLowerCase() + ' pictures for this title. TheTVDB is the only provider here that draws banners, and it draws them for series rather than for films.</div>';
+                        more.style.display = 'none';
+                        return;
+                    }
                     drawMore();
                 }
 
-                ['All'].concat(kinds).forEach(function (kind) {
-                    var count = kind === 'All'
-                        ? images.length
-                        : images.filter(function (image) { return image.Type === kind; }).length;
-
+                ['All'].concat(ARTWORK_SHAPES).forEach(function (kind) {
                     var chip = document.createElement('button');
                     chip.setAttribute('is', 'emby-button');
                     chip.type = 'button';
                     chip.className = 'raised emby-button';
-                    chip.textContent = kind + ' (' + count + ')';
+                    chip.textContent = kind === 'All' ? 'All (' + images.length + ')' : kind;
                     chip.style.opacity = kind === filter ? '1' : '0.6';
                     chip.addEventListener('click', function () {
                         filter = kind;
                         Array.prototype.forEach.call(chips.children, function (other) {
                             other.style.opacity = other === chip ? '1' : '0.6';
                         });
-                        redraw();
+
+                        if (kind === 'All') {
+                            show(webArtworkByShape.All);
+                            return;
+                        }
+
+                        // Asked for by name rather than filtered out of what is already here.
+                        // The untyped answer is a few hundred posters and the banners sit past
+                        // the end of it, so filtering would report none while the provider
+                        // holds twenty.
+                        strip.innerHTML = '<div class="fieldDescription">Asking for ' + kind.toLowerCase() + ' pictures…</div>';
+                        more.style.display = 'none';
+                        remoteImagesOfShape(kind).then(function (list) {
+                            if (filter !== kind) { return; }
+                            chip.textContent = kind + ' (' + list.length + ')';
+                            show(list);
+                        });
                     });
                     chips.appendChild(chip);
                 });
 
                 more.addEventListener('click', drawMore);
-                redraw();
+                show(images);
             }
 
             /**
