@@ -65,7 +65,7 @@ internal sealed record AppBuild(
                 path,
                 version,
                 gradle.Groups["type"].Value.ToLowerInvariant(),
-                gradle.Groups["abi"].Success ? gradle.Groups["abi"].Value : null,
+                AbiOf(gradle.Groups["abi"].Success ? gradle.Groups["abi"].Value : null, fileName),
                 bytes,
                 modified);
         }
@@ -81,9 +81,35 @@ internal sealed record AppBuild(
             path,
             parsed,
             fileName.Contains("debug", StringComparison.OrdinalIgnoreCase) ? "debug" : "release",
-            KnownAbis.FirstOrDefault(a => fileName.Contains(a, StringComparison.OrdinalIgnoreCase)),
+            AbiOf(null, fileName),
             bytes,
             modified);
+    }
+
+    /// <summary>
+    /// The ABI, and only if it is one.
+    /// <para>
+    /// Whatever the name says has to be checked against the ABIs that exist, because the ABI
+    /// goes straight into an asset name and the app asks for asset names <em>exactly</em>: an
+    /// ABI read wrong is an update that is never offered and never explained. A name can be
+    /// wrong in the middle and still match - a hash that is not hex leaves the version's commit
+    /// part unmatched, the build number takes its place, and everything after it looks like an
+    /// ABI. When it is not one, the file is treated as universal, which is the honest reading of
+    /// "the name does not say".
+    /// </para>
+    /// </summary>
+    private static string? AbiOf(string? candidate, string fileName)
+    {
+        if (candidate is not null)
+        {
+            var exact = KnownAbis.FirstOrDefault(a => string.Equals(a, candidate, StringComparison.OrdinalIgnoreCase));
+            if (exact is not null)
+            {
+                return exact;
+            }
+        }
+
+        return KnownAbis.FirstOrDefault(a => fileName.Contains(a, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
