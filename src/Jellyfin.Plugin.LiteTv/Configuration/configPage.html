@@ -428,7 +428,7 @@
             }
 
             /** The picture the plugin currently falls back to for one slot, or ''. */
-            function fallbackSrc(channel, key) {
+            function fallbackSrc(channel, key, maxWidth) {
                 var image = effectiveArt[String(channel.Id).replace(/-/g, '').toLowerCase()];
                 if (!image) { return ''; }
                 // One slot, one fallback. Showing the same picture under all three would hide
@@ -441,7 +441,10 @@
                     : key === 'BannerUrl' ? image.BannerType
                         : image.BackdropType;
                 if (!itemId || !type) { return ''; }
-                return ApiClient.serverAddress() + '/Items/' + itemId + '/Images/' + type + '?maxWidth=400';
+                // Four hundred pixels is plenty for the thumbnail beside the slot and nowhere
+                // near enough to crop from, so the caller can ask for the real thing.
+                return ApiClient.serverAddress() + '/Items/' + itemId + '/Images/' + type
+                    + '?maxWidth=' + (maxWidth || 400);
             }
 
             function artworkOf(channel) {
@@ -568,14 +571,23 @@
                     crop.type = 'button';
                     crop.className = 'raised emby-button';
                     crop.textContent = 'Crop…';
-                    crop.title = 'Choose what part of this picture the slot shows';
+                    crop.title = 'Choose what part of this picture the slot shows — works on the '
+                        + 'automatic picture as well as one you chose';
                     crop.addEventListener('click', function () {
+                        // The automatic picture can be cropped too. It is the one most in need
+                        // of it - nobody chose it for this shape, the plugin found it in the
+                        // channel's lineup - and refusing to crop it meant uploading a copy of
+                        // a picture the server already had just to move the frame on it.
+                        // Cropping one turns it into a chosen picture, which is what saving a
+                        // crop means anyway.
                         var current = art[kind.key];
-                        if (!current) {
-                            Dashboard.alert('Put a picture in this slot first, then crop it.');
+                        var src = current ? artworkSrc(current) : fallbackSrc(channel, kind.key, 1920);
+                        if (!src) {
+                            Dashboard.alert('There is no picture in this slot yet, and none was '
+                                + 'found in the channel’s content. Choose one first, then crop it.');
                             return;
                         }
-                        beginCrop(artworkSrc(current), kind);
+                        beginCrop(src, kind);
                     });
 
                     var keep = document.createElement('button');
