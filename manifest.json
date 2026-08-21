@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.36.0",
+        "changelog": "The crop tool works on the automatic picture. It used to refuse any slot that had nothing chosen for it, which is the wrong way round: the automatic picture is the one most in need of cropping - nobody chose it for that shape, the plugin found it in the channel's lineup - and the only way to move the frame on it was to upload a copy of a picture the server already had. Cropping one now works exactly as cropping a chosen picture does, and turns it into a chosen picture, which is what saving a crop means anyway. It is fetched at full size rather than at the size of the thumbnail beside the slot, so a crop is a crop of the picture and not of a preview of it.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.36.0/litetv-channels_1.0.36.0.zip",
+        "checksum": "122d89105bf4243930c268793d97f4d0",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
         "version": "1.0.35.0",
         "changelog": "SponsorBlock, for trailers. German trailers mostly come from channels that wrap them in a branded card at the front and a plea to subscribe at the back, and a minute-long break has no room for either. GET /LiteTv/Trailer/{id} now carries the stretches to seek past, and a client is expected to take them without asking - the skip button an app shows for library content is right for a programme and wrong inside an advert. The lookup uses the hash-prefix form of the API, so the service is asked about every video whose id starts with the same four characters and is never told which one is playing. There is a switch for it on the configuration page; turned off, no request is made at all.\n\nA collection is followed to the films inside it when artwork is derived. A BoxSet is a name with a list behind it and usually has no pictures of its own, so a marathon channel built from one came out blank on the television and offered nothing in the configuration's gallery, while each film it airs has a poster and a thumb. The collection is still asked first: artwork somebody made for a collection was made for exactly this. The web gallery does the same, falling back to the films when the providers hold nothing for the collection itself.",
         "targetAbi": "10.11.0.0",
