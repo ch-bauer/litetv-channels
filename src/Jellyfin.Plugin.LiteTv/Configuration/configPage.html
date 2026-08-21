@@ -301,6 +301,30 @@
                     </button>
                 </div>
             </form>
+
+            <h3 style="margin-top: 2em;">App updates</h3>
+            <div class="fieldDescription" style="margin-bottom: 0.8em;">
+                This server can hand the television its own app updates, so a new build is
+                uploaded here instead of being pushed over ADB — and ADB can then be switched
+                off on the box. Put the address below into the app's
+                <strong>Settings &rarr; Advanced &rarr; Update URL</strong> once; after that it
+                checks here by itself and offers whatever build is newer than the one installed.
+            </div>
+
+            <div class="inputContainer">
+                <input is="emby-input" type="text" id="UpdateUrl" readonly label="Update URL for the app" />
+            </div>
+
+            <div style="margin-bottom: 0.6em;">
+                <button is="emby-button" type="button" id="UploadBuild" class="raised"><span>Upload a build</span></button>
+                <input type="file" id="UploadBuildFile" accept=".apk,application/vnd.android.package-archive" style="display: none;" />
+                <span id="UploadBuildProgress" style="margin-left: 0.8em;"></span>
+            </div>
+            <div class="inputContainer">
+                <input is="emby-input" type="text" id="UpdateNotes" label="What changed in this build (optional, shown on the TV before installing)" />
+            </div>
+
+            <div class="paperList" id="UpdateBuildList" style="margin-bottom: 2em;"></div>
         </div>
     </div>
 
@@ -1937,10 +1961,141 @@
                     renderChannelSelect();
                     loadEffectiveArt().then(renderEditor);
                     loadSuggestions();
+                    loadBuilds();
                     Dashboard.hideLoadingMsg();
                     loading = false;
                 });
             }
+
+            // =========================================================================
+            // App updates
+            //
+            // The plugin answers the app's update check with the shape GitHub's releases API
+            // uses, and serves the APK itself. This is the other end of that: a place to put a
+            // build, and a list of what the television is currently being offered.
+            // =========================================================================
+
+            function renderBuilds(store) {
+                q('#UpdateUrl').value = store.UpdateUrl || '';
+                var host = q('#UpdateBuildList');
+                host.innerHTML = '';
+
+                if (!store.Builds || !store.Builds.length) {
+                    var empty = document.createElement('div');
+                    empty.className = 'listItem';
+                    empty.style.padding = '0.6em 0.4em';
+                    empty.textContent = 'No builds uploaded yet. The app will be told there is nothing to install.';
+                    host.appendChild(empty);
+                    return;
+                }
+
+                store.Builds.forEach(function (build) {
+                    var row = document.createElement('div');
+                    row.className = 'listItem';
+                    row.style.display = 'flex';
+                    row.style.alignItems = 'center';
+                    row.style.padding = '0.5em 0.4em';
+
+                    var text = document.createElement('div');
+                    text.style.flex = '1';
+                    text.style.minWidth = '0';
+
+                    var title = document.createElement('div');
+                    title.textContent = build.Version + ' · ' + build.BuildType + (build.Abi ? ' · ' + build.Abi : '');
+                    if (build.Offered) {
+                        title.style.fontWeight = '600';
+                    }
+
+                    var sub = document.createElement('div');
+                    sub.className = 'fieldDescription';
+                    sub.style.margin = '0';
+                    sub.textContent = build.FileName
+                        + ' — ' + (build.Bytes / (1024 * 1024)).toFixed(1) + ' MB'
+                        + (build.Offered ? ' — offered to the app' : '');
+
+                    text.appendChild(title);
+                    text.appendChild(sub);
+
+                    var remove = document.createElement('button');
+                    remove.setAttribute('is', 'emby-button');
+                    remove.type = 'button';
+                    remove.className = 'raised emby-button';
+                    remove.textContent = 'Delete';
+                    remove.addEventListener('click', function () {
+                        deleteBuild(build.FileName);
+                    });
+
+                    row.appendChild(text);
+                    row.appendChild(remove);
+                    host.appendChild(row);
+                });
+            }
+
+            function loadBuilds() {
+                return ApiClient.fetch({
+                    url: ApiClient.getUrl('LiteTv/Update/Builds'),
+                    type: 'GET',
+                    dataType: 'json'
+                }).then(renderBuilds).catch(function () {
+                    // An older plugin build on a server that has not restarted yet has no such
+                    // endpoint. Saying nothing is better than an alert on a page that is
+                    // otherwise working.
+                });
+            }
+
+            function deleteBuild(fileName) {
+                return ApiClient.fetch({
+                    url: ApiClient.getUrl('LiteTv/Update/Builds/' + encodeURIComponent(fileName)),
+                    type: 'DELETE',
+                    dataType: 'json'
+                }).then(renderBuilds).catch(function (err) {
+                    Dashboard.alert(String(err));
+                });
+            }
+
+            q('#UploadBuild').addEventListener('click', function () {
+                q('#UploadBuildFile').click();
+            });
+
+            q('#UploadBuildFile').addEventListener('change', function () {
+                var file = this.files && this.files[0];
+                this.value = '';
+                if (!file) { return; }
+
+                var notes = (q('#UpdateNotes').value || '').trim();
+                var progress = q('#UploadBuildProgress');
+                progress.textContent = 'Uploading ' + file.name + ' (' + (file.size / (1024 * 1024)).toFixed(1) + ' MB)…';
+
+                // Not through ApiClient: this is tens of megabytes of raw body, and the same
+                // plain fetch the artwork upload uses is the one thing here that streams.
+                var url = ApiClient.getUrl('LiteTv/Update/Builds/' + encodeURIComponent(file.name));
+                if (notes) {
+                    url += (url.indexOf('?') >= 0 ? '&' : '?') + 'notes=' + encodeURIComponent(notes);
+                }
+
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/octet-stream',
+                        'Authorization': 'MediaBrowser Token="' + ApiClient.accessToken() + '"'
+                    },
+                    body: file
+                }).then(function (res) {
+                    if (!res.ok) {
+                        return res.text().then(function (text) {
+                            throw new Error(text || ('upload failed: ' + res.status));
+                        });
+                    }
+                    return res.json();
+                }).then(function (store) {
+                    progress.textContent = 'Uploaded. The television will be offered ' + (store.LatestVersion || 'nothing') + '.';
+                    q('#UpdateNotes').value = '';
+                    renderBuilds(store);
+                }).catch(function (err) {
+                    progress.textContent = '';
+                    Dashboard.alert(String(err));
+                });
+            });
 
             document.querySelector('#LiteTvConfigPage').addEventListener('pageshow', loadPage);
 

@@ -26,7 +26,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         // Here rather than in a startup task because it is a one-line file edit that has to
         // have happened before the web client asks Plugin Pages what to draw, and the plugin
         // constructor is the earliest point at which the paths are known.
-        SidebarLink.Register(applicationPaths, logger);
+        SidebarLink.Remove(applicationPaths, logger);
     }
 
     /// <inheritdoc />
@@ -55,7 +55,18 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 EmbeddedResourcePath = string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
                     "{0}.Configuration.configPage.html",
-                    GetType().Namespace)
+                    GetType().Namespace),
+
+                // In the dashboard's own left-hand menu, not only behind Dashboard → Plugins →
+                // LiteTV. This is the screen that gets edited - channels, artwork, the schedule -
+                // and three navigations to reach it is three too many. Jellyfin has always had
+                // this and the plugin simply never asked.
+                // No MenuSection: every plugin on this server that appears in that menu - Intro
+                // Skipper, Jellyfin Enhanced, JS Injector, Segment Editor - leaves it unset, and
+                // matching them is the point.
+                EnableInMainMenu = true,
+                DisplayName = "LiteTV",
+                MenuIcon = "live_tv"
             }
         };
     }
