@@ -43,7 +43,15 @@ public sealed class YouTubeStreamResolver
     /// </summary>
     /// <param name="Url">The video, or the whole trailer when there is no separate audio.</param>
     /// <param name="AudioUrl">The audio, when video and audio are separate streams.</param>
-    public sealed record ResolvedStream(string Url, string? AudioUrl);
+    /// <summary>
+    /// What was resolved, and how - the how being reportable so that field testing on a
+    /// television does not have to be done by reading the server log.
+    /// </summary>
+    /// <param name="Url">The stream to play.</param>
+    /// <param name="AudioUrl">Its audio, when the picture is a stream of its own.</param>
+    /// <param name="Client">Which client answered.</param>
+    /// <param name="Quality">The height in pixels, or 0 when nothing said.</param>
+    public sealed record ResolvedStream(string Url, string? AudioUrl, string Client = "", int Quality = 0);
 
     /// <summary>
     /// How long a resolved URL is offered again before it is looked up afresh.
@@ -295,7 +303,15 @@ public sealed class YouTubeStreamResolver
             return best is { Quality: >= GoodEnough } ? best : null;
         }
 
-        foreach (var client in Clients)
+        // One client only, when somebody testing on a television has named one. What YouTube
+        // gives back depends on who is asking, and that cannot be settled from here - see
+        // PluginConfiguration.YouTubeClient.
+        var only = Plugin.Instance?.Configuration.YouTubeClient;
+        var ladder = string.IsNullOrWhiteSpace(only)
+            ? Clients
+            : Clients.Where(c => string.Equals(c.Name, only, StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        foreach (var client in ladder.Length == 0 ? Clients : ladder)
         {
             var found = await TryInnertubeAsync(id, client, cancellationToken).ConfigureAwait(false);
             if (Better(found) is { } good)
@@ -726,7 +742,7 @@ public sealed class YouTubeStreamResolver
     private sealed record StreamCandidate(string Url, int Quality, string Source, string? AudioUrl = null)
     {
         /// <summary>Gets what the caller plays: the addresses, without the ranking.</summary>
-        public ResolvedStream Stream => new(Url, AudioUrl);
+        public ResolvedStream Stream => new(Url, AudioUrl, Source, Quality);
     }
 
     /// <summary>

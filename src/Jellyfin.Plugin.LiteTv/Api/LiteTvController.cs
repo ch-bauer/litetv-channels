@@ -433,6 +433,8 @@ public class LiteTvController : ControllerBase
                 AudioUrl = stream.AudioUrl,
                 UserAgent = YouTubeStreamResolver.UserAgent,
                 Referer = YouTubeStreamResolver.Referer,
+                Client = stream.Client,
+                Quality = stream.Quality,
                 SkipSegments = await SkipSegmentsAsync(trailer.Url).ConfigureAwait(false)
             };
         }
@@ -477,6 +479,8 @@ public class LiteTvController : ControllerBase
             AudioUrl = stream.AudioUrl,
             UserAgent = YouTubeStreamResolver.UserAgent,
             Referer = YouTubeStreamResolver.Referer,
+            Client = stream.Client,
+            Quality = stream.Quality,
             SkipSegments = await SkipSegmentsAsync(url).ConfigureAwait(false)
         };
     }
@@ -996,6 +1000,15 @@ public class ResolvedTrailerDto
 
     /// <summary>Gets or sets the User-Agent the stream must be requested with.</summary>
     public string UserAgent { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets which YouTube client answered, so a trailer that looks wrong on a
+    /// television can be explained without reading the server log.
+    /// </summary>
+    public string Client { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the height in pixels of what was resolved, or 0 when unknown.</summary>
+    public int Quality { get; set; }
 
     /// <summary>Gets or sets the Referer the stream must be requested with.</summary>
     public string Referer { get; set; } = string.Empty;

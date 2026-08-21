@@ -45,6 +45,20 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool SkipTrailerSegments { get; set; } = true;
 
+    /// <summary>
+    /// Gets or sets which YouTube client the trailer resolver pretends to be, or an empty
+    /// string to try them all in order.
+    /// <para>
+    /// Here because this is the one thing about trailers that cannot be settled from a server.
+    /// What YouTube hands over depends on who is asking, and it differs by client, by day, and
+    /// by whether the asker looks like a real device: Android VR returns unobfuscated addresses
+    /// for every rendition on a phone running microG, and answers LOGIN_REQUIRED from a
+    /// server that has no Google identity to offer. Whoever is testing on the television can
+    /// name a client here and see for themselves rather than take a measurement's word for it.
+    /// </para>
+    /// </summary>
+    public string YouTubeClient { get; set; } = string.Empty;
+
 }
 
 /// <summary>
