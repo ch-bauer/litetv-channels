@@ -92,30 +92,38 @@ public sealed class YouTubeStreamResolver
     /// <summary>
     /// The clients we claim to be, in the order they are tried.
     /// <para>
-    /// The order is measured rather than inherited. Moonfin asks ANDROID_VR first and the TV
-    /// player second; on 20 Aug 2026, against four of this library's own trailers, ANDROID_VR
-    /// answered <c>LOGIN_REQUIRED</c> and the TV player answered <c>ERROR</c> every time. IOS
-    /// answered OK but offered only adaptive streams - video and audio apart, no use to a
-    /// player handed a single URL. <b>ANDROID</b> resolved all four, to muxed H.264 with AAC,
-    /// which is what a television decodes in hardware. So ANDROID leads.
+    /// <b>No API key.</b> Every port of this trick carries a table of hardcoded
+    /// <c>AIzaSy...</c> keys copied from YouTube's own players, and on 21 Aug 2026 the player
+    /// endpoint was measured answering identically with and without one. They were a liability
+    /// with no upside: they look like credentials in a public repository, they belong to
+    /// somebody else, and they are precisely the sort of constant that is rotated without
+    /// notice. What actually identifies the caller is the client name, its version and the
+    /// matching User-Agent, which is all that is sent now - the same shape yt-dlp settled on.
     /// </para>
     /// <para>
-    /// The others are kept behind it rather than deleted: they cost one fast failure each,
-    /// they answer for videos ANDROID sometimes will not, and which of them works is exactly
-    /// the thing that changes without notice.
+    /// The order is measured rather than inherited. Moonfin asks ANDROID_VR first and the TV
+    /// player second; measured on 20 and 21 Aug 2026, ANDROID_VR and the TV player answer
+    /// <c>LOGIN_REQUIRED</c>, WEB and MWEB answer <c>UNPLAYABLE</c>, IOS answers with adaptive
+    /// streams up to 720p, and <b>ANDROID</b> answers with the full ladder to 1080p. So ANDROID
+    /// leads and IOS backs it up.
+    /// </para>
+    /// <para>
+    /// The ones that fail today are kept behind them rather than deleted: they cost one fast
+    /// failure each, they answer for videos ANDROID sometimes will not, and which of them works
+    /// is exactly the thing that changes without notice. Re-measure before trusting any of it.
     /// </para>
     /// </summary>
     private static readonly InnertubeClient[] Clients =
     {
-        new("ANDROID", "3", "20.10.41", "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w", "MOBILE",
+        new("ANDROID", "3", "20.10.41", "MOBILE",
             "com.google.android.youtube/20.10.41 (Linux; U; Android 11) gzip"),
-        new("IOS", "5", "20.10.4", "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc", "MOBILE",
+        new("IOS", "5", "20.10.4", "MOBILE",
             "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"),
-        new("ANDROID_VR", "28", "1.60.19", "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w", "MOBILE",
-            "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; Quest 3 Build/SQ3A.220605.009.A1) gzip"),
-        new("TVHTML5_SIMPLY_EMBEDDED_PLAYER", "85", "2.0", "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8", "TV",
-            "Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1"),
-        new("WEB", "1", "2.20250312.04.00", "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8", "DESKTOP", UserAgent)
+        new("ANDROID_VR", "28", "1.62.27", "MOBILE",
+            "com.google.android.apps.youtube.vr.oculus/1.62.27 (Linux; U; Android 12L; Quest 3 Build/SQ3A.220605.009.A1) gzip"),
+        new("TVHTML5", "7", "7.20250101.10.00", "TV",
+            "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version"),
+        new("WEB", "1", "2.20250312.04.00", "DESKTOP", UserAgent)
     };
 
     private readonly IHttpClientFactory _httpClientFactory;
@@ -309,7 +317,7 @@ public sealed class YouTubeStreamResolver
 
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
-                $"https://www.youtube.com/youtubei/v1/player?key={client.ApiKey}&prettyPrint=false")
+                "https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
             {
                 Content = JsonContent.Create(body)
             };
@@ -430,9 +438,16 @@ public sealed class YouTubeStreamResolver
     /// mistake.
     /// </para>
     /// <para>
-    /// H.264 in MP4, and nothing above 1080p: a television decodes that combination in
-    /// hardware, and a trailer that stutters through VP9 at 2160p is worse than one that does
-    /// not. Audio is AAC, preferring stereo - a 5.1 track is offered and would be remixed by
+    /// H.264 in MP4 is preferred and nothing above 1080p is taken: a television decodes that
+    /// combination in hardware, and a trailer that stutters through VP9 at 2160p is worse than
+    /// one that does not. The preference is deliberately small - a hundred points against a
+    /// height in the hundreds - so that it decides between two streams of the same size and
+    /// never lets 360p H.264 beat 720p VP9. AV1 is skipped outright: hardware support for it
+    /// is the one thing a set-top box of unknown vintage most often lacks, and there is always
+    /// an H.264 or VP9 rendition beside it.
+    /// </para>
+    /// <para>
+    /// Audio is AAC, preferring stereo - a 5.1 track is offered and would be remixed by
     /// whatever the set is plugged into, which for a thirty-second trailer is a poor trade.
     /// </para>
     /// </summary>
@@ -463,14 +478,14 @@ public sealed class YouTubeStreamResolver
             if (mime.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
             {
                 var height = Height(stream);
-                if (height is 0 or > 1080)
+                if (height is 0 or > 1080 || mime.Contains("av01", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
                 var score = height;
-                if (mime.Contains("avc1", StringComparison.OrdinalIgnoreCase)) score += 4000;
-                if (mime.Contains("mp4", StringComparison.OrdinalIgnoreCase)) score += 2000;
+                if (mime.Contains("avc1", StringComparison.OrdinalIgnoreCase)) score += 100;
+                if (mime.Contains("mp4", StringComparison.OrdinalIgnoreCase)) score += 30;
                 if (score > videoScore)
                 {
                     videoScore = score;
@@ -612,7 +627,6 @@ public sealed class YouTubeStreamResolver
         string Name,
         string NameId,
         string Version,
-        string ApiKey,
         string Platform,
         string UserAgent);
 
