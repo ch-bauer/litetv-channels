@@ -90,6 +90,76 @@ public class TrailerSlot
 }
 
 /// <summary>
+/// What a channel does instead of what it would have done, at one fixed moment.
+/// <para>
+/// A LiteTV schedule is generated rather than stored: the anchor plus the queue decide what is
+/// on at any instant, which is what makes it identical on every client, free to compute and
+/// endless - the channel loops forever without anybody writing down next March. Editing it
+/// therefore cannot mean editing a stored list, because there is none. It means keeping a small
+/// set of exceptions and laying them over what the generator says.
+/// </para>
+/// <para>
+/// Each edit is an appointment: from <see cref="StartUtc"/>, for as long as its content runs.
+/// Whatever the generator had there is trimmed around it, exactly as a real broadcaster's
+/// schedule bends around a fixture. That keeps the loop, keeps every client agreeing, and costs
+/// only what is actually different from the automatic schedule.
+/// </para>
+/// <para>
+/// Keyed to an absolute instant rather than to a weekly slot, deliberately. An edit made by
+/// dragging a programme in a timeline is about *that* airing - "not this Saturday's film, that
+/// one" - and a viewer who wants something every week has <see cref="TrailerSlot"/>, which is
+/// exactly a standing weekly instruction. Absolute edits also expire by themselves: one in the
+/// past can never fire again, so the list is prunable rather than permanent.
+/// </para>
+/// </summary>
+public class ScheduleEdit
+{
+    /// <summary>Gets or sets the edit's own id, so the page can address one of many.</summary>
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>Gets or sets a value indicating whether the edit is in force.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Gets or sets when it starts.</summary>
+    public DateTime StartUtc { get; set; }
+
+    /// <summary>Gets or sets what it does.</summary>
+    public ScheduleEditKind Kind { get; set; }
+
+    /// <summary>
+    /// Gets or sets the library item to air. It brings its own runtime, which is what decides
+    /// how much of the generated schedule this edit displaces.
+    /// </summary>
+    public Guid ItemId { get; set; }
+
+    /// <summary>
+    /// Gets or sets an address to air instead - a trailer, an advert, anything the library only
+    /// links to. The client resolves and plays it; the server never fetches it.
+    /// </summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets how long to give it, in seconds. Required for an address and for
+    /// <see cref="ScheduleEditKind.Remove"/>, which has no content to take a runtime from;
+    /// ignored for a library item, which brings its own.
+    /// </summary>
+    public int DurationSeconds { get; set; }
+
+    /// <summary>Gets or sets what to call it in the guide. Empty takes the item's own name.</summary>
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>What a <see cref="ScheduleEdit"/> does to the generated schedule.</summary>
+public enum ScheduleEditKind
+{
+    /// <summary>Air this instead of whatever the generator put here.</summary>
+    Air = 0,
+
+    /// <summary>Air nothing here at all, leaving the channel dark for the duration.</summary>
+    Remove = 1
+}
+
+/// <summary>
 /// A virtual TV channel: an ordered, endlessly looping queue of library content.
 /// The schedule is fully deterministic: what is on "now" derives from the wall clock,
 /// the anchor timestamp and the item runtimes. (v2 may add optional time blocks.)
@@ -121,6 +191,13 @@ public class TvChannel
     /// Gets or sets the ordered content sources making up the loop.
     /// </summary>
     public List<ChannelSource> Sources { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the changes made to this channel's generated schedule by hand: what airs
+    /// instead, and what airs not at all. Empty - the usual case - means the channel is exactly
+    /// what its queue and anchor say it is.
+    /// </summary>
+    public List<ScheduleEdit> ScheduleEdits { get; set; } = new();
 
     /// <summary>
     /// Gets or sets how many consecutive items are taken from each source before

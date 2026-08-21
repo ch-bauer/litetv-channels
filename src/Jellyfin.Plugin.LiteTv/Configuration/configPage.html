@@ -225,7 +225,22 @@
                         The schedule is worked out on the server from the saved configuration, so this
                         saves first — otherwise it would show you the channel you had before the edit.
                     </div>
-                    <div class="paperList" id="SchedulePreview" style="margin-bottom: 1.5em;"></div>
+                    <div class="paperList" id="SchedulePreview" style="margin-bottom: 0.8em;"></div>
+
+                    <h4>Changes to this schedule</h4>
+                    <div class="fieldDescription" style="margin-bottom: 0.6em;">
+                        A channel's schedule is worked out from its content and its grid rather than
+                        written down, so it cannot be edited directly — what is stored is the
+                        difference. Each change holds its own stretch of the clock and the schedule
+                        bends around it, exactly as a broadcaster's does around a fixture. Changes are
+                        tied to a moment rather than to a weekly time; for something every week, use a
+                        trailer slot above. Ones in the past can never fire again and are safe to undo.
+                    </div>
+                    <div class="paperList" id="ScheduleEditList" style="margin-bottom: 0.8em;"></div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="ScheduleEditSearch" label="What should air instead (press Replace… on a row first)" />
+                    </div>
+                    <div class="paperList" id="ScheduleEditSearchResults" style="margin-bottom: 1.5em;"></div>
 
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="ItemSearch" label="Add content (search movies, series, collections)" />
@@ -367,6 +382,7 @@
                 if (!channel) {
                     return;
                 }
+                renderScheduleEdits();
                 q('#ChannelName').value = channel.Name || '';
                 q('#ChannelEnabled').checked = channel.Enabled !== false;
                 q('#EpisodesPerBlock').value = channel.EpisodesPerBlock || 0;
@@ -1504,7 +1520,181 @@
                 body.appendChild(note);
 
                 row.appendChild(body);
+
+                // The schedule is not a printout. Everything on it can be taken off, or have
+                // something else put over it - and because a channel's schedule is generated
+                // rather than stored, "taken off" is kept as an exception laid over what the
+                // generator says. See ScheduleEditing on the server.
+                var edits = document.createElement('div');
+                edits.style.display = 'flex';
+                edits.style.gap = '0.4em';
+
+                edits.appendChild(scheduleButton('Remove', function () {
+                    addScheduleEdit({
+                        StartUtc: program.StartUtc,
+                        // Named, not numbered: this page GETs the configuration with enum names
+                        // and posts it back the same way, and one field disagreeing with the
+                        // rest is a 500 with nothing to say why.
+                        Kind: 'Remove',
+                        DurationSeconds: Math.max(60, Math.round((program.RuntimeTicks || 0) / 10000000)),
+                        Name: program.Name
+                    });
+                }));
+
+                edits.appendChild(scheduleButton('Replace…', function () {
+                    scheduleReplaceAt = program.StartUtc;
+                    q('#ScheduleEditSearchResults').innerHTML =
+                        '<div class="listItem">Search below for what should air at '
+                        + start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                        + ' instead.</div>';
+                    q('#ScheduleEditSearch').value = '';
+                    q('#ScheduleEditSearch').focus();
+                }));
+
+                row.appendChild(edits);
                 return row;
+            }
+
+            function scheduleButton(text, onClick) {
+                var button = document.createElement('button');
+                button.setAttribute('is', 'emby-button');
+                button.type = 'button';
+                button.className = 'raised emby-button';
+                button.textContent = text;
+                button.addEventListener('click', onClick);
+                return button;
+            }
+
+            // =========================================================================
+            // Editing the schedule
+            //
+            // A LiteTV schedule is generated from the anchor and the queue, so there is no
+            // stored list to edit. What is stored instead is the difference: a handful of
+            // appointments that hold their own stretch of the clock, with the generated
+            // schedule bending around them. One edit is one exception, keyed to an absolute
+            // moment - a standing weekly instruction is what a trailer slot is for.
+            // =========================================================================
+
+            /** The airing a Replace… is aimed at, while the search is open. */
+            var scheduleReplaceAt = null;
+
+            function scheduleEdits() {
+                var channel = currentChannel();
+                if (!channel) { return []; }
+                if (!channel.ScheduleEdits) { channel.ScheduleEdits = []; }
+                return channel.ScheduleEdits;
+            }
+
+            function addScheduleEdit(edit) {
+                var list = scheduleEdits();
+                // One edit per moment. Two appointments at the same instant is a schedule
+                // nobody can read, and the second is always the one that was meant.
+                for (var i = list.length - 1; i >= 0; i--) {
+                    if (list[i].StartUtc === edit.StartUtc) { list.splice(i, 1); }
+                }
+                edit.Enabled = true;
+                list.push(edit);
+                renderScheduleEdits();
+                loadSchedule();
+            }
+
+            function renderScheduleEdits() {
+                var host = q('#ScheduleEditList');
+                if (!host) { return; }
+                var list = scheduleEdits();
+                host.innerHTML = '';
+
+                if (!list.length) {
+                    host.innerHTML = '<div class="fieldDescription">No changes. This channel airs exactly what its content and grid say it does.</div>';
+                    return;
+                }
+
+                list.slice().sort(function (a, b) {
+                    return new Date(a.StartUtc) - new Date(b.StartUtc);
+                }).forEach(function (edit) {
+                    var when = new Date(edit.StartUtc);
+                    var row = document.createElement('div');
+                    row.className = 'listItem';
+                    row.style.display = 'flex';
+                    row.style.alignItems = 'center';
+                    row.style.gap = '0.8em';
+
+                    var label = document.createElement('div');
+                    label.style.flexGrow = '1';
+                    label.textContent = when.toLocaleString(undefined, {
+                        weekday: 'short', day: 'numeric', month: 'short',
+                        hour: '2-digit', minute: '2-digit'
+                    }) + '  ·  ' + (edit.Kind === 1 || edit.Kind === 'Remove'
+                        ? 'off air for ' + Math.round((edit.DurationSeconds || 0) / 60) + ' min'
+                        : (edit.Name || edit.Url || 'something else'));
+                    if (when < new Date()) {
+                        label.style.opacity = '0.55';
+                        label.textContent += '  ·  past';
+                    }
+                    row.appendChild(label);
+
+                    row.appendChild(scheduleButton('Undo', function () {
+                        var all = scheduleEdits();
+                        var at = all.indexOf(edit);
+                        if (at >= 0) { all.splice(at, 1); }
+                        renderScheduleEdits();
+                        loadSchedule();
+                    }));
+
+                    host.appendChild(row);
+                });
+            }
+
+            /** Searches for something to put in the slot a Replace… named. */
+            function searchScheduleEdit(term) {
+                var results = q('#ScheduleEditSearchResults');
+                if (!scheduleReplaceAt) {
+                    results.innerHTML = '<div class="listItem">Press Replace… on a row of the schedule first.</div>';
+                    return;
+                }
+                if (!term) { results.innerHTML = ''; return; }
+
+                ApiClient.getJSON(ApiClient.getUrl('Items', {
+                    searchTerm: term,
+                    includeItemTypes: 'Movie,Series,Episode,Video',
+                    recursive: true,
+                    limit: 12,
+                    fields: 'RunTimeTicks'
+                })).then(function (result) {
+                    results.innerHTML = '';
+                    (result.Items || []).forEach(function (item) {
+                        var row = document.createElement('div');
+                        row.className = 'listItem';
+                        row.style.display = 'flex';
+                        row.style.alignItems = 'center';
+                        row.style.gap = '0.6em';
+
+                        var label = document.createElement('div');
+                        label.style.flexGrow = '1';
+                        var minutes = Math.round((item.RunTimeTicks || 0) / 10000000 / 60);
+                        label.textContent = [item.SeriesName, item.Name].filter(function (x) { return x; }).join(' — ')
+                            + (minutes ? '  ·  ' + minutes + ' min' : '');
+                        row.appendChild(label);
+
+                        row.appendChild(scheduleButton('Air this', function () {
+                            addScheduleEdit({
+                                StartUtc: scheduleReplaceAt,
+                                Kind: 'Air',
+                                ItemId: item.Id,
+                                Name: [item.SeriesName, item.Name].filter(function (x) { return x; }).join(' - ')
+                            });
+                            scheduleReplaceAt = null;
+                            results.innerHTML = '';
+                            q('#ScheduleEditSearch').value = '';
+                        }));
+
+                        results.appendChild(row);
+                    });
+
+                    if (!results.children.length) {
+                        results.innerHTML = '<div class="listItem">Nothing found.</div>';
+                    }
+                });
             }
 
             function renderBlockSources() {
@@ -2106,7 +2296,7 @@
                     q('#SkipTrailerSegments').checked = config.SkipTrailerSegments !== false;
                     currentIndex = config.Channels.length ? 0 : -1;
                     renderChannelSelect();
-                    loadEffectiveArt().then(renderEditor);
+                    loadEffectiveArt().then(function () { renderEditor(); renderScheduleEdits(); });
                     loadSuggestions();
                     loadBuilds();
                     Dashboard.hideLoadingMsg();
@@ -2371,6 +2561,13 @@
             })();
 
             q('#LoadSchedule').addEventListener('click', loadSchedule);
+
+            var scheduleEditTimer = null;
+            q('#ScheduleEditSearch').addEventListener('input', function () {
+                var term = this.value;
+                clearTimeout(scheduleEditTimer);
+                scheduleEditTimer = setTimeout(function () { searchScheduleEdit(term); }, 300);
+            });
             q('#LoadArtworkGallery').addEventListener('click', loadArtworkGallery);
             q('#LoadWebArtwork').addEventListener('click', loadWebArtwork);
 

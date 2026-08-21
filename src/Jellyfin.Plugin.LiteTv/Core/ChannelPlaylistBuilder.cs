@@ -170,6 +170,27 @@ public class ChannelPlaylistBuilder
         => _libraryManager.GetItemById(itemId)?.RunTimeTicks ?? 0;
 
     /// <summary>
+    /// What a library item is called, or an empty string when it is gone. An episode is named
+    /// as the series and the episode together, because "Folge 3" on its own in a schedule tells
+    /// nobody what channel they are looking at.
+    /// </summary>
+    /// <param name="itemId">The item.</param>
+    /// <returns>The name.</returns>
+    public string NameOf(Guid itemId)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        if (item is null)
+        {
+            return string.Empty;
+        }
+
+        return item is MediaBrowser.Controller.Entities.TV.Episode episode
+            && !string.IsNullOrEmpty(episode.SeriesName)
+                ? $"{episode.SeriesName} - {item.Name}"
+                : item.Name ?? string.Empty;
+    }
+
+    /// <summary>
     /// Drops all cached queues and schedules (called when the plugin configuration changes).
     /// </summary>
     public void Invalidate()

@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Banners from TheTVDB, which were there all along. The gallery filtered the pictures it already had, and that answer is a few hundred TheMovieDB posters - so the banners sat past the end of it and the strip reported none while the provider held twenty. Measured on the test server: an untyped request for \"Marvel's Agents of S.H.I.E.L.D.\" returns 430 pictures with no banner among them; the same series asked for banners by name returns all 21, from TheTVDB. The Boys has 18, SpongeBob 8. So each shape is now asked for by name when it is chosen, rather than filtered out of a slice.\n\nBanner leads the shapes, because it is the slot that cannot be filled any other way - about five and a half to one, and nothing else is. TheTVDB draws them for series and not for films, so a film channel still fills that slot from a backdrop through the crop tool.\n\nThe rest of 1.0.41.0 stands: twenty-four tiles at a time behind a Load more button, the German-first ordering still applied over the whole set before anything is drawn, and a collection asked about and opened every time rather than only when it answered with nothing.",
+  "changelog": "The schedule can be edited. A channel's schedule is worked out from its content, its grid and its anchor rather than written down anywhere - which is what makes it identical on every client, free to compute and endless - so there was nothing to edit. What is stored now is the difference: a handful of appointments, each holding its own stretch of the clock, with the generated schedule bending around them exactly as a broadcaster's does around a fixture.\n\nOn the configuration page every row of the schedule has Remove and Replace. Removing leaves the channel dark for that stretch rather than pulling everything forward, because pulling forward would move every programme after it and break every time the channel had promised. Replacing airs a library item from that moment for as long as it runs, taking as much of the generated schedule as it needs. What is left of a programme either side of an edit keeps its position, so a film interrupted resumes where it was cut rather than replaying the part that was skipped, and a remainder under two minutes is dropped instead of aired.\n\nEdits are tied to a moment rather than to a time of the week: dragging Saturday's film is about that airing, and something every week is what a trailer slot already is. One in the past can never fire again, so the list stays prunable. Nine tests cover the arithmetic, which is where an off-by-one would otherwise hide for weeks behind a schedule that still looks plausible.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-21T00:00:00.000Z",
-  "version": "1.0.42.0",
+  "version": "1.0.43.0",
   "status": "Active",
   "autoUpdate": false
 }
