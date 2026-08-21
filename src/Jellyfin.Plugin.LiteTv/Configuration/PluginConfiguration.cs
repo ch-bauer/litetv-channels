@@ -32,6 +32,19 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string ChannelUserPassword { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the parts of a trailer that are not the trailer
+    /// are skipped, using SponsorBlock's public database.
+    /// <para>
+    /// On by default. German trailers mostly come from channels that wrap them in a branded
+    /// card and a plea to subscribe, and a minute-long break has no room for either. The
+    /// lookup asks about a four-character hash of the video id rather than the id itself, so
+    /// the service is never told what is being watched; turning this off stops the request
+    /// being made at all.
+    /// </para>
+    /// </summary>
+    public bool SkipTrailerSegments { get; set; } = true;
+
 }
 
 /// <summary>

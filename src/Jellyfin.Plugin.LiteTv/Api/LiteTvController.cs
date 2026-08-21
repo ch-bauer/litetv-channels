@@ -33,6 +33,7 @@ public class LiteTvController : ControllerBase
     private readonly ILibraryManager _libraryManager;
     private readonly ChannelPlaybackUser _playbackUser;
     private readonly YouTubeStreamResolver _trailers;
+    private readonly SponsorBlockClient _sponsorBlock;
     private readonly IHttpClientFactory _httpClientFactory;
 
     /// <summary>
@@ -42,18 +43,21 @@ public class LiteTvController : ControllerBase
     /// <param name="libraryManager">The library manager.</param>
     /// <param name="playbackUser">The account channel playback runs under.</param>
     /// <param name="trailers">Resolves linked trailers into playable streams.</param>
+    /// <param name="sponsorBlock">Says which parts of a trailer are not the trailer.</param>
     /// <param name="httpClientFactory">Fetches artwork chosen from somewhere else.</param>
     public LiteTvController(
         ChannelGuide guide,
         ILibraryManager libraryManager,
         ChannelPlaybackUser playbackUser,
         YouTubeStreamResolver trailers,
+        SponsorBlockClient sponsorBlock,
         IHttpClientFactory httpClientFactory)
     {
         _guide = guide;
         _libraryManager = libraryManager;
         _playbackUser = playbackUser;
         _trailers = trailers;
+        _sponsorBlock = sponsorBlock;
         _httpClientFactory = httpClientFactory;
     }
 
@@ -483,7 +487,8 @@ public class LiteTvController : ControllerBase
                 Url = stream.Url,
                 AudioUrl = stream.AudioUrl,
                 UserAgent = YouTubeStreamResolver.UserAgent,
-                Referer = YouTubeStreamResolver.Referer
+                Referer = YouTubeStreamResolver.Referer,
+                SkipSegments = await SkipSegmentsAsync(trailer.Url).ConfigureAwait(false)
             };
         }
 
@@ -757,14 +762,43 @@ public class LiteTvController : ControllerBase
     /// <summary>
     /// Every library item a channel is built from, in the order it was configured: the channel's
     /// own lineup first, then whatever its blocks air, then the titles it advertises.
+    /// <para>
+    /// A collection is followed into its contents. A BoxSet is a name with a list behind it and
+    /// very often has no artwork of its own, so a channel built from one - "Marathon: Fünf
+    /// Freunde Filmreihe" - had nothing to derive a picture from and came out blank, while the
+    /// three films it airs each had a poster and a thumb. The collection is still asked first:
+    /// somebody who made artwork for the collection meant it for exactly this.
+    /// </para>
     /// </summary>
-    private static IEnumerable<Guid> ChannelSources(TvChannel channel) =>
-        channel.Sources
-            .Concat(channel.Blocks.SelectMany(b => b.Sources))
-            .Concat(channel.TrailerTitles)
-            .Select(s => s.ItemId)
-            .Where(id => id != Guid.Empty)
-            .Distinct();
+    private IEnumerable<Guid> ChannelSources(TvChannel channel)
+    {
+        var seen = new HashSet<Guid>();
+
+        foreach (var id in channel.Sources
+                     .Concat(channel.Blocks.SelectMany(b => b.Sources))
+                     .Concat(channel.TrailerTitles)
+                     .Select(s => s.ItemId)
+                     .Where(id => id != Guid.Empty))
+        {
+            if (seen.Add(id))
+            {
+                yield return id;
+            }
+
+            if (_libraryManager.GetItemById(id) is not BoxSet boxSet)
+            {
+                continue;
+            }
+
+            foreach (var child in boxSet.GetLinkedChildren().OrderBy(c => c.PremiereDate ?? DateTime.MaxValue))
+            {
+                if (seen.Add(child.Id))
+                {
+                    yield return child.Id;
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// Puts whatever artwork the given items have onto the channel image, and says whether the
@@ -871,6 +905,32 @@ public class LiteTvController : ControllerBase
     /// this a channel's break can open with a fifteen-second teaser for a film it is about
     /// to show in full. Borrowed from Wholphin, which sorts its own trailer picker this way.
     /// </summary>
+    /// <summary>
+    /// The parts of a trailer to skip over, or nothing when the lookup is switched off or has
+    /// no answer. Never throws: a trailer with an unskipped sponsor read is a much smaller
+    /// problem than a break that fails.
+    /// </summary>
+    private async Task<List<SkipSegmentDto>> SkipSegmentsAsync(string url)
+    {
+        if (Plugin.Instance?.Configuration.SkipTrailerSegments != true)
+        {
+            return new List<SkipSegmentDto>();
+        }
+
+        var segments = await _sponsorBlock
+            .SegmentsAsync(YouTubeStreamResolver.VideoId(url), HttpContext.RequestAborted)
+            .ConfigureAwait(false);
+
+        return segments
+            .Select(s => new SkipSegmentDto
+            {
+                StartSeconds = s.StartSeconds,
+                EndSeconds = s.EndSeconds,
+                Category = s.Category
+            })
+            .ToList();
+    }
+
     private static int TrailerRank(TrailerDto trailer)
     {
         // Language first, and by a distance nothing else can close: a German household being
@@ -953,6 +1013,32 @@ public class ResolvedTrailerDto
 
     /// <summary>Gets or sets the Referer the stream must be requested with.</summary>
     public string Referer { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the stretches of the trailer that are not the trailer, in order.
+    /// <para>
+    /// A client is expected to seek straight past them without asking. The skip button the
+    /// fork shows for library content is right for a programme and wrong here: a break is a
+    /// minute long, and nobody should have to press a button inside an advert.
+    /// </para>
+    /// </summary>
+    public List<SkipSegmentDto> SkipSegments { get; set; } = new();
+}
+
+/// <summary>
+/// A stretch of a trailer to seek past: an uploader's branded card, a plea to subscribe, a
+/// read for something unrelated.
+/// </summary>
+public class SkipSegmentDto
+{
+    /// <summary>Gets or sets where it starts, in seconds from the beginning.</summary>
+    public double StartSeconds { get; set; }
+
+    /// <summary>Gets or sets where it ends, and where playback should carry on from.</summary>
+    public double EndSeconds { get; set; }
+
+    /// <summary>Gets or sets what SponsorBlock calls it - "sponsor", "intro", "outro".</summary>
+    public string Category { get; set; } = string.Empty;
 }
 
 /// <summary>
