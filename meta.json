@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "A YouTube account can be pasted in. The setting was there and documented and did nothing; now the whole Cookie header from a logged-in tab is sent, and the request is signed the way YouTube's own web player signs it - SAPISIDHASH over the seconds, the session id and the origin, which carries no password because the secret is the cookie the browser already holds. Only the clients that are signed in in real life carry it: Android VR is logout-only and keeps asking exactly as it does today, so an empty setting changes nothing at all. Use an account you do not care about - it is stored in plain text and anybody who can read this configuration can act as it.",
+  "changelog": "The television mints a proof-of-origin token and this takes it. Without one, YouTube gives this server a 1080p ladder whose streams stop being served after about sixty seconds, or one muxed 360p that plays to the end - measured, on every client that answers at all. The wall is `pot=` enforcement, and the token that lifts it comes from Google's BotGuard, which is JavaScript wanting a browser that a server does not have and an Android box does. So POST /LiteTv/PoToken takes what the box mints, the visitor id it was minted against goes into the player request, and every googlevideo address goes out carrying it. With no token held, nothing changes at all. The YouTube account setting is gone in the same release: it was measured worthless on every client, it is not the mechanism anybody else uses, and a live credential in plain-text configuration that buys nothing is the worst of both.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-22T00:00:00.000Z",
-  "version": "1.0.55.0",
+  "version": "1.0.56.0",
   "status": "Active",
   "autoUpdate": false
 }
