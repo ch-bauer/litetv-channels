@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.54.0",
+        "changelog": "The check for a stream that stops now looks near the end rather than past the opening. Two thirds of the way in was not far enough: an iOS 1080p pair measured on 21 August served its audio at half way and refused it at nine tenths, so the check passed and the trailer would still have stopped - later than a minute in, and just as wrong. It asks at 95% now, and whatever serves that serves the lot.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.54.0/litetv-channels_1.0.54.0.zip",
+        "checksum": "430903904cabd472c1ee8d548a8f4763",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
         "version": "1.0.53.0",
         "changelog": "1080p is back, by asking the way ReVanced asks. Android VR was written off here as needing a login; it does not. It needs the request an application makes rather than the one a web page makes: the app endpoint at youtubei.googleapis.com instead of www.youtube.com, a deviceMake and deviceModel, and none of a browser's Origin and Referer headers - an Oculus user agent carrying a web page's headers is not a client YouTube has ever seen. Asked properly it answered with 22 renditions up to 2160p, every one of them carrying an address.\n\nThat matters because the plain Android client no longer carries addresses at all: nineteen adaptive renditions with no url on any of them, and one muxed 360p, which is exactly why trailers had dropped to 360p.\n\nAndroid VR is also refused a fair part of the time with \"Sign in to confirm you're not a bot\". That is a gate on the asker, not on the request, and the answer to it is to fall through to the next client rather than to hammer it - so a break gets 360p that day rather than nothing, and the good rendition whenever the gate is open.",
         "targetAbi": "10.11.0.0",
