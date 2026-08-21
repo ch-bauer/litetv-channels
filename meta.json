@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Clearing a channel's borrowed artwork no longer breaks the save. The page wrote the empty guid with dashes, and Jellyfin's own converter reads guids in the dash-less form and only that one - so the configuration came back 500, \"Unrecognized Guid format\", and nothing on the page was saved. Found while building a channel through the API, where the same rule bites: an empty string is not a guid either, so a field like this can never be blanked.",
+  "changelog": "A trailer that stops just past a minute. YouTube's conditions on adaptive streams moved again, and this time they serve only the opening of a file: measured against googlevideo on 21 August, a hundred kilobytes at 20% of the way in came back 206 and the same request at 46% came back 403 - on a URL seconds old, with the range asked for as a header and as a query parameter alike, and on a freshly resolved URL asked for the far offset first. For a 128 kbps audio stream that cap is about a minute of sound, which is exactly what it looked like from the sofa.\n\nSo the pick is checked instead of assumed. When an adaptive pair wins the ladder, one small range beyond the opening is requested - on the audio stream, which is the smaller file and the one that runs out first - and a refusal drops the answer to the best muxed format. 360p that plays through is worth more than 1080p that stops. It costs one request per resolve, only when adaptive has won, and when YouTube stops capping it starts preferring the good renditions again with nothing to change.\n\nAlso: a break is no longer announced as a preview of something with no trailer. A programme with neither a trailer file nor a provider link is skipped when the schedule looks for something to advertise, so the guide stops printing \"Vorschau: X\" for a preview that was never going to play. An episode's trailers are looked for on its series, the same fallback the resolver makes.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-21T00:00:00.000Z",
-  "version": "1.0.48.0",
+  "version": "1.0.49.0",
   "status": "Active",
   "autoUpdate": false
 }
