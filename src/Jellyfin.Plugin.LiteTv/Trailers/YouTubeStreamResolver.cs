@@ -804,9 +804,11 @@ public sealed class YouTubeStreamResolver
             return true;
         }
 
-        // Past the opening, and short of the end: two thirds is beyond anything that has been
-        // served under a cap and well inside a file that is not capped.
-        var from = (long)(length * 0.66);
+        // Near the end, not merely past the opening. Two thirds was not enough: an iOS 1080p
+        // pair measured on 21 Aug served its audio at half way and refused it at nine tenths,
+        // so the probe passed and the trailer would still have stopped - later than a minute
+        // in, and just as wrong. Whatever serves 95% serves the lot.
+        var from = (long)(length * 0.95);
 
         try
         {
