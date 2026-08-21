@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.38.0",
+        "changelog": "1080p trailers, and the two rules that make them play. The revert to 360p in 1.0.37.0 was one measurement short: adaptive streams do play, they simply come with conditions the plugin was breaking.\n\nRead them in windows. A request for the whole file, or for tens of megabytes, is answered 403; a megabyte at any offset is served happily. ExoPlayer asks for the whole file, which is why the good renditions never showed a frame while 360p muxed ones were fine.\n\nUse them soon. The expire on a googlevideo URL is hours away and means nothing - an address a few minutes old starts refusing everything past its first window. This cached resolutions for forty-five minutes, so a looping channel came back to a break and played a dead URL. It is two minutes now, only enough to stop a break asking twice while it starts; resolving costs a fifth of a second.\n\nMeasured: windows of a megabyte at every offset tried, on a URL still answering after five minutes, at 1080p H.264 with 128 kbps AAC. The client has to do the windowing - a player handed these addresses without it will still see 403s.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.38.0/litetv-channels_1.0.38.0.zip",
+        "checksum": "f08dbbc9c234da9aea051fac324861f5",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
         "version": "1.0.37.0",
         "changelog": "Trailers use muxed streams again, and play. Pairing adaptive video and audio was right about where the quality lives and wrong about being able to fetch it: measured on 21 August, an adaptive URL serves its first megabyte and answers 403 to everything after it - from any offset, on a URL seconds old, through ANDROID and IOS alike, with or without ratebypass, by Range header or by range query - while a muxed URL from the same answer serves its whole ten megabytes in one request. That is YouTube's proof-of-origin regime, and getting past it means minting a token by running their JavaScript.\n\nSo the resolver takes the best muxed format again: itag 18 at 360p for most videos, itag 22 at 720p where it survives. A trailer that plays is worth more than a resolution it never reached. The measurement is written into the code, along with the instruction not to prefer adaptive formats again without first checking that a window past the first megabyte still comes back 206.",
         "targetAbi": "10.11.0.0",
