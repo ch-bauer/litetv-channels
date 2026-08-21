@@ -56,7 +56,7 @@ Either way the channel appears on clients that cannot really play it.
 
 Instead the plugin serves the schedule as data — `/LiteTv/Channels`, `/LiteTv/Guide` — and a
 client that knows what a channel is builds the queue itself. Today that means the
-**[Wholphin LiteTV fork](https://github.com/damontecres/Wholphin)** on Android TV. Every other
+**Wholphin LiteTV fork (WIP)** on Android TV. Every other
 client sees nothing, which is the intent: a channel should show up only where it works.
 
 Before playing anything, a client asks `GET /LiteTv/PlaybackUser` for the account to play
