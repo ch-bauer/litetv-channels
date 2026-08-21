@@ -982,22 +982,28 @@
                 // inside it: they are what the channel actually airs.
                 remoteImages(itemId)
                     .then(function (images) {
-                        if (images.length || chosen || firstSource.Type !== 'Collection') {
+                        // A collection is asked about *and* opened, every time. A film series
+                        // usually is a collection to TheMovieDB too, so it answers with a
+                        // handful of pictures - which used to be enough to stop the films
+                        // inside ever being asked about, and the films are what the channel
+                        // actually airs. Their artwork is the better artwork and there is far
+                        // more of it.
+                        if (chosen || firstSource.Type !== 'Collection') {
                             return images;
                         }
 
                         return ApiClient
-                            .getJSON(ApiClient.getUrl('Items', { parentId: itemId, recursive: true, limit: 4 }))
+                            .getJSON(ApiClient.getUrl('Items', { parentId: itemId, recursive: true, limit: 6 }))
                             .then(function (result) {
                                 var children = result.Items || [];
-                                if (!children.length) { return []; }
+                                if (!children.length) { return images; }
                                 return Promise
                                     .all(children.map(function (child) { return remoteImages(child.Id); }))
                                     .then(function (lists) {
-                                        // Interleaved rather than concatenated, so the gallery
-                                        // opens on one picture of each film instead of four of
-                                        // the first one.
-                                        var merged = [];
+                                        // The collection's own pictures lead, then one picture
+                                        // of each film in turn - so the strip opens on a spread
+                                        // rather than six of the first film.
+                                        var merged = images.slice();
                                         for (var i = 0; ; i++) {
                                             var any = false;
                                             for (var j = 0; j < lists.length; j++) {
@@ -1017,13 +1023,14 @@
 
             /** What the providers hold for one title, German first. Never rejects. */
             function remoteImages(itemId) {
-                // The providers hold a couple of hundred pictures for a well-known film and
-                // this asks for a fixed slice of them, so the limit decides which languages
-                // are even in the room before germanFirst gets to order them. A hundred and
-                // twenty thumbnails is a dashboard page that still loads.
+                // The providers hold two to four hundred pictures for a well-known film and
+                // this asks for a fixed slice of them, so the limit decides which languages are
+                // even in the room before germanFirst gets to order them. It is generous now
+                // that the strip draws a page at a time: the answer is one request and some
+                // JSON, and it is the tiles - a fetch each - that used to make this expensive.
                 return ApiClient.getJSON(ApiClient.getUrl('Items/' + itemId + '/RemoteImages', {
                     includeAllLanguages: true,
-                    limit: 120
+                    limit: 200
                 })).then(function (result) {
                     return germanFirst(result.Images || []);
                 }).catch(function () {
@@ -1032,7 +1039,24 @@
                 });
             }
 
-            /** Puts a set of provider pictures into the gallery. */
+            /** How many provider pictures are drawn at once. */
+            var WEB_ARTWORK_PAGE = 24;
+
+            /**
+             * Puts a set of provider pictures into the gallery, a page at a time.
+             *
+             * Every tile is a background-image, so drawing the whole answer means the browser
+             * fetching a couple of hundred pictures from the providers the instant the strip
+             * appears - for a slot that will be filled by one of the first few. A well-known
+             * film has two to four hundred of them. The ordering still happens over the whole
+             * set before anything is drawn, or paging would bury the German pictures further
+             * down instead of showing them.
+             *
+             * The shape filter is here because the hard slot to fill is the banner: a banner is
+             * about five and a half to one, no provider on this server offers one, and filling
+             * it means finding the widest thing there is and cropping it. Picking that out of
+             * two hundred posters by eye is not a way to do it.
+             */
             function drawWebArtwork(images) {
                 var gallery = q('#ArtworkGallery');
                 gallery.innerHTML = '';
@@ -1046,14 +1070,86 @@
                 hint.textContent = 'German pictures first, then untitled ones. Click a picture to put it in the highlighted slot above. These are addresses on the provider\u2019s own servers — use Upload if you would rather the picture lived here.';
                 gallery.appendChild(hint);
 
+                // The shapes actually present, in the order they are useful for a channel.
+                var order = ['Backdrop', 'Thumb', 'Banner', 'Primary', 'Logo', 'Disc', 'Art'];
+                var kinds = [];
+                images.forEach(function (image) {
+                    if (image.Type && kinds.indexOf(image.Type) < 0) { kinds.push(image.Type); }
+                });
+                kinds.sort(function (a, b) {
+                    var ai = order.indexOf(a), bi = order.indexOf(b);
+                    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+                });
+
+                var filter = 'All';
+                var shown = 0;
+
+                var chips = document.createElement('div');
+                chips.style.display = 'flex';
+                chips.style.flexWrap = 'wrap';
+                chips.style.gap = '0.4em';
+                chips.style.margin = '0.4em 0 0.7em 0';
+                gallery.appendChild(chips);
+
                 var strip = document.createElement('div');
                 strip.style.display = 'flex';
                 strip.style.flexWrap = 'wrap';
                 strip.style.gap = '0.5em';
-                images.forEach(function (image) {
-                    strip.appendChild(remoteArtworkTile(image));
-                });
                 gallery.appendChild(strip);
+
+                var more = document.createElement('button');
+                more.setAttribute('is', 'emby-button');
+                more.type = 'button';
+                more.className = 'raised emby-button';
+                more.style.marginTop = '0.7em';
+                gallery.appendChild(more);
+
+                function matching() {
+                    return filter === 'All'
+                        ? images
+                        : images.filter(function (image) { return image.Type === filter; });
+                }
+
+                function drawMore() {
+                    var list = matching();
+                    var upto = Math.min(shown + WEB_ARTWORK_PAGE, list.length);
+                    for (var i = shown; i < upto; i++) {
+                        strip.appendChild(remoteArtworkTile(list[i]));
+                    }
+                    shown = upto;
+                    more.style.display = shown < list.length ? '' : 'none';
+                    more.textContent = 'Load more (' + (list.length - shown) + ' left)';
+                }
+
+                function redraw() {
+                    strip.innerHTML = '';
+                    shown = 0;
+                    drawMore();
+                }
+
+                ['All'].concat(kinds).forEach(function (kind) {
+                    var count = kind === 'All'
+                        ? images.length
+                        : images.filter(function (image) { return image.Type === kind; }).length;
+
+                    var chip = document.createElement('button');
+                    chip.setAttribute('is', 'emby-button');
+                    chip.type = 'button';
+                    chip.className = 'raised emby-button';
+                    chip.textContent = kind + ' (' + count + ')';
+                    chip.style.opacity = kind === filter ? '1' : '0.6';
+                    chip.addEventListener('click', function () {
+                        filter = kind;
+                        Array.prototype.forEach.call(chips.children, function (other) {
+                            other.style.opacity = other === chip ? '1' : '0.6';
+                        });
+                        redraw();
+                    });
+                    chips.appendChild(chip);
+                });
+
+                more.addEventListener('click', drawMore);
+                redraw();
             }
 
             /**
