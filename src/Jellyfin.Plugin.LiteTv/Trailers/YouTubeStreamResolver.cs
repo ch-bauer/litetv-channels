@@ -119,97 +119,128 @@ public sealed class YouTubeStreamResolver
     /// matching User-Agent, which is all that is sent now - the same shape yt-dlp settled on.
     /// </para>
     /// <para>
-    /// The order is measured, and the measurement changed on 21 Aug 2026. <b>ANDROID_VR leads
-    /// now</b>: asked the way ReVanced asks - the app endpoint at <c>youtubei.googleapis.com</c>,
-    /// a device make and model, and none of a browser's Origin and Referer - it answered with
-    /// <b>22 renditions up to 2160p, every one of them carrying an address</b>. The plain
-    /// ANDROID client, by contrast, now returns nineteen renditions with <i>no address on any of
-    /// them</i> and one muxed 360p, which is the whole reason trailers had dropped to 360p.
+    /// <b>Copied field by field from ReVanced on 22 Aug 2026.</b> Their GitHub answers 451 now;
+    /// the repository is on GitLab, at <c>gitlab.com/revanced/revanced-patches</c>, and this was
+    /// read from <c>extensions/shared/library/.../spoof/ClientType.java</c> and
+    /// <c>spoof/requests/PlayerRoutes.java</c> there. <b>Read the real one, not a fork</b> - the
+    /// Morphe fork has diverged (its VR client is a Pico 4 on Android 10, and it sends the
+    /// client <i>name</i> in a header where ReVanced sends the id) and following it would have
+    /// been wrong twice over.
     /// </para>
     /// <para>
-    /// ANDROID_VR is also refused a good deal of the time, with "Sign in to confirm you're not a
-    /// bot". That is a gate on the asker rather than on the request, and the honest response to
-    /// it is to fall through to the next client rather than to hammer it - so the ladder does
-    /// exactly that, and a break gets 360p that day instead of nothing.
+    /// Theirs is a list of five and this is those five. The device profiles were already right
+    /// here; what was wrong was the shape of the request around them - see
+    /// <see cref="AndroidUserAgent"/> for the User-Agent, <see cref="Context"/> for the field
+    /// that should never have been sent, and <see cref="AppPlayerEndpoint"/> for the endpoint.
     /// </para>
     /// <para>
-    /// The ones that fail today are kept behind them rather than deleted: they cost one fast
-    /// failure each, they answer for videos ANDROID sometimes will not, and which of them works
-    /// is exactly the thing that changes without notice. Re-measure before trusting any of it.
+    /// <b>What cannot be copied is the part that logs in.</b> ReVanced does not build an
+    /// <c>Authorization</c> header at all: it forwards the one the real YouTube app already
+    /// holds, along with <c>X-Goog-Visitor-Id</c> and <c>X-GOOG-API-FORMAT-VERSION</c>, and it
+    /// <i>skips</i> any <c>useAuth</c> client outright when the user is not logged in. That is
+    /// an app OAuth token belonging to a signed-in phone, which a Jellyfin server does not have
+    /// and cannot mint - and it is a different thing entirely from the cookie signature this
+    /// plugin can build, which is measured to buy nothing (see the configuration note on
+    /// <c>YouTubeCookie</c>).
+    /// </para>
+    /// <para>
+    /// So the two clients ReVanced marks <c>useAuth</c> - ANDROID_REEL and ANDROID_CREATOR - are
+    /// kept here rather than skipped, and asked anonymously. That is a deliberate departure:
+    /// ReVanced would not ask them at all logged out, but on this server ANDROID answers 360p
+    /// anonymously, and a rung that answers beats a rung that is skipped on principle.
     /// </para>
     /// </summary>
     private static readonly InnertubeClient[] Clients =
     {
-        // Taken from ReVanced's own spoofing roster, read on 21 Aug 2026 - the project that
-        // does this against a moving target full time, and whose list looks nothing like the
-        // one that was guessed here. Two things about it matter more than the names.
-        //
-        // The **device fields** are part of the client. This ladder used to send a client name
-        // and a version and nothing else, which is why ANDROID_VR answered LOGIN_REQUIRED every
-        // time it was tried: without a Quest 3 and an Android 12 behind it, it is not a client
-        // YouTube recognises. They are sent now.
-        //
-        // And the **order is by what plays**, not by what is newest. Android VR is logged out
-        // by definition, so it never has an account's restrictions applied to it, and its
-        // streaming URLs are handed over unobfuscated. IOS is deliberately last: ReVanced's own
-        // tracker carries "videos stop loading after 1 minute" against it, which is the exact
-        // fault this ladder was rebuilt to fix.
-        new("ANDROID_VR", "28", "1.61.48", "MOBILE",
-            "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; GB) gzip")
+        // ANDROID_VR 1.61.48 - Oculus Quest 3, Android 12, SDK 32, build SQ3A.220605.009.A1.
+        // ReVanced: "This client can only be used when logged out", useAuth false, which is
+        // why AcceptsAccount stays false. It leads here rather than in their order because it
+        // is the one measured returning every rendition up to 2160p with an address on each.
+        new("ANDROID_VR", "28", "1.61.48")
         {
+            PackageName = "com.google.android.apps.youtube.vr.oculus",
             DeviceMake = "Oculus",
             DeviceModel = "Quest 3",
             OsName = "Android",
             OsVersion = "12",
-            AndroidSdkVersion = 32
+            AndroidSdkVersion = 32,
+            BuildId = "SQ3A.220605.009.A1"
         },
 
-        // The plain Android app, at the version ReVanced ships as ANDROID_REEL. Authenticated
-        // clients are what most extraction tools have used since 2024.
-        new("ANDROID", "3", "20.44.38", "MOBILE",
-            "com.google.android.youtube/20.44.38 (Linux; U; Android 11) gzip")
+        // ANDROID_VR 1.43.32 - the same headset, an older app. ReVanced carries both, and it
+        // costs one fast failure to have a second try at the client that pays best.
+        new("ANDROID_VR", "28", "1.43.32")
         {
-            DeviceMake = "Google",
-            DeviceModel = "Pixel 6",
+            PackageName = "com.google.android.apps.youtube.vr.oculus",
+            DeviceMake = "Oculus",
+            DeviceModel = "Quest 3",
             OsName = "Android",
-            OsVersion = "11",
-            AndroidSdkVersion = 30,
-            AcceptsAccount = true
+            OsVersion = "12",
+            AndroidSdkVersion = 32,
+            BuildId = "SQ3A.220605.009.A1"
         },
 
-        new("ANDROID_CREATOR", "14", "23.47.101", "MOBILE",
-            "com.google.android.apps.youtube.creator/23.47.101 (Linux; U; Android 15) gzip")
+        // ANDROID_REEL - the plain Android app, and the client ReVanced notes "has been used by
+        // most open-source YouTube stream extraction tools since 2024". Two things are theirs
+        // and unusual: it is the one client that does NOT use the player endpoint - it asks
+        // reel/reel_item_watch with the request nested under playerRequest - and they warn that
+        // sending an access token with it helps Google identify the caller as ReVanced.
+        //
+        // The device fields are Build.MANUFACTURER/MODEL/RELEASE/SDK_INT/ID on a real phone.
+        // A server has no such thing, so a plausible phone is hardcoded; that is the one place
+        // this cannot be verbatim.
+        new("ANDROID", "3", "20.44.38")
         {
+            PackageName = "com.google.android.youtube",
             DeviceMake = "Google",
             DeviceModel = "Pixel 9 Pro Fold",
             OsName = "Android",
             OsVersion = "15",
             AndroidSdkVersion = 35,
-            AcceptsAccount = true
+            BuildId = "AP3A.241005.015.A2",
+            UsePlayerEndpoint = false
         },
 
-        new("VISIONOS", "101", "0.1", "MOBILE",
-            "com.google.ios.youtubevr/0.1 (RealityDevice14,1; U; CPU visionOS 1_3 like Mac OS X)")
+        // ANDROID_CREATOR - Pixel 9 Pro Fold, Android 15, SDK 35, app 23.47.101. ReVanced:
+        // no livestreams and no HDR, but it plays videos with music and ones labelled for
+        // children, which is exactly the set a trailer channel trips over.
+        new("ANDROID_CREATOR", "14", "23.47.101")
+        {
+            PackageName = "com.google.android.apps.youtube.creator",
+            DeviceMake = "Google",
+            DeviceModel = "Pixel 9 Pro Fold",
+            OsName = "Android",
+            OsVersion = "15",
+            AndroidSdkVersion = 35,
+            BuildId = "AP3A.241005.015.A2",
+            AcceptsAccount = true,
+            RequiresAccount = true
+        },
+
+        // VISIONOS - "Internal YT client for an unreleased YT client. May stop working at any
+        // time," in their words. Not an Android client, so its User-Agent is given rather than
+        // generated, and it sends no androidSdkVersion.
+        new("VISIONOS", "101", "0.1")
         {
             DeviceMake = "Apple",
             DeviceModel = "RealityDevice14,1",
             OsName = "visionOS",
-            OsVersion = "1.3.21O771"
+            OsVersion = "1.3.21O771",
+            UserAgentOverride =
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+                + "(KHTML, like Gecko) Version/18.0 Safari/605.1.15"
         },
 
-        new("IOS", "5", "20.10.4", "MOBILE",
-            "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)")
+        // Ours, not ReVanced's: they dropped WEB from streaming entirely. Kept last because on
+        // 22 Aug 2026 it still answered on this server with 360p, and a rung that answers is
+        // worth more than a tidy list. It is the only client here that talks to the website
+        // rather than the app endpoint.
+        new("WEB", "1", "2.20250312.04.00")
         {
-            DeviceMake = "Apple",
-            DeviceModel = "iPhone16,2",
-            OsName = "iOS",
-            OsVersion = "18.3.2.22D82",
+            Browser = true,
+            UserAgentOverride = UserAgent,
             AcceptsAccount = true
-        },
-
-        new("TVHTML5", "7", "7.20250101.10.00", "TV",
-            "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version"),
-        new("WEB", "1", "2.20250312.04.00", "DESKTOP", UserAgent) { AcceptsAccount = true }
+        }
     };
 
     private readonly IHttpClientFactory _httpClientFactory;
@@ -325,6 +356,14 @@ public sealed class YouTubeStreamResolver
 
         foreach (var client in ladder.Length == 0 ? Clients : ladder)
         {
+            // ReVanced's own skip: a client that only answers signed in is not worth a request
+            // when there is nothing to sign with. It is a hard 400 rather than a refusal that
+            // falls through, so asking anyway costs a rung and buys nothing.
+            if (client.RequiresAccount && AccountCookie(Plugin.Instance?.Configuration.YouTubeCookie) is null)
+            {
+                continue;
+            }
+
             var found = await TryInnertubeAsync(id, client, cancellationToken).ConfigureAwait(false);
             if (Better(found) is { } good)
             {
@@ -515,41 +554,95 @@ public sealed class YouTubeStreamResolver
         return string.Create(CultureInfo.InvariantCulture, $"SAPISIDHASH {seconds}_{hash}");
     }
 
+    /// <summary>
+    /// Unwraps the reel endpoint's answer, which nests the whole player response one level
+    /// deeper. The player endpoint's answer is already at the top and is handed back untouched.
+    /// </summary>
+    /// <param name="root">The parsed response.</param>
+    /// <returns>The player response.</returns>
+    private static JsonElement PlayerResponse(JsonElement root) =>
+        root.TryGetProperty("playerResponse", out var nested) ? nested : root;
+
+    /// <summary>
+    /// The User-Agent an Android client sends, built the way ReVanced builds it.
+    /// <para>
+    /// Theirs is one format string in <c>ClientType</c>'s Android constructor:
+    /// <c>"%s/%s (Linux; U; Android %s; %s; %s; Build/%s)"</c> over the package name, the app
+    /// version, the OS version, the <i>locale</i>, the device model and the build id.
+    /// </para>
+    /// <para>
+    /// What was sent before was <c>com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U;
+    /// Android 12; GB) gzip</c> - the right package and version wrapped in a shape no YouTube
+    /// app has ever sent: a bare country where the locale goes, no device model, no build id,
+    /// and a trailing <c>gzip</c> from a different convention entirely.
+    /// </para>
+    /// <para>
+    /// The locale is <c>Locale.getDefault()</c> on a handset. Here it is fixed at
+    /// <c>en_US</c>, to match the <c>hl</c> and <c>gl</c> the body carries.
+    /// </para>
+    /// </summary>
+    /// <param name="client">The client to describe.</param>
+    /// <returns>The User-Agent header value.</returns>
+    private static string AndroidUserAgent(InnertubeClient client) => string.Create(
+        CultureInfo.InvariantCulture,
+        $"{client.PackageName}/{client.Version} (Linux; U; Android {client.OsVersion}; en_US; {client.DeviceModel}; Build/{client.BuildId})");
+
+    /// <summary>
+    /// The app player endpoint, with ReVanced's own field mask.
+    /// <para>
+    /// Theirs is <c>player?fields=streamingData&amp;alt=proto</c>. The mask is copied and
+    /// widened by one field - <c>playabilityStatus</c>, which this resolver reads to tell a
+    /// refusal from an answer and theirs does not need. <b><c>alt=proto</c> is deliberately not
+    /// copied</b>: ReVanced asks for protobuf and parses it, there is no generated protobuf
+    /// here, and JSON is the same answer in a shape this can read. That is the only part of the
+    /// request that differs from theirs on purpose.
+    /// </para>
+    /// </summary>
+    private const string AppPlayerEndpoint =
+        "https://youtubei.googleapis.com/youtubei/v1/player"
+        + "?prettyPrint=false&fields=playabilityStatus,streamingData";
+
+    /// <summary>
+    /// The reel endpoint, for the one client ReVanced does not give the player endpoint.
+    /// <para>
+    /// Same mask shape as theirs, nested: the whole player response arrives under
+    /// <c>playerResponse</c>, which is why <see cref="PlayerResponse"/> exists.
+    /// </para>
+    /// </summary>
+    private const string ReelPlayerEndpoint =
+        "https://youtubei.googleapis.com/youtubei/v1/reel/reel_item_watch"
+        + "?prettyPrint=false&fields=playerResponse.playabilityStatus,playerResponse.streamingData";
+
+    /// <summary>
+    /// The <c>context.client</c> object, in ReVanced's own field order.
+    /// <para>
+    /// <b>No <c>platform</c>.</b> This used to send <c>"MOBILE"</c> for every client and
+    /// <c>"DESKTOP"</c> for the web one. ReVanced's <c>createInnertubeBody</c> sends no such
+    /// field at all, for any client - it was invented here, and an invented field is exactly
+    /// the sort of thing that makes a request not look like the app it claims to be.
+    /// </para>
+    /// </summary>
+    /// <param name="client">The client to describe.</param>
+    /// <returns>The client context.</returns>
     private static Dictionary<string, object?> Context(InnertubeClient client)
     {
         var context = new Dictionary<string, object?>
         {
+            ["deviceMake"] = client.DeviceMake,
+            ["deviceModel"] = client.DeviceModel,
             ["clientName"] = client.Name,
             ["clientVersion"] = client.Version,
-            ["hl"] = "en",
-            ["gl"] = "US",
-            ["platform"] = client.Platform
+            ["osName"] = client.OsName,
+            ["osVersion"] = client.OsVersion
         };
-
-        if (!string.IsNullOrEmpty(client.DeviceMake))
-        {
-            context["deviceMake"] = client.DeviceMake;
-        }
-
-        if (!string.IsNullOrEmpty(client.DeviceModel))
-        {
-            context["deviceModel"] = client.DeviceModel;
-        }
-
-        if (!string.IsNullOrEmpty(client.OsName))
-        {
-            context["osName"] = client.OsName;
-        }
-
-        if (!string.IsNullOrEmpty(client.OsVersion))
-        {
-            context["osVersion"] = client.OsVersion;
-        }
 
         if (client.AndroidSdkVersion is { } sdk)
         {
-            context["androidSdkVersion"] = sdk;
+            context["androidSdkVersion"] = sdk.ToString(CultureInfo.InvariantCulture);
         }
+
+        context["hl"] = "en";
+        context["gl"] = "US";
 
         return context;
     }
@@ -561,29 +654,48 @@ public sealed class YouTubeStreamResolver
             using var http = _httpClientFactory.CreateClient();
             http.Timeout = RequestTimeout;
 
-            var body = new Dictionary<string, object?>
+            var request_ = new Dictionary<string, object?>
             {
-                ["videoId"] = id,
                 ["contentCheckOk"] = true,
                 ["racyCheckOk"] = true,
+                ["videoId"] = id
+            };
+
+            var body = new Dictionary<string, object?>
+            {
                 ["context"] = new Dictionary<string, object?>
                 {
                     ["client"] = Context(client)
                 }
             };
 
+            if (client.UsePlayerEndpoint)
+            {
+                foreach (var (key, value) in request_)
+                {
+                    body[key] = value;
+                }
+            }
+            else
+            {
+                // ReVanced's reel shape: the request nested, and the player response asked for
+                // rather than disabled.
+                body["playerRequest"] = request_;
+                body["disablePlayerResponse"] = false;
+            }
+
             // The app endpoint, not the website's. ReVanced's own requests go to
             // youtubei.googleapis.com, which is where an application client belongs; and an
             // application client does not send a browser's Origin and Referer, so neither does
             // this one unless it is pretending to be a browser. Sending a web page's headers
             // with an Oculus user agent is not a client YouTube has ever seen.
-            var browser = client.Platform == "DESKTOP";
+            var browser = client.Browser;
 
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
                 browser
                     ? "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
-                    : "https://youtubei.googleapis.com/youtubei/v1/player?prettyPrint=false")
+                    : client.UsePlayerEndpoint ? AppPlayerEndpoint : ReelPlayerEndpoint)
             {
                 Content = JsonContent.Create(body)
             };
@@ -595,6 +707,10 @@ public sealed class YouTubeStreamResolver
                 request.Headers.TryAddWithoutValidation("Referer", Referer);
             }
 
+            // The number, not the name - and ReVanced says so out loud where they set it:
+            // "Not a typo. \"Client-Name\" uses the client type id." The Morphe fork sends the
+            // string here, which is one of the two things reading a fork instead of the real
+            // repository got wrong.
             request.Headers.TryAddWithoutValidation("X-YouTube-Client-Name", client.NameId);
             request.Headers.TryAddWithoutValidation("X-YouTube-Client-Version", client.Version);
 
@@ -641,7 +757,7 @@ public sealed class YouTubeStreamResolver
                 .ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), default, cancellationToken)
                 .ConfigureAwait(false);
 
-            var root = json.RootElement;
+            var root = PlayerResponse(json.RootElement);
             if (root.TryGetProperty("playabilityStatus", out var playability)
                 && playability.TryGetProperty("status", out var status)
                 && status.GetString() is { } text
@@ -1030,17 +1146,15 @@ public sealed class YouTubeStreamResolver
                 CultureInfo.InvariantCulture,
                 $"{candidate.Quality}p{(candidate.AudioUrl is null ? " muxed" : " with separate audio")}");
 
-    private sealed record InnertubeClient(
-        string Name,
-        string NameId,
-        string Version,
-        string Platform,
-        string UserAgent)
+    private sealed record InnertubeClient(string Name, string NameId, string Version)
     {
+        /// <summary>The app's package name, for the Android clients that generate a User-Agent.</summary>
+        public string? PackageName { get; init; }
+
         /// <summary>Who made the device this client claims to run on - Oculus, Google, Apple.</summary>
         public string? DeviceMake { get; init; }
 
-        /// <summary>The device this client claims to be running on, when it has to say.</summary>
+        /// <summary>The device this client claims to be running on.</summary>
         public string? DeviceModel { get; init; }
 
         /// <summary>The operating system's name, as the client reports it.</summary>
@@ -1052,18 +1166,52 @@ public sealed class YouTubeStreamResolver
         /// <summary>The Android API level, for the Android clients that send one.</summary>
         public int? AndroidSdkVersion { get; init; }
 
+        /// <summary>The Android build id, which the generated User-Agent ends with.</summary>
+        public string? BuildId { get; init; }
+
+        /// <summary>
+        /// A User-Agent given outright, for the clients that are not Android and therefore have
+        /// none to generate.
+        /// </summary>
+        public string? UserAgentOverride { get; init; }
+
+        /// <summary>
+        /// Whether this client asks the player endpoint. ReVanced's ANDROID_REEL is the one that
+        /// does not: it asks <c>reel/reel_item_watch</c>, with the request nested under
+        /// <c>playerRequest</c> and the answer nested under <c>playerResponse</c>.
+        /// </summary>
+        public bool UsePlayerEndpoint { get; init; } = true;
+
+        /// <summary>Whether this client talks to the website rather than the app endpoint.</summary>
+        public bool Browser { get; init; }
+
         /// <summary>
         /// Whether this client may carry a signed-in session.
         /// <para>
-        /// Not every client can. ReVanced's roster marks ANDROID_VR logout-only and skips the
-        /// <c>Authorization</c> header for it, which is not a style choice: a headset client
-        /// that has never had an account behind it is not a shape YouTube expects one from,
-        /// and signing it is a good way to turn a working anonymous request into a refused
-        /// one. So a pasted account is offered only to the clients that are signed in in real
-        /// life, and ANDROID_VR keeps asking exactly the way it does today.
+        /// ReVanced calls this <c>useAuth</c>, and what they put behind it is the real app's own
+        /// OAuth token rather than anything they build - so their answer for a given client is
+        /// not transferable to the cookie signature this plugin can offer. Kept false for every
+        /// client copied from them, because a signed request measured no better than an
+        /// anonymous one and a signature a client does not expect is a good way to be refused.
         /// </para>
         /// </summary>
         public bool AcceptsAccount { get; init; }
+
+        /// <summary>
+        /// Whether this client is refused outright without an account.
+        /// <para>
+        /// ReVanced skips a <c>useAuth</c> client when the user is not logged in, and this is
+        /// the same skip. ANDROID_CREATOR is the one that needs it: asked anonymously it
+        /// answers <b>400 "Precondition check failed"</b> every time, whatever the body says -
+        /// measured on 22 Aug 2026 across four request shapes.
+        /// </para>
+        /// </summary>
+        public bool RequiresAccount { get; init; }
+
+        /// <summary>
+        /// The User-Agent to send: the given one, or ReVanced's generated Android shape.
+        /// </summary>
+        public string UserAgent => UserAgentOverride ?? AndroidUserAgent(this);
     }
 
     private sealed record CachedStream(ResolvedStream Stream, DateTime ExpiresUtc);
