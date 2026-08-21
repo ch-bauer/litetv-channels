@@ -47,6 +47,32 @@ public class AppBuildTests
         Assert.Equal("v1.0.6-3-gabc1234", build.Version.ToString());
     }
 
+    /// <summary>
+    /// Found by a smoke test against the live server: a hash that is not hex leaves the
+    /// version's commit part unmatched, the build number slides into its place, and everything
+    /// after it was taken for an ABI - which produced the asset name
+    /// <c>Wholphin-release-gtest123-1-armeabi-v7a.apk</c>, a name the app never asks for.
+    /// </summary>
+    [Fact]
+    public void NeverInventsAnAbi()
+    {
+        var build = Build("Wholphin-default-release-0.0.1-1-gtest123-1-armeabi-v7a.apk");
+
+        Assert.Equal("armeabi-v7a", build.Abi);
+        Assert.Contains("Wholphin-release-armeabi-v7a.apk", AppBuild.Assets(new[] { build }).Select(a => a.Key));
+    }
+
+    [Fact]
+    public void TreatsAnUnknownAbiAsNone()
+    {
+        var build = Build("Wholphin-default-release-1.0.5-22-g7b77227d-57-sparc.apk");
+
+        Assert.Null(build.Abi);
+        Assert.Equal(
+            new[] { "Wholphin-release.apk", "Wholphin.apk" },
+            AppBuild.Assets(new[] { build }).Select(a => a.Key));
+    }
+
     [Fact]
     public void RefusesAFileWithNoVersion()
     {
