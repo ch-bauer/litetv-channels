@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.41.0",
+        "changelog": "The web gallery draws a page at a time. Every tile is a picture fetched from the provider, and the strip drew the whole answer at once - two to four hundred of them for a well-known film, to fill one slot that is almost always filled from the first few. Twenty-four now, with a Load more button under them. The German-first ordering still runs over the whole set before anything is drawn, so paging cannot bury the German pictures the way a smaller request would.\n\nThere are shape filters above the strip. The hard slot to fill is the banner - about five and a half to one, and no provider offers one, so filling it means finding the widest picture there is and cropping it. Measured on this server: TheMovieDB and OMDb answer with Primary, Backdrop, Thumb and Logo, and no Banner at all, so Backdrop and Thumb are the candidates and the filter puts them first. Enabling Fanart.tv in Jellyfin would add real banners; nothing here can conjure them.\n\nA collection is asked about and opened, every time. It used to ask the providers about the collection and only fall back to the films inside when that answered with nothing - but a film series usually is a collection to TheMovieDB, so it answered with a handful of pictures and the films' own artwork, which is better and far more plentiful, was never reached. The collection's pictures lead, then one picture of each film in turn.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.41.0/litetv-channels_1.0.41.0.zip",
+        "checksum": "13eb7b135bb71beb99ec3e50be8209dd",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
         "version": "1.0.40.0",
         "changelog": "An ABI is only used if it is one. Smoke-testing the update server against the live server turned up a build whose file name was read as ABI \"gtest123-1-armeabi-v7a\", and so advertised as Wholphin-release-gtest123-1-armeabi-v7a.apk - a name the app never asks for, which means an update that is never offered and nothing anywhere saying why. The cause is that a name can be wrong in the middle and still match: a commit hash that is not hexadecimal leaves the version's commit part unmatched, the build number slides into its place, and everything after it looks like an ABI. Whatever the name says is now checked against the ABIs that exist, and a file whose name does not name one is treated as universal, which is the honest reading of \"the name does not say\".\n\nEverything else in 1.0.39.0 was confirmed working against the live server first: the release JSON, the three asset names in the order the app asks for them, the download, and range requests.",
         "targetAbi": "10.11.0.0",
