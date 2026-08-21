@@ -150,7 +150,17 @@ public class LiteTvController : ControllerBase
         }
 
         var at = DateTime.UtcNow;
-        var window = _guide.Window(channel, at, at.AddHours(12)).Take(256).ToList();
+
+        // Anything that has already finished is dropped before anybody looks at the list.
+        // A window starts at the airing covering its first moment, and that airing can be
+        // rebuilt into several - a break is now adverts, then a trailer, then what is left -
+        // so the first thing the schedule hands back is not necessarily the thing that is on.
+        // Taken literally it made a channel report an advert that ended two minutes ago.
+        var window = _guide.Window(channel, at, at.AddHours(12))
+            .Where(a => a.EndUtc > at)
+            .Take(256)
+            .ToList();
+
         var current = window.FirstOrDefault();
         if (current is null)
         {

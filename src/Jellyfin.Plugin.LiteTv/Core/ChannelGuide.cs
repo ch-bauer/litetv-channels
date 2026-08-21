@@ -10,6 +10,14 @@ namespace Jellyfin.Plugin.LiteTv.Core;
 /// </summary>
 public sealed class ChannelGuide
 {
+    /// <summary>
+    /// What to keep back for a trailer the schedule cannot measure. Nearly every trailer a
+    /// library holds is a link the client resolves, so the server never learns its length; two
+    /// and a half minutes covers the long ones, and a break that over-reserves simply runs a
+    /// little quiet at the end, which is what a break used to be anyway.
+    /// </summary>
+    private static readonly TimeSpan LinkedTrailerReserve = TimeSpan.FromSeconds(150);
+
     private readonly ChannelPlaylistBuilder _builder;
 
     /// <summary>
@@ -51,7 +59,14 @@ public sealed class ChannelGuide
             return null;
         }
 
-        return Window(channel, at, at.AddMinutes(1)).FirstOrDefault();
+        // The one that covers this moment, not simply the first the window hands back. A
+        // window begins at the airing containing its first instant, and that airing may be
+        // rebuilt into several - adverts, a trailer, then the rest of the break - the earliest
+        // of which can already have finished by the time it is asked about.
+        var window = Window(channel, at, at.AddMinutes(1)).ToList();
+        return window.FirstOrDefault(a => a.StartUtc <= at && a.EndUtc > at)
+            ?? window.FirstOrDefault(a => a.EndUtc > at)
+            ?? window.FirstOrDefault();
     }
 
     /// <summary>
@@ -240,11 +255,22 @@ public sealed class ChannelGuide
         var seed = Draw(gap.StartUtc, channel.Id, ordered.Count);
 
         // How long the trailer that follows will want, so the break does not end on an advert.
-        var reserved = trailed is not null
+        //
+        // Local trailer files are the easy case: their runtime is known. Nearly every trailer a
+        // library has is a *link*, though, which the client resolves and which the schedule
+        // therefore knows nothing about - so with an advert pool of any size the adverts would
+        // eat the break and the trailer they were supposed to lead into would have nowhere to
+        // go. A linked trailer gets a fixed reservation instead: not exact, and far better than
+        // the zero that measuring gives.
+        var localTicks = trailed is not null
             ? _builder.TrailersFor(trailed.ItemId).Select(t => t.RuntimeTicks).DefaultIfEmpty(0).Max()
             : 0;
 
-        var room = gap.EndUtc - cursor - TimeSpan.FromTicks(reserved);
+        var reserved = trailed is null
+            ? TimeSpan.Zero
+            : localTicks > 0 ? TimeSpan.FromTicks(localTicks) : LinkedTrailerReserve;
+
+        var room = gap.EndUtc - cursor - reserved;
 
         for (var i = 0; i < ordered.Count; i++)
         {
