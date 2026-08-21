@@ -6,16 +6,20 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.LiteTv.Configuration;
 
 /// <summary>
-/// Puts LiteTV in the web client's own sidebar, when the server has the plugin that can.
+/// Takes LiteTV back out of the web client's own sidebar.
 /// <para>
-/// Configuring a channel otherwise means Dashboard, then Plugins, then LiteTV, every time -
-/// three navigations to reach the only screen anybody actually edits. The Plugin Pages plugin
-/// exists to solve exactly this, and it takes its entries from a JSON file in its own
-/// configuration folder. That file is the whole contract; there is no API to call.
+/// For a while the plugin put itself there through the Plugin Pages plugin, so that configuring
+/// a channel did not mean Dashboard, then Plugins, then LiteTV. That link is in every user's
+/// sidebar, not only an administrator's - and what it opens is the configuration page, where
+/// somebody who is not an administrator sees every channel, every source and the name of the
+/// playback account, and cannot save any of it. The page belongs in the dashboard, which is
+/// where <see cref="Plugin.GetPages"/> now asks for it: <c>EnableInMainMenu</c> puts it in the
+/// dashboard's own menu beside the other plugins, and the dashboard is administrators only.
 /// </para>
 /// <para>
-/// Nothing here is required. A server without Plugin Pages gets no link and no stray file, and
-/// the dashboard page it already had is untouched either way.
+/// This runs on every start rather than once, because Plugin Pages' configuration file is not
+/// ours and an entry written by an older version of this plugin would otherwise sit in it for
+/// good - the plugin that put it there being gone is not something Plugin Pages checks.
 /// </para>
 /// </summary>
 public static class SidebarLink
@@ -24,106 +28,51 @@ public static class SidebarLink
     private const string PluginPagesConfigFolder = "Jellyfin.Plugin.PluginPages";
 
     /// <summary>
-    /// Bumped when the entry below changes in a way an already-registered link would not pick
-    /// up. Plugin Pages never revisits an entry once written, so the version is the only way to
-    /// replace one.
-    /// </summary>
-    private const int EntryVersion = 1;
-
-    /// <summary>
-    /// Registers the sidebar entry, if Plugin Pages is installed and has not got one already.
+    /// Removes the sidebar entry this plugin used to register, if it is still there.
     /// </summary>
     /// <param name="paths">The server's application paths.</param>
     /// <param name="logger">Where to say what happened.</param>
-    public static void Register(IApplicationPaths paths, ILogger logger)
+    public static void Remove(IApplicationPaths paths, ILogger logger)
     {
         try
         {
-            if (!IsPluginPagesInstalled(paths))
+            var file = Path.Combine(paths.PluginConfigurationsPath, PluginPagesConfigFolder, "config.json");
+            if (!File.Exists(file))
             {
-                logger.LogDebug("LiteTV: no Plugin Pages, so no sidebar link");
                 return;
             }
 
-            var file = Path.Combine(paths.PluginConfigurationsPath, PluginPagesConfigFolder, "config.json");
-            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            var text = File.ReadAllText(file);
+            if (string.IsNullOrWhiteSpace(text) || JsonNode.Parse(text) is not JsonObject config)
+            {
+                return;
+            }
 
-            var config = Read(file);
             if (config["pages"] is not JsonArray pages)
             {
-                pages = new JsonArray();
-                config["pages"] = pages;
+                return;
             }
 
-            // An entry from an older version of this plugin is removed rather than edited: the
-            // file belongs to somebody else, and replacing one object wholesale is the only
-            // change that cannot half-apply.
-            var existing = pages.FirstOrDefault(p => (string?)p?["Id"] == EntryId);
-            if (existing is not null)
+            var ours = pages.Where(p => (string?)p?["Id"] == EntryId).ToList();
+            if (ours.Count == 0)
             {
-                if ((int?)existing["Version"] >= EntryVersion)
-                {
-                    return;
-                }
-
-                pages.Remove(existing);
+                return;
             }
 
-            pages.Add(new JsonObject
+            foreach (var entry in ours)
             {
-                ["Id"] = EntryId,
-                ["Url"] = "/LiteTv/Page",
-                ["DisplayText"] = "LiteTV",
-                ["Icon"] = "live_tv",
-                ["Version"] = EntryVersion
-            });
+                pages.Remove(entry);
+            }
 
             File.WriteAllText(file, config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            logger.LogInformation("LiteTV: added itself to the web client sidebar via Plugin Pages");
+            logger.LogInformation("LiteTV: removed itself from the web client sidebar; it is in the dashboard menu instead");
         }
         catch (Exception ex)
         {
-            // A sidebar link is a convenience. Nothing about the plugin depends on it, and a
-            // plugin that refused to load because somebody else's config file was malformed
-            // would be trading something that matters for something that does not.
-            logger.LogWarning(ex, "LiteTV: could not register the sidebar link");
+            // Tidying up somebody else's configuration file is not worth failing to load over.
+            logger.LogWarning(ex, "LiteTV: could not remove the sidebar link");
         }
     }
 
     private static string EntryId => typeof(Plugin).Namespace!;
-
-    private static JsonObject Read(string file)
-    {
-        if (!File.Exists(file))
-        {
-            return new JsonObject();
-        }
-
-        var text = File.ReadAllText(file);
-        return string.IsNullOrWhiteSpace(text)
-            ? new JsonObject()
-            : JsonNode.Parse(text) as JsonObject ?? new JsonObject();
-    }
-
-    /// <summary>
-    /// Whether Plugin Pages is on this server.
-    /// <para>
-    /// Asked of the plugins folder rather than of the loaded assemblies, because plugins load
-    /// in name order and "LiteTv" comes before "PluginPages" - so at the moment this runs the
-    /// assembly reliably is not there yet, and looking for it would answer no every time.
-    /// </para>
-    /// </summary>
-    private static bool IsPluginPagesInstalled(IApplicationPaths paths)
-    {
-        if (Directory.Exists(Path.Combine(paths.PluginConfigurationsPath, PluginPagesConfigFolder)))
-        {
-            return true;
-        }
-
-        return Directory.Exists(paths.PluginsPath)
-            && Directory.EnumerateDirectories(paths.PluginsPath)
-                .Select(Path.GetFileName)
-                .Any(name => name is not null
-                    && name.Replace(" ", string.Empty).Contains("PluginPages", StringComparison.OrdinalIgnoreCase));
-    }
 }
