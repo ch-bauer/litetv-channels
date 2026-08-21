@@ -128,12 +128,65 @@ public sealed class YouTubeStreamResolver
     /// </summary>
     private static readonly InnertubeClient[] Clients =
     {
-        new("ANDROID", "3", "20.10.41", "MOBILE",
-            "com.google.android.youtube/20.10.41 (Linux; U; Android 11) gzip"),
+        // Taken from ReVanced's own spoofing roster, read on 21 Aug 2026 - the project that
+        // does this against a moving target full time, and whose list looks nothing like the
+        // one that was guessed here. Two things about it matter more than the names.
+        //
+        // The **device fields** are part of the client. This ladder used to send a client name
+        // and a version and nothing else, which is why ANDROID_VR answered LOGIN_REQUIRED every
+        // time it was tried: without a Quest 3 and an Android 12 behind it, it is not a client
+        // YouTube recognises. They are sent now.
+        //
+        // And the **order is by what plays**, not by what is newest. Android VR is logged out
+        // by definition, so it never has an account's restrictions applied to it, and its
+        // streaming URLs are handed over unobfuscated. IOS is deliberately last: ReVanced's own
+        // tracker carries "videos stop loading after 1 minute" against it, which is the exact
+        // fault this ladder was rebuilt to fix.
+        new("ANDROID_VR", "28", "1.61.48", "MOBILE",
+            "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; GB) gzip")
+        {
+            DeviceModel = "Quest 3",
+            OsName = "Android",
+            OsVersion = "12",
+            AndroidSdkVersion = 32
+        },
+
+        // The plain Android app, at the version ReVanced ships as ANDROID_REEL. Authenticated
+        // clients are what most extraction tools have used since 2024.
+        new("ANDROID", "3", "20.44.38", "MOBILE",
+            "com.google.android.youtube/20.44.38 (Linux; U; Android 11) gzip")
+        {
+            DeviceModel = "Pixel 6",
+            OsName = "Android",
+            OsVersion = "11",
+            AndroidSdkVersion = 30
+        },
+
+        new("ANDROID_CREATOR", "14", "23.47.101", "MOBILE",
+            "com.google.android.apps.youtube.creator/23.47.101 (Linux; U; Android 15) gzip")
+        {
+            DeviceModel = "Pixel 9 Pro Fold",
+            OsName = "Android",
+            OsVersion = "15",
+            AndroidSdkVersion = 35
+        },
+
+        new("VISIONOS", "101", "0.1", "MOBILE",
+            "com.google.ios.youtubevr/0.1 (RealityDevice14,1; U; CPU visionOS 1_3 like Mac OS X)")
+        {
+            DeviceModel = "RealityDevice14,1",
+            OsName = "visionOS",
+            OsVersion = "1.3.21O771"
+        },
+
         new("IOS", "5", "20.10.4", "MOBILE",
-            "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"),
-        new("ANDROID_VR", "28", "1.62.27", "MOBILE",
-            "com.google.android.apps.youtube.vr.oculus/1.62.27 (Linux; U; Android 12L; Quest 3 Build/SQ3A.220605.009.A1) gzip"),
+            "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)")
+        {
+            DeviceModel = "iPhone16,2",
+            OsName = "iOS",
+            OsVersion = "18.3.2.22D82"
+        },
+
         new("TVHTML5", "7", "7.20250101.10.00", "TV",
             "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version"),
         new("WEB", "1", "2.20250312.04.00", "DESKTOP", UserAgent)
@@ -303,6 +356,45 @@ public sealed class YouTubeStreamResolver
         return null;
     }
 
+    /// <summary>
+    /// The client half of an Innertube request: who this is pretending to be, in the shape
+    /// YouTube expects it. The device fields are only sent when the client has them, because an
+    /// empty deviceModel is worse than no deviceModel.
+    /// </summary>
+    private static Dictionary<string, object?> Context(InnertubeClient client)
+    {
+        var context = new Dictionary<string, object?>
+        {
+            ["clientName"] = client.Name,
+            ["clientVersion"] = client.Version,
+            ["hl"] = "en",
+            ["gl"] = "US",
+            ["platform"] = client.Platform
+        };
+
+        if (!string.IsNullOrEmpty(client.DeviceModel))
+        {
+            context["deviceModel"] = client.DeviceModel;
+        }
+
+        if (!string.IsNullOrEmpty(client.OsName))
+        {
+            context["osName"] = client.OsName;
+        }
+
+        if (!string.IsNullOrEmpty(client.OsVersion))
+        {
+            context["osVersion"] = client.OsVersion;
+        }
+
+        if (client.AndroidSdkVersion is { } sdk)
+        {
+            context["androidSdkVersion"] = sdk;
+        }
+
+        return context;
+    }
+
     private async Task<StreamCandidate?> TryInnertubeAsync(string id, InnertubeClient client, CancellationToken cancellationToken)
     {
         try
@@ -317,14 +409,7 @@ public sealed class YouTubeStreamResolver
                 ["racyCheckOk"] = true,
                 ["context"] = new Dictionary<string, object?>
                 {
-                    ["client"] = new Dictionary<string, object?>
-                    {
-                        ["clientName"] = client.Name,
-                        ["clientVersion"] = client.Version,
-                        ["hl"] = "en",
-                        ["gl"] = "US",
-                        ["platform"] = client.Platform
-                    }
+                    ["client"] = Context(client)
                 }
             };
 
@@ -742,7 +827,20 @@ public sealed class YouTubeStreamResolver
         string NameId,
         string Version,
         string Platform,
-        string UserAgent);
+        string UserAgent)
+    {
+        /// <summary>The device this client claims to be running on, when it has to say.</summary>
+        public string? DeviceModel { get; init; }
+
+        /// <summary>The operating system's name, as the client reports it.</summary>
+        public string? OsName { get; init; }
+
+        /// <summary>The operating system's version, as the client reports it.</summary>
+        public string? OsVersion { get; init; }
+
+        /// <summary>The Android API level, for the Android clients that send one.</summary>
+        public int? AndroidSdkVersion { get; init; }
+    }
 
     private sealed record CachedStream(ResolvedStream Stream, DateTime ExpiresUtc);
 }

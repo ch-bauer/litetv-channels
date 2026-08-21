@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "The capped stream no longer wins the ladder. 1.0.49.0 spotted that an adaptive pair would stop a minute in and fell back to muxed - but only within the client that found it, and a client with no muxed format to offer handed the capped 1080p back anyway, where it outranked the 360p another client had already provided. The server log said so plainly and the answer was still itag 137.\n\nA stream that will not play past its opening now ranks at the floor: below anything that plays through, above nothing at all. So the ladder keeps looking, any client's muxed format wins, and a capped stream is returned only when the whole ladder comes back capped - a minute of a trailer being better than silence when there is nothing else.",
+  "changelog": "The client ladder is ReVanced's, not a guess. Their spoofing roster - read on 21 August, from GitLab, since their GitHub is DMCA-blocked - looks nothing like the one this had, and two differences matter more than the names.\n\nThe device fields are part of a client. This sent a client name and a version and nothing else, which is why ANDROID_VR answered LOGIN_REQUIRED every time it was tried here: without a Quest 3 and an Android 12 behind it, it is not a client YouTube recognises. deviceModel, osName, osVersion and androidSdkVersion are sent now.\n\nAnd the order is by what plays. Android VR 1.61.48 leads, because it is logged out by definition - no account restrictions apply to it and its streaming URLs come back unobfuscated - followed by the Android app at 20.44.38, Android Creator and visionOS. IOS is last on purpose: ReVanced's own tracker carries \"videos stop loading after 1 minute\" against it, which is exactly the fault this was rebuilt to fix.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-21T00:00:00.000Z",
-  "version": "1.0.50.0",
+  "version": "1.0.51.0",
   "status": "Active",
   "autoUpdate": false
 }
