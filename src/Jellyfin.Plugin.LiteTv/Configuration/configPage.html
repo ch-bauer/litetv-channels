@@ -892,11 +892,15 @@
                 }
 
                 gallery.innerHTML = '<div class="fieldDescription">Asking the metadata providers…</div>';
+                // The providers hold a couple of hundred pictures for a well-known film and
+                // this asks for a fixed slice of them, so the limit decides which languages
+                // are even in the room before germanFirst gets to order them. A hundred and
+                // twenty thumbnails is a dashboard page that still loads.
                 ApiClient.getJSON(ApiClient.getUrl('Items/' + itemId + '/RemoteImages', {
                     includeAllLanguages: true,
-                    limit: 60
+                    limit: 120
                 })).then(function (result) {
-                    var images = result.Images || [];
+                    var images = germanFirst(result.Images || []);
                     gallery.innerHTML = '';
                     if (!images.length) {
                         gallery.innerHTML = '<div class="fieldDescription">The providers have no pictures for that title.</div>';
@@ -905,7 +909,7 @@
 
                     var hint = document.createElement('div');
                     hint.className = 'fieldDescription';
-                    hint.textContent = 'Click a picture to put it in the highlighted slot above. These are addresses on the provider\u2019s own servers — use Upload if you would rather the picture lived here.';
+                    hint.textContent = 'German pictures first, then untitled ones. Click a picture to put it in the highlighted slot above. These are addresses on the provider\u2019s own servers — use Upload if you would rather the picture lived here.';
                     gallery.appendChild(hint);
 
                     var strip = document.createElement('div');
@@ -921,8 +925,41 @@
                 });
             }
 
+            /**
+             * Puts the German pictures at the front of the gallery.
+             *
+             * A poster or a banner has the film's title written on it, and the title is
+             * translated - so a picture in the wrong language is a channel captioned in a
+             * language nobody in the house is reading. The providers return whatever they hold
+             * in whatever order they hold it, usually English first.
+             *
+             * Pictures with no language at all come second, not last: that is what a provider
+             * marks a textless backdrop as, and a textless backdrop is exactly right for the
+             * background slot. English is put ahead of the rest only because a title in
+             * English is at least readable here.
+             *
+             * Nothing is hidden. The order is a preference, and somebody who wants the English
+             * poster can still scroll to it.
+             */
+            function germanFirst(images) {
+                function rank(image) {
+                    var language = (image.Language || '').toLowerCase();
+                    if (language === 'de' || language.indexOf('de-') === 0) { return 0; }
+                    if (!language) { return 1; }
+                    if (language === 'en' || language.indexOf('en-') === 0) { return 2; }
+                    return 3;
+                }
+
+                // Decorated with the index so the sort is stable: within a language the
+                // providers' own order is their ranking, and it is better than any of ours.
+                return images
+                    .map(function (image, index) { return { image: image, index: index }; })
+                    .sort(function (a, b) { return (rank(a.image) - rank(b.image)) || (a.index - b.index); })
+                    .map(function (entry) { return entry.image; });
+            }
+
             function remoteArtworkTile(image) {
-                var caption = [image.ProviderName, image.Type].filter(function (x) { return x; }).join(' · ');
+                var caption = [image.ProviderName, image.Type, image.Language].filter(function (x) { return x; }).join(' · ');
                 if (image.Width) { caption += '  ' + image.Width + '×' + image.Height; }
 
                 return galleryTile(image.ThumbnailUrl || image.Url, caption, function () {

@@ -873,9 +873,47 @@ public class LiteTvController : ControllerBase
     /// </summary>
     private static int TrailerRank(TrailerDto trailer)
     {
-        var name = trailer.Name;
+        // Language first, and by a distance nothing else can close: a German household being
+        // told about tonight's film in English is worse than being told about it by a teaser.
+        // Which trailer it is only decides between trailers that are already in the language.
+        return (GermanRank(trailer.Name) * 100) + KindRank(trailer.Name);
+    }
+
+    /// <summary>
+    /// Guesses a trailer's language from its name, because that is all there is to go on -
+    /// <c>RemoteTrailer</c> carries a name and a URL and nothing else.
+    /// <para>
+    /// The markers are taken from what the providers actually wrote for this library:
+    /// "Trailer Deutsch HD", "Trailer German", "Deutsch Trailer", "offizieller Kinotrailer
+    /// german". A German trailer says so in its title nearly every time, because it was
+    /// uploaded to be found by people searching in German.
+    /// </para>
+    /// <para>
+    /// "Offizieller" and "Kinotrailer" count on their own: they are German words, and a
+    /// trailer titled in German is in German. <c>OmU</c> deliberately does not - it means the
+    /// original soundtrack with subtitles, which nobody reads off a television across a room.
+    /// </para>
+    /// </summary>
+    private static int GermanRank(string name)
+    {
+        foreach (var marker in new[] { "deutsch", "german", "offizieller", "kinotrailer" })
+        {
+            if (name.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            {
+                return 0;
+            }
+        }
+
+        return 1;
+    }
+
+    /// <summary>Which kind of trailer it is: the full one, then anything, then a teaser.</summary>
+    private static int KindRank(string name)
+    {
         if (name.Contains("Official Trailer", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Official Theatrical Trailer", StringComparison.OrdinalIgnoreCase))
+            || name.Contains("Official Theatrical Trailer", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Offizieller Trailer", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Kinotrailer", StringComparison.OrdinalIgnoreCase))
         {
             return 0;
         }
