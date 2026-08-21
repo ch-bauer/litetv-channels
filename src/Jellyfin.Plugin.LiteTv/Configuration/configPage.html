@@ -44,6 +44,27 @@
                     </div>
                 </div>
 
+                <div class="selectContainer">
+                    <select is="emby-select" id="YouTubeClient" label="YouTube client for trailers">
+                        <option value="">Try them all, best first</option>
+                        <option value="ANDROID_VR">Android VR (Quest 3)</option>
+                        <option value="ANDROID">Android</option>
+                        <option value="ANDROID_CREATOR">Android Creator</option>
+                        <option value="VISIONOS">visionOS</option>
+                        <option value="IOS">iOS</option>
+                        <option value="TVHTML5">TV</option>
+                        <option value="WEB">Web</option>
+                    </select>
+                    <div class="fieldDescription">
+                        What YouTube hands over depends on who is asking, and it differs by client, by
+                        day, and by whether the asker looks like a real device — Android VR gives every
+                        rendition unobfuscated to a phone running microG, and answers "login required"
+                        to a server with no Google identity to offer. This is the one thing about
+                        trailers that cannot be settled from here, so it can be pinned and tried from
+                        the television. Leave it on "try them all" unless you are testing.
+                    </div>
+                </div>
+
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
                 <div class="fieldDescription" style="margin-bottom: 0.6em;">
                     Based on the media in your library. Adding a suggestion creates a channel you can still edit below.
@@ -1473,6 +1494,7 @@
                 applyEditorToChannel();
                 config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
                 config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
+                config.YouTubeClient = q('#YouTubeClient').value || '';
 
                 list.innerHTML = '<div class="listItem">Saving, then asking the server…</div>';
                 ApiClient.updatePluginConfiguration(pluginId, config)
@@ -2416,6 +2438,7 @@
                     config.Channels = config.Channels || [];
                     q('#ChannelUserName').value = config.ChannelUserName || 'LiteTV';
                     q('#SkipTrailerSegments').checked = config.SkipTrailerSegments !== false;
+                    q('#YouTubeClient').value = config.YouTubeClient || '';
                     currentIndex = config.Channels.length ? 0 : -1;
                     renderChannelSelect();
                     loadEffectiveArt().then(function () { renderEditor(); renderScheduleEdits(); });
@@ -2843,6 +2866,7 @@
                     applyEditorToChannel();
                     config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
                 config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
+                config.YouTubeClient = q('#YouTubeClient').value || '';
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
                         renderBlockSelect();
