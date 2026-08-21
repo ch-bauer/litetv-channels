@@ -3,6 +3,11 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # So a release can be re-cut without moving a tag - and so that "did Actions run?" is a
+  # question that can be answered on purpose rather than by pushing another tag. Dispatch it
+  # against the tag itself (`gh workflow run release.yml --ref v1.2.3`): every step below reads
+  # GITHUB_REF_NAME, which is the tag's name either way.
+  workflow_dispatch:
 
 permissions:
   contents: write
