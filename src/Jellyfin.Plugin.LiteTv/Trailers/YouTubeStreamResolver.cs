@@ -396,6 +396,54 @@ public sealed class YouTubeStreamResolver
     public const string AccountOrigin = "https://www.youtube.com";
 
     /// <summary>
+    /// The cookies worth sending, out of the many a browser hands over.
+    /// <para>
+    /// A real paste is enormous. The one measured on 22 Aug 2026 held <b>166 cookies and
+    /// 182 kilobytes</b>, nearly all of it Google's per-service <c>ST-*</c> state, and sending
+    /// it whole made <i>every</i> signed request fail - a header that size is refused before
+    /// anything reads it, and since a failed rung is silent the only symptom was trailers
+    /// quietly not resolving. Trimmed to these twenty names the same paste is under two
+    /// kilobytes and works.
+    /// </para>
+    /// <para>
+    /// The list is the session and nothing else: the id pair the signature is built from, the
+    /// login cookies that make it a session, and the visitor ids YouTube expects alongside
+    /// them. Anything not named here is dropped.
+    /// </para>
+    /// </summary>
+    private static readonly HashSet<string> AccountCookies = new(StringComparer.Ordinal)
+    {
+        "SID", "HSID", "SSID", "APISID", "SAPISID", "LOGIN_INFO", "PREF", "SIDCC",
+        "__Secure-1PSID", "__Secure-3PSID", "__Secure-1PAPISID", "__Secure-3PAPISID",
+        "__Secure-1PSIDTS", "__Secure-3PSIDTS", "__Secure-1PSIDCC", "__Secure-3PSIDCC",
+        "__Secure-YEC", "VISITOR_INFO1_LIVE", "VISITOR_PRIVACY_METADATA", "YSC"
+    };
+
+    /// <summary>
+    /// Reduces a pasted cookie header to the part a signed request needs.
+    /// </summary>
+    /// <param name="cookie">The whole <c>Cookie</c> header, as it was pasted.</param>
+    /// <returns>The header to send, or null when the paste carries no session at all.</returns>
+    internal static string? AccountCookie(string? cookie)
+    {
+        if (Sapisid(cookie) is null)
+        {
+            return null;
+        }
+
+        var kept = cookie!
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(part =>
+            {
+                var split = part.IndexOf('=', StringComparison.Ordinal);
+                return split > 0 && AccountCookies.Contains(part[..split].Trim());
+            });
+
+        var header = string.Join("; ", kept);
+        return header.Length == 0 ? null : header;
+    }
+
+    /// <summary>
     /// Pulls the session id out of a pasted cookie header - the one value in it that the
     /// signature is built from.
     /// <para>
@@ -561,13 +609,26 @@ public sealed class YouTubeStreamResolver
             // Whether it actually brings the addresses back is a measurement nobody has run;
             // this is the plumbing that lets it be run from the configuration page.
             var cookie = Plugin.Instance?.Configuration.YouTubeCookie;
-            if (client.AcceptsAccount && !string.IsNullOrWhiteSpace(cookie)
-                && AuthorizationFor(cookie, DateTimeOffset.UtcNow) is { } authorization)
+            if (client.AcceptsAccount && !string.IsNullOrWhiteSpace(cookie))
             {
-                request.Headers.TryAddWithoutValidation("Cookie", cookie.Trim());
-                request.Headers.TryAddWithoutValidation("Authorization", authorization);
-                request.Headers.TryAddWithoutValidation("X-Origin", AccountOrigin);
-                request.Headers.TryAddWithoutValidation("X-Goog-AuthUser", "0");
+                if (AccountCookie(cookie) is { } session
+                    && AuthorizationFor(cookie, DateTimeOffset.UtcNow) is { } authorization)
+                {
+                    request.Headers.TryAddWithoutValidation("Cookie", session);
+                    request.Headers.TryAddWithoutValidation("Authorization", authorization);
+                    request.Headers.TryAddWithoutValidation("X-Origin", AccountOrigin);
+                    request.Headers.TryAddWithoutValidation("X-Goog-AuthUser", "0");
+                }
+                else
+                {
+                    // Said out loud, because the alternative is a setting that looks filled in
+                    // and does nothing. The usual cause is an export taken from youtube.com
+                    // only: the id the signature is built from is a google.com cookie.
+                    _logger.LogWarning(
+                        "LiteTV: a YouTube cookie is configured but carries no session id "
+                        + "(__Secure-3PAPISID or SAPISID); asking anonymously. Re-export "
+                        + "including google.com.");
+                }
             }
 
             using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
