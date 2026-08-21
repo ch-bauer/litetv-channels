@@ -486,6 +486,48 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
+    /// Takes a proof-of-origin token that a television has minted.
+    /// <para>
+    /// The server cannot mint one: it needs Google's BotGuard, which is JavaScript that wants a
+    /// browser. An Android box has one built in, so it runs BotGuard in a WebView and posts the
+    /// result here, and every trailer resolved afterwards carries it. See
+    /// <see cref="ProofOfOrigin"/> for what it buys - in short, the difference between a 1080p
+    /// stream that stops after a minute and one that plays to the end.
+    /// </para>
+    /// </summary>
+    /// <param name="minted">What the television minted.</param>
+    /// <returns>What is now held, without the tokens themselves.</returns>
+    [HttpPost("PoToken")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<PoTokenStatusDto> PostPoToken([FromBody] PoTokenDto minted)
+    {
+        if (string.IsNullOrWhiteSpace(minted.VisitorData) || string.IsNullOrWhiteSpace(minted.PoToken))
+        {
+            return BadRequest("visitorData and poToken are both required");
+        }
+
+        return Status(ProofOfOrigin.Take(minted.VisitorData, minted.PoToken, minted.PlayerPoToken));
+    }
+
+    /// <summary>
+    /// Says whether a usable token is held, so the television can decide whether to mint again
+    /// and so a person with curl can tell what the server is working with.
+    /// </summary>
+    /// <returns>The status. Never the tokens - they are a proof of identity.</returns>
+    [HttpGet("PoToken")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<PoTokenStatusDto> GetPoToken() => Status(ProofOfOrigin.Held);
+
+    private static PoTokenStatusDto Status(ProofOfOrigin.Minted? held) => new()
+    {
+        Held = held is not null,
+        MintedUtc = held?.MintedUtc,
+        AgeSeconds = held is null ? null : (int)(DateTime.UtcNow - held.MintedUtc).TotalSeconds,
+        HasPlayerToken = held?.PlayerToken is not null
+    };
+
+    /// <summary>
     /// Suggests channels based on the media present in the library: genre channels,
     /// collection marathons and a kids channel. Used by the configuration page.
     /// </summary>
@@ -1333,4 +1375,47 @@ public class PlayingChannelDto
     /// a series, rather than following the schedule, are shielded like everything else the
     /// channel plays.</summary>
     public bool ShieldBingedEpisodes { get; set; } = true;
+}
+
+/// <summary>
+/// A proof-of-origin token as a television mints it.
+/// </summary>
+public class PoTokenDto
+{
+    /// <summary>
+    /// Gets or sets the visitor id the token was minted against.
+    /// <para>
+    /// Not optional and not cosmetic: the token is bound to this, and a request carrying one
+    /// without the other is refused in a way that looks exactly like carrying neither.
+    /// </para>
+    /// </summary>
+    public string VisitorData { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the token for stream addresses.</summary>
+    public string PoToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the token for the player request, when the minter made a separate one.
+    /// Leave it empty rather than repeating <see cref="PoToken"/> - the two are different
+    /// contexts, and the wrong one is worse than none.
+    /// </summary>
+    public string? PlayerPoToken { get; set; }
+}
+
+/// <summary>
+/// What the server is holding. Deliberately says nothing about the token itself.
+/// </summary>
+public class PoTokenStatusDto
+{
+    /// <summary>Gets or sets a value indicating whether a usable token is held.</summary>
+    public bool Held { get; set; }
+
+    /// <summary>Gets or sets when it was minted.</summary>
+    public DateTime? MintedUtc { get; set; }
+
+    /// <summary>Gets or sets how long ago that was, in seconds.</summary>
+    public int? AgeSeconds { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether a separate player token came with it.</summary>
+    public bool HasPlayerToken { get; set; }
 }

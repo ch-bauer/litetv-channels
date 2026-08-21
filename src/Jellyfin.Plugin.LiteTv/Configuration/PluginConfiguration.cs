@@ -59,28 +59,6 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string YouTubeClient { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Gets or sets the cookie header from a logged-in YouTube session, or an empty string to
-    /// ask anonymously.
-    /// <para>
-    /// What YouTube hands an anonymous asker is one 360p muxed address and nineteen renditions
-    /// with no address at all - measured, not assumed. An account changes that: the same
-    /// request signed as a logged-in session gets the addresses. This is where the session is
-    /// kept.
-    /// </para>
-    /// <para>
-    /// <b>Use an account you do not care about.</b> This is a server asking YouTube for streams
-    /// on a schedule, which is the shape of thing accounts get rate-limited and banned for, and
-    /// the account here is one paste away from being the account everything else is on.
-    /// </para>
-    /// <para>
-    /// <b>It is stored in plain text</b>, like every other plugin setting on this server, and it
-    /// is a live credential - anybody who can read the configuration can act as that account.
-    /// Never put a dump of this configuration anywhere public.
-    /// </para>
-    /// </summary>
-    public string YouTubeCookie { get; set; } = string.Empty;
-
 }
 
 /// <summary>
