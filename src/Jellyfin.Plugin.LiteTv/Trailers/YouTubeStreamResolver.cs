@@ -39,11 +39,6 @@ namespace Jellyfin.Plugin.LiteTv.Trailers;
 public sealed class YouTubeStreamResolver
 {
     /// <summary>
-    /// What a resolved trailer is: one address, or two that have to be played together.
-    /// </summary>
-    /// <param name="Url">The video, or the whole trailer when there is no separate audio.</param>
-    /// <param name="AudioUrl">The audio, when video and audio are separate streams.</param>
-    /// <summary>
     /// What was resolved, and how - the how being reportable so that field testing on a
     /// television does not have to be done by reading the server log.
     /// </summary>
@@ -122,11 +117,18 @@ public sealed class YouTubeStreamResolver
     /// matching User-Agent, which is all that is sent now - the same shape yt-dlp settled on.
     /// </para>
     /// <para>
-    /// The order is measured rather than inherited. Moonfin asks ANDROID_VR first and the TV
-    /// player second; measured on 20 and 21 Aug 2026, ANDROID_VR and the TV player answer
-    /// <c>LOGIN_REQUIRED</c>, WEB and MWEB answer <c>UNPLAYABLE</c>, IOS answers with adaptive
-    /// streams up to 720p, and <b>ANDROID</b> answers with the full ladder to 1080p. So ANDROID
-    /// leads and IOS backs it up.
+    /// The order is measured, and the measurement changed on 21 Aug 2026. <b>ANDROID_VR leads
+    /// now</b>: asked the way ReVanced asks - the app endpoint at <c>youtubei.googleapis.com</c>,
+    /// a device make and model, and none of a browser's Origin and Referer - it answered with
+    /// <b>22 renditions up to 2160p, every one of them carrying an address</b>. The plain
+    /// ANDROID client, by contrast, now returns nineteen renditions with <i>no address on any of
+    /// them</i> and one muxed 360p, which is the whole reason trailers had dropped to 360p.
+    /// </para>
+    /// <para>
+    /// ANDROID_VR is also refused a good deal of the time, with "Sign in to confirm you're not a
+    /// bot". That is a gate on the asker rather than on the request, and the honest response to
+    /// it is to fall through to the next client rather than to hammer it - so the ladder does
+    /// exactly that, and a break gets 360p that day instead of nothing.
     /// </para>
     /// <para>
     /// The ones that fail today are kept behind them rather than deleted: they cost one fast
@@ -153,6 +155,7 @@ public sealed class YouTubeStreamResolver
         new("ANDROID_VR", "28", "1.61.48", "MOBILE",
             "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; GB) gzip")
         {
+            DeviceMake = "Oculus",
             DeviceModel = "Quest 3",
             OsName = "Android",
             OsVersion = "12",
@@ -164,6 +167,7 @@ public sealed class YouTubeStreamResolver
         new("ANDROID", "3", "20.44.38", "MOBILE",
             "com.google.android.youtube/20.44.38 (Linux; U; Android 11) gzip")
         {
+            DeviceMake = "Google",
             DeviceModel = "Pixel 6",
             OsName = "Android",
             OsVersion = "11",
@@ -173,6 +177,7 @@ public sealed class YouTubeStreamResolver
         new("ANDROID_CREATOR", "14", "23.47.101", "MOBILE",
             "com.google.android.apps.youtube.creator/23.47.101 (Linux; U; Android 15) gzip")
         {
+            DeviceMake = "Google",
             DeviceModel = "Pixel 9 Pro Fold",
             OsName = "Android",
             OsVersion = "15",
@@ -182,6 +187,7 @@ public sealed class YouTubeStreamResolver
         new("VISIONOS", "101", "0.1", "MOBILE",
             "com.google.ios.youtubevr/0.1 (RealityDevice14,1; U; CPU visionOS 1_3 like Mac OS X)")
         {
+            DeviceMake = "Apple",
             DeviceModel = "RealityDevice14,1",
             OsName = "visionOS",
             OsVersion = "1.3.21O771"
@@ -190,6 +196,7 @@ public sealed class YouTubeStreamResolver
         new("IOS", "5", "20.10.4", "MOBILE",
             "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)")
         {
+            DeviceMake = "Apple",
             DeviceModel = "iPhone16,2",
             OsName = "iOS",
             OsVersion = "18.3.2.22D82"
@@ -388,6 +395,11 @@ public sealed class YouTubeStreamResolver
             ["platform"] = client.Platform
         };
 
+        if (!string.IsNullOrEmpty(client.DeviceMake))
+        {
+            context["deviceMake"] = client.DeviceMake;
+        }
+
         if (!string.IsNullOrEmpty(client.DeviceModel))
         {
             context["deviceModel"] = client.DeviceModel;
@@ -429,15 +441,29 @@ public sealed class YouTubeStreamResolver
                 }
             };
 
+            // The app endpoint, not the website's. ReVanced's own requests go to
+            // youtubei.googleapis.com, which is where an application client belongs; and an
+            // application client does not send a browser's Origin and Referer, so neither does
+            // this one unless it is pretending to be a browser. Sending a web page's headers
+            // with an Oculus user agent is not a client YouTube has ever seen.
+            var browser = client.Platform == "DESKTOP";
+
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
-                "https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+                browser
+                    ? "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
+                    : "https://youtubei.googleapis.com/youtubei/v1/player?prettyPrint=false")
             {
                 Content = JsonContent.Create(body)
             };
             request.Headers.TryAddWithoutValidation("User-Agent", client.UserAgent);
-            request.Headers.TryAddWithoutValidation("Origin", "https://www.youtube.com");
-            request.Headers.TryAddWithoutValidation("Referer", Referer);
+
+            if (browser)
+            {
+                request.Headers.TryAddWithoutValidation("Origin", "https://www.youtube.com");
+                request.Headers.TryAddWithoutValidation("Referer", Referer);
+            }
+
             request.Headers.TryAddWithoutValidation("X-YouTube-Client-Name", client.NameId);
             request.Headers.TryAddWithoutValidation("X-YouTube-Client-Version", client.Version);
 
@@ -845,6 +871,9 @@ public sealed class YouTubeStreamResolver
         string Platform,
         string UserAgent)
     {
+        /// <summary>Who made the device this client claims to run on - Oculus, Google, Apple.</summary>
+        public string? DeviceMake { get; init; }
+
         /// <summary>The device this client claims to be running on, when it has to say.</summary>
         public string? DeviceModel { get; init; }
 
