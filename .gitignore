@@ -6,3 +6,10 @@ package/
 *.user
 .vs/
 .claude
+
+# Configuration dumps taken from a running server. They are POST bodies from testing, they
+# carry the playback account's password, and one of them was published for a day before
+# anybody noticed - which is the whole reason this line exists.
+cfg*.json
+chan*.json
+publish/
