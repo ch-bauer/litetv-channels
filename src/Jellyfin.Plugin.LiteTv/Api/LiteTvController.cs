@@ -469,8 +469,8 @@ public class LiteTvController : ControllerBase
     {
         foreach (var trailer in RemoteTrailers(itemId))
         {
-            var url = await _trailers.ResolveAsync(trailer.Url, HttpContext.RequestAborted).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(url))
+            var stream = await _trailers.ResolveAsync(trailer.Url, HttpContext.RequestAborted).ConfigureAwait(false);
+            if (stream is null || string.IsNullOrEmpty(stream.Url))
             {
                 // Try the next one rather than giving up: a video pulled down or blocked in
                 // this region fails on its own, and the second-best trailer still airs.
@@ -480,7 +480,8 @@ public class LiteTvController : ControllerBase
             return new ResolvedTrailerDto
             {
                 Name = trailer.Name,
-                Url = url,
+                Url = stream.Url,
+                AudioUrl = stream.AudioUrl,
                 UserAgent = YouTubeStreamResolver.UserAgent,
                 Referer = YouTubeStreamResolver.Referer
             };
@@ -898,6 +899,16 @@ public class ResolvedTrailerDto
 
     /// <summary>Gets or sets the stream address to play.</summary>
     public string Url { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the audio address, when the trailer's audio is a stream of its own.
+    /// <para>
+    /// Null means <see cref="Url"/> carries its own sound. When it is set, the two have to be
+    /// played together - that pairing is the only way YouTube offers anything above 360p, so a
+    /// client that ignores this field gets a picture in silence rather than a poor trailer.
+    /// </para>
+    /// </summary>
+    public string? AudioUrl { get; set; }
 
     /// <summary>Gets or sets the User-Agent the stream must be requested with.</summary>
     public string UserAgent { get; set; } = string.Empty;

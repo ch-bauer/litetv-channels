@@ -31,6 +31,13 @@ namespace Jellyfin.Plugin.LiteTv.Trailers;
 public sealed class YouTubeStreamResolver
 {
     /// <summary>
+    /// What a resolved trailer is: one address, or two that have to be played together.
+    /// </summary>
+    /// <param name="Url">The video, or the whole trailer when there is no separate audio.</param>
+    /// <param name="AudioUrl">The audio, when video and audio are separate streams.</param>
+    public sealed record ResolvedStream(string Url, string? AudioUrl);
+
+    /// <summary>
     /// How long a resolved URL is offered again before it is looked up afresh. Google's
     /// stream URLs carry an expiry of their own, usually some hours; this stays well inside
     /// that, because a URL that dies mid-trailer is worse than a second's delay.
@@ -38,6 +45,26 @@ public sealed class YouTubeStreamResolver
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(45);
 
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// The height at which the ladder stops looking. Below it the answer is kept but the next
+    /// rung is still asked.
+    /// <para>
+    /// This is the whole of the 360p fix. Innertube's <c>formats</c> list - the muxed one,
+    /// video and audio in a single file - nowadays holds itag 18 and little else, so a client
+    /// that answers without a manifest hands back 360p and the old ladder stopped there
+    /// satisfied. ANDROID leads the ladder because it is the most likely to answer at all, and
+    /// it is precisely the one that tends not to return a manifest; IOS and the TV player
+    /// usually do. Carrying on costs a couple of fast requests and gets the quality ladder.
+    /// </para>
+    /// </summary>
+    private const int GoodEnough = 720;
+
+    /// <summary>
+    /// The quality a manifest counts as: above anything a single file can score, since it
+    /// carries every rendition the video has.
+    /// </summary>
+    private const int Manifest = int.MaxValue;
 
     /// <summary>
     /// Sent when the stream is fetched as well as when it is resolved. Google serves a
@@ -156,19 +183,19 @@ public sealed class YouTubeStreamResolver
     /// </summary>
     /// <param name="url">The trailer address as the library holds it.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A playable URL, or null when it could not be resolved. A link that is not
+    /// <returns>What to play, or null when it could not be resolved. A link that is not
     /// YouTube is handed back untouched, since it may already be playable.</returns>
-    public async Task<string?> ResolveAsync(string? url, CancellationToken cancellationToken)
+    public async Task<ResolvedStream?> ResolveAsync(string? url, CancellationToken cancellationToken)
     {
         var id = VideoId(url);
         if (id is null)
         {
-            return url;
+            return string.IsNullOrEmpty(url) ? null : new ResolvedStream(url, null);
         }
 
         if (_cache.TryGetValue(id, out var cached) && cached.ExpiresUtc > DateTime.UtcNow)
         {
-            return cached.Url;
+            return cached.Stream;
         }
 
         var resolved = await ResolveIdAsync(id, cancellationToken).ConfigureAwait(false);
@@ -180,45 +207,82 @@ public sealed class YouTubeStreamResolver
         return resolved;
     }
 
-    private async Task<string?> ResolveIdAsync(string id, CancellationToken cancellationToken)
+    private async Task<ResolvedStream?> ResolveIdAsync(string id, CancellationToken cancellationToken)
     {
+        StreamCandidate? best = null;
+
+        StreamCandidate? Better(StreamCandidate? candidate)
+        {
+            if (candidate is not null && (best is null || candidate.Quality > best.Quality))
+            {
+                best = candidate;
+            }
+
+            return best is { Quality: >= GoodEnough } ? best : null;
+        }
+
         foreach (var client in Clients)
         {
-            var url = await TryInnertubeAsync(id, client, cancellationToken).ConfigureAwait(false);
-            if (url is not null)
+            var found = await TryInnertubeAsync(id, client, cancellationToken).ConfigureAwait(false);
+            if (Better(found) is { } good)
             {
-                _logger.LogDebug("LiteTV: resolved trailer {Id} as {Client}", id, client.Name);
-                return url;
+                _logger.LogDebug(
+                    "LiteTV: resolved trailer {Id} as {Client}, {Quality}",
+                    id,
+                    good.Source,
+                    Describe(good));
+                return good.Stream;
             }
         }
 
         foreach (var instance in PipedInstances)
         {
-            var url = await TryMirrorAsync($"{instance}/streams/{id}", "hls", "videoStreams", cancellationToken)
+            var found = await TryMirrorAsync($"{instance}/streams/{id}", "hls", "videoStreams", instance, cancellationToken)
                 .ConfigureAwait(false);
-            if (url is not null)
+            if (Better(found) is { } good)
             {
-                _logger.LogDebug("LiteTV: resolved trailer {Id} via {Instance}", id, instance);
-                return url;
+                _logger.LogDebug(
+                    "LiteTV: resolved trailer {Id} via {Instance}, {Quality}",
+                    id,
+                    good.Source,
+                    Describe(good));
+                return good.Stream;
             }
         }
 
         foreach (var instance in InvidiousInstances)
         {
-            var url = await TryMirrorAsync($"{instance}/api/v1/videos/{id}", null, "formatStreams", cancellationToken)
+            var found = await TryMirrorAsync($"{instance}/api/v1/videos/{id}", null, "formatStreams", instance, cancellationToken)
                 .ConfigureAwait(false);
-            if (url is not null)
+            if (Better(found) is { } good)
             {
-                _logger.LogDebug("LiteTV: resolved trailer {Id} via {Instance}", id, instance);
-                return url;
+                _logger.LogDebug(
+                    "LiteTV: resolved trailer {Id} via {Instance}, {Quality}",
+                    id,
+                    good.Source,
+                    Describe(good));
+                return good.Stream;
             }
+        }
+
+        if (best is not null)
+        {
+            // Nothing anywhere offered better, so the low one is the trailer. Said out loud
+            // because a channel quietly airing 360p is exactly the complaint this ladder
+            // exists to answer.
+            _logger.LogInformation(
+                "LiteTV: trailer {Id} resolved only to {Quality}, from {Source}",
+                id,
+                Describe(best),
+                best.Source);
+            return best.Stream;
         }
 
         _logger.LogInformation("LiteTV: no source could resolve trailer {Id}", id);
         return null;
     }
 
-    private async Task<string?> TryInnertubeAsync(string id, InnertubeClient client, CancellationToken cancellationToken)
+    private async Task<StreamCandidate?> TryInnertubeAsync(string id, InnertubeClient client, CancellationToken cancellationToken)
     {
         try
         {
@@ -285,11 +349,29 @@ public sealed class YouTubeStreamResolver
             {
                 if (streaming.TryGetProperty(manifest, out var url) && url.GetString() is { Length: > 0 } value)
                 {
-                    return value;
+                    return new StreamCandidate(value, Manifest, client.Name);
                 }
             }
 
-            return streaming.TryGetProperty("formats", out var formats) ? BestOf(formats) : null;
+            // Adaptive first, muxed second, and whichever is better wins. The muxed list -
+            // video and audio in one file - is where a single-URL player has to look, and
+            // nowadays it holds itag 18 and nothing else: 360p with thin audio, which is
+            // exactly what the channel was airing. Everything worth watching is in
+            // adaptiveFormats, as a video stream and an audio stream that have to be played
+            // together.
+            var adaptive = streaming.TryGetProperty("adaptiveFormats", out var adaptiveFormats)
+                ? BestPair(adaptiveFormats, client.Name)
+                : null;
+            var muxed = streaming.TryGetProperty("formats", out var formats)
+                ? BestOf(formats, client.Name)
+                : null;
+
+            if (adaptive is null || (muxed is not null && muxed.Quality > adaptive.Quality))
+            {
+                return muxed ?? adaptive;
+            }
+
+            return adaptive;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
@@ -298,10 +380,11 @@ public sealed class YouTubeStreamResolver
         }
     }
 
-    private async Task<string?> TryMirrorAsync(
+    private async Task<StreamCandidate?> TryMirrorAsync(
         string url,
         string? directProperty,
         string streamsProperty,
+        string source,
         CancellationToken cancellationToken)
     {
         try
@@ -326,10 +409,10 @@ public sealed class YouTubeStreamResolver
                 && direct.ValueKind == JsonValueKind.String
                 && direct.GetString() is { Length: > 0 } hls)
             {
-                return hls;
+                return new StreamCandidate(hls, Manifest, source);
             }
 
-            return root.TryGetProperty(streamsProperty, out var streams) ? BestOf(streams) : null;
+            return root.TryGetProperty(streamsProperty, out var streams) ? BestOf(streams, source) : null;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
@@ -338,10 +421,96 @@ public sealed class YouTubeStreamResolver
     }
 
     /// <summary>
+    /// Picks a video stream and an audio stream to be played together.
+    /// <para>
+    /// This is where the quality is. YouTube keeps H.264 at 1080p, and AAC at 128 kbps, in the
+    /// adaptive lists only; the muxed list a single-URL player wants is 360p. Pairing them
+    /// costs a second address in the answer and a merged media source in the app, and it is
+    /// the difference between a trailer that looks like the channel and one that looks like a
+    /// mistake.
+    /// </para>
+    /// <para>
+    /// H.264 in MP4, and nothing above 1080p: a television decodes that combination in
+    /// hardware, and a trailer that stutters through VP9 at 2160p is worse than one that does
+    /// not. Audio is AAC, preferring stereo - a 5.1 track is offered and would be remixed by
+    /// whatever the set is plugged into, which for a thirty-second trailer is a poor trade.
+    /// </para>
+    /// </summary>
+    private static StreamCandidate? BestPair(JsonElement streams, string source)
+    {
+        if (streams.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        string? video = null;
+        var videoHeight = 0;
+        var videoScore = int.MinValue;
+        string? audio = null;
+        var audioScore = int.MinValue;
+
+        foreach (var stream in streams.EnumerateArray())
+        {
+            if (!stream.TryGetProperty("url", out var urlElement) || urlElement.GetString() is not { Length: > 0 } url)
+            {
+                // A stream whose URL has to be un-ciphered by running YouTube's own JavaScript
+                // is not worth the machinery; the clients we claim to be hand back plain URLs.
+                continue;
+            }
+
+            var mime = stream.TryGetProperty("mimeType", out var m) ? m.GetString() ?? string.Empty : string.Empty;
+
+            if (mime.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            {
+                var height = Height(stream);
+                if (height is 0 or > 1080)
+                {
+                    continue;
+                }
+
+                var score = height;
+                if (mime.Contains("avc1", StringComparison.OrdinalIgnoreCase)) score += 4000;
+                if (mime.Contains("mp4", StringComparison.OrdinalIgnoreCase)) score += 2000;
+                if (score > videoScore)
+                {
+                    videoScore = score;
+                    videoHeight = height;
+                    video = url;
+                }
+            }
+            else if (mime.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+            {
+                var score = 0;
+                if (mime.Contains("mp4a", StringComparison.OrdinalIgnoreCase)) score += 4000;
+                var channels = stream.TryGetProperty("audioChannels", out var c) && c.TryGetInt32(out var count)
+                    ? count
+                    : 2;
+                if (channels <= 2) score += 2000;
+                if (stream.TryGetProperty("bitrate", out var b) && b.TryGetInt32(out var bitrate))
+                {
+                    score += Math.Min(bitrate / 1000, 320);
+                }
+
+                if (score > audioScore)
+                {
+                    audioScore = score;
+                    audio = url;
+                }
+            }
+        }
+
+        return video is null || audio is null ? null : new StreamCandidate(video, videoHeight, source, audio);
+    }
+
+    /// <summary>
     /// Picks a stream that carries its own audio. A video-only track is the commonest thing
     /// on offer and the one thing that must not be chosen: it plays in silence.
+    /// <para>
+    /// The candidate carries the height it settled on, because the caller has to be able to
+    /// tell "the best this rung had" from "good enough to stop looking".
+    /// </para>
     /// </summary>
-    private static string? BestOf(JsonElement streams)
+    private static StreamCandidate? BestOf(JsonElement streams, string source)
     {
         if (streams.ValueKind != JsonValueKind.Array)
         {
@@ -349,6 +518,7 @@ public sealed class YouTubeStreamResolver
         }
 
         string? best = null;
+        var bestHeight = 0;
         var bestScore = int.MinValue;
 
         foreach (var stream in streams.EnumerateArray())
@@ -377,16 +547,18 @@ public sealed class YouTubeStreamResolver
             // hardware. A trailer that drops frames is worse than a lower resolution.
             if (mime.Contains("avc1", StringComparison.OrdinalIgnoreCase)) score += 400;
             if (mime.Contains("mp4", StringComparison.OrdinalIgnoreCase)) score += 200;
-            score += Height(stream);
+            var height = Height(stream);
+            score += height;
 
             if (score > bestScore)
             {
                 bestScore = score;
+                bestHeight = height;
                 best = url;
             }
         }
 
-        return best;
+        return best is null ? null : new StreamCandidate(best, bestHeight, source);
     }
 
     private static int Height(JsonElement stream)
@@ -414,6 +586,28 @@ public sealed class YouTubeStreamResolver
         return 0;
     }
 
+    /// <summary>
+    /// One answer from one rung of the ladder, with how good it is.
+    /// <para>
+    /// <see cref="Quality"/> is a picture height, and a manifest counts as
+    /// <see cref="Manifest"/> - better than any single file, because the player picks off the
+    /// whole ladder rather than being handed one guess.
+    /// </para>
+    /// </summary>
+    private sealed record StreamCandidate(string Url, int Quality, string Source, string? AudioUrl = null)
+    {
+        /// <summary>Gets what the caller plays: the addresses, without the ranking.</summary>
+        public ResolvedStream Stream => new(Url, AudioUrl);
+    }
+
+    /// <summary>For the log, so a bad-looking trailer can be explained without guessing.</summary>
+    private static string Describe(StreamCandidate candidate) =>
+        candidate.Quality == Manifest
+            ? "a manifest"
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"{candidate.Quality}p{(candidate.AudioUrl is null ? " muxed" : " with separate audio")}");
+
     private sealed record InnertubeClient(
         string Name,
         string NameId,
@@ -422,5 +616,5 @@ public sealed class YouTubeStreamResolver
         string Platform,
         string UserAgent);
 
-    private sealed record CachedStream(string Url, DateTime ExpiresUtc);
+    private sealed record CachedStream(ResolvedStream Stream, DateTime ExpiresUtc);
 }
