@@ -135,7 +135,10 @@ public sealed class ChannelGuide
                 continue;
             }
 
-            var trailed = TrailedProgram(channel, window, i) ?? airing.NextProgram;
+            // The fallback is checked too, or a gap with nothing to show would be announced
+            // anyway by the entry the schedule happens to have put after it.
+            var trailed = TrailedProgram(channel, window, i)
+                ?? airing.NextProgram?.Takeaway(next => _builder.HasTrailer(next.ItemId));
             var slot = SlotFor(channel, airing);
             var cursor = airing.StartUtc;
 
@@ -333,7 +336,7 @@ public sealed class ChannelGuide
     /// then settles for the furthest programme it can see, and finally for the next one.
     /// </para>
     /// </summary>
-    private static ScheduledEntry? TrailedProgram(TvChannel channel, List<Airing> window, int index)
+    private ScheduledEntry? TrailedProgram(TvChannel channel, List<Airing> window, int index)
     {
         var wanted = Math.Max(1, channel.TrailerLookahead);
         ScheduledEntry? furthest = null;
@@ -349,6 +352,17 @@ public sealed class ChannelGuide
             // Only the start of a programme is worth trailing. A programme resumed after a
             // block boundary is already half over, and announcing it would be a lie.
             if (window[i].OffsetTicks > 0)
+            {
+                continue;
+            }
+
+            // And only a programme something can actually be played for. A break announcing
+            // "Vorschau: Avatar" with no trailer to show spends itself in silence, and the
+            // guide prints the announcement either way - so the viewer is told about a preview
+            // that never existed. A programme with nothing to show is skipped over here and
+            // the search goes on to the next one; if none of them has anything, the gap stays
+            // a plain break.
+            if (!_builder.HasTrailer(window[i].Entry!.ItemId))
             {
                 continue;
             }

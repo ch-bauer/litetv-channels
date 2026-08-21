@@ -395,6 +395,18 @@ public sealed class YouTubeStreamResolver
                 return muxed ?? adaptive;
             }
 
+            // And check that the good one can actually be played to the end before preferring
+            // it. See ServesPastTheOpeningAsync: the conditions on these streams move, and on
+            // 21 Aug 2026 they moved again to serving only the opening stretch of a file.
+            if (!await ServesPastTheOpeningAsync(adaptive, cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogInformation(
+                    "LiteTV: {Quality}p adaptive is capped today, falling back to {Fallback}",
+                    adaptive.Quality,
+                    muxed is null ? "nothing better" : Describe(muxed));
+                return muxed ?? adaptive;
+            }
+
             return adaptive;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
@@ -624,6 +636,84 @@ public sealed class YouTubeStreamResolver
     {
         /// <summary>Gets what the caller plays: the addresses, without the ranking.</summary>
         public ResolvedStream Stream => new(Url, AudioUrl);
+    }
+
+    /// <summary>
+    /// Whether an adaptive stream will be served past its opening, which is not a given.
+    /// <para>
+    /// The conditions on these URLs have moved three times in two days. They were whole-file;
+    /// then windows of a megabyte at any offset; and on 21 Aug 2026, measured against
+    /// googlevideo, **only the opening of a file is served at all** - a hundred kilobytes at
+    /// 20% of the way in came back 206 and the same request at 46% came back 403, on a URL
+    /// seconds old, and it made no difference whether the range was asked for in a header or
+    /// as a query parameter. For a 128 kbps audio stream that is about a minute of sound,
+    /// which is exactly how it was reported: the trailer stops just past a minute.
+    /// </para>
+    /// <para>
+    /// So the pick is checked rather than assumed. One small range beyond the opening, on the
+    /// audio stream when there is one - it is the smaller file and the one that runs out
+    /// first. A refusal means the good rendition is unplayable today whatever the ladder says
+    /// about it, and 360p muxed that plays through is worth more than 1080p that stops.
+    /// </para>
+    /// <para>
+    /// It costs one request per resolve, and only when an adaptive pair has won. When YouTube
+    /// stops capping, this quietly starts preferring the good renditions again with nothing to
+    /// change.
+    /// </para>
+    /// </summary>
+    private async Task<bool> ServesPastTheOpeningAsync(StreamCandidate candidate, CancellationToken cancellationToken)
+    {
+        var target = candidate.AudioUrl ?? candidate.Url;
+        var length = ContentLength(target);
+        if (length <= 0)
+        {
+            // Nothing to aim at. Assume it plays rather than dropping to 360p on a guess.
+            return true;
+        }
+
+        // Past the opening, and short of the end: two thirds is beyond anything that has been
+        // served under a cap and well inside a file that is not capped.
+        var from = (long)(length * 0.66);
+
+        try
+        {
+            using var http = _httpClientFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(6);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, target);
+            request.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
+            request.Headers.TryAddWithoutValidation("Referer", Referer);
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(from, from + 1024);
+
+            using var response = await http
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
+
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            // A network hiccup is not evidence of a cap, and dropping every trailer to 360p
+            // because one probe timed out would be the worse mistake.
+            _logger.LogDebug(ex, "LiteTV: could not check whether the adaptive stream is capped");
+            return true;
+        }
+    }
+
+    /// <summary>The file's length, which googlevideo puts in the URL as <c>clen</c>.</summary>
+    private static long ContentLength(string url)
+    {
+        var at = url.IndexOf("clen=", StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return 0;
+        }
+
+        var value = url.AsSpan(at + 5);
+        var end = value.IndexOf('&');
+        return long.TryParse(end < 0 ? value : value[..end], NumberStyles.Integer, CultureInfo.InvariantCulture, out var length)
+            ? length
+            : 0;
     }
 
     /// <summary>For the log, so a bad-looking trailer can be explained without guessing.</summary>

@@ -191,6 +191,46 @@ public class ChannelPlaylistBuilder
     }
 
     /// <summary>
+    /// Whether anything could actually be played to advertise this programme: a trailer file
+    /// the library holds, or a link a metadata provider attached.
+    /// <para>
+    /// Asked before a break is labelled as trailing something. A schedule that announces
+    /// "Vorschau: Avatar" and then has nothing to play spends the break in silence and tells
+    /// the viewer about a preview that does not exist - twice over, since the guide prints it
+    /// too. An episode's trailers live on its series, the same fallback the resolving endpoint
+    /// makes, because nobody cuts a trailer per episode.
+    /// </para>
+    /// </summary>
+    /// <param name="itemId">The programme.</param>
+    /// <returns>Whether it has a trailer of any kind.</returns>
+    public bool HasTrailer(Guid itemId)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        if (item is null)
+        {
+            return false;
+        }
+
+        if (TrailersFor(itemId).Count > 0)
+        {
+            return true;
+        }
+
+        if (item.RemoteTrailers.Any(t => !string.IsNullOrEmpty(t.Url)))
+        {
+            return true;
+        }
+
+        if (item is MediaBrowser.Controller.Entities.TV.Episode episode && episode.SeriesId != Guid.Empty)
+        {
+            var series = _libraryManager.GetItemById(episode.SeriesId);
+            return series?.RemoteTrailers.Any(t => !string.IsNullOrEmpty(t.Url)) == true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Which decade a library item was made in - 1980 for the eighties - or zero when nothing
     /// says. Used to put an advert of the right vintage in front of it.
     /// </summary>
