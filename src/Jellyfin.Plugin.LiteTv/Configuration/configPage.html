@@ -380,6 +380,19 @@
             var artworkSearchTimer;
             var artworkLibraryTimer;
             var EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+
+            /**
+             * Whether an id names nothing.
+             *
+             * Not a comparison with EMPTY_GUID, because Jellyfin writes guids both ways: the
+             * configuration comes back with the dashes stripped, so the empty one arrives as
+             * thirty-two zeros and matches nothing spelled with dashes. That read as "a picture
+             * has been chosen", the chosen picture's id was then asked of the providers, and the
+             * gallery reported that they had nothing for a title that does not exist.
+             */
+            function isEmptyId(id) {
+                return !id || String(id).replace(/-/g, '') === '00000000000000000000000000000000';
+            }
             var trailerSearchTimer;
             var blockSearchTimer = null;
 
@@ -1007,7 +1020,7 @@
                 if (!channel) { return; }
 
                 var itemId = artworkOf(channel).ImageItemId;
-                var chosen = !!(itemId && itemId !== EMPTY_GUID);
+                var chosen = !isEmptyId(itemId);
                 var firstSource = (channel.Sources || [])[0] || {};
                 if (!chosen) {
                     itemId = firstSource.ItemId;
@@ -2708,7 +2721,7 @@
                 if (!channel) { return; }
 
                 var current = artworkOf(channel).ImageItemId;
-                if (current && current !== EMPTY_GUID) {
+                if (!isEmptyId(current)) {
                     var chosen = document.createElement('div');
                     chosen.className = 'listItem';
                     chosen.style.display = 'flex';
