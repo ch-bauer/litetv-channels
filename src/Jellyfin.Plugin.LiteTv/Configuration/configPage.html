@@ -846,11 +846,21 @@
                 if (!channel) { return; }
 
                 var ids = [];
-                (channel.Sources || []).forEach(function (s) { ids.push(s.ItemId); });
-                (channel.Blocks || []).forEach(function (b) {
-                    (b.Sources || []).forEach(function (s) { ids.push(s.ItemId); });
-                });
-                (channel.TrailerTitles || []).forEach(function (s) { ids.push(s.ItemId); });
+                var collections = [];
+                function take(source) {
+                    if (!source || !source.ItemId) { return; }
+                    ids.push(source.ItemId);
+                    // A collection is a name with a list behind it and usually no artwork of
+                    // its own, so asking for it alone answers with one picture-less BoxSet -
+                    // which is what "Marathon: Fünf Freunde Filmreihe" did: an empty gallery
+                    // for a channel with three films in it. What the channel actually airs is
+                    // the films, and their pictures are the ones worth choosing between.
+                    if (source.Type === 'Collection') { collections.push(source.ItemId); }
+                }
+
+                (channel.Sources || []).forEach(take);
+                (channel.Blocks || []).forEach(function (b) { (b.Sources || []).forEach(take); });
+                (channel.TrailerTitles || []).forEach(take);
                 ids = ids.filter(function (id, i) { return id && ids.indexOf(id) === i; });
 
                 if (!ids.length) {
@@ -859,9 +869,28 @@
                 }
 
                 gallery.innerHTML = '<div class="fieldDescription">Loading…</div>';
-                ApiClient.getJSON(ApiClient.getUrl('Items', { ids: ids.join(','), limit: ids.length }))
-                    .then(function (result) {
-                        showItemArtwork(result.Items || []);
+
+                var requests = [ApiClient.getJSON(ApiClient.getUrl('Items', { ids: ids.join(','), limit: ids.length }))];
+                collections.forEach(function (id) {
+                    requests.push(ApiClient.getJSON(ApiClient.getUrl('Items', {
+                        parentId: id,
+                        recursive: true,
+                        limit: 60
+                    })));
+                });
+
+                Promise.all(requests)
+                    .then(function (results) {
+                        var items = [];
+                        var seen = {};
+                        results.forEach(function (result) {
+                            (result.Items || []).forEach(function (item) {
+                                if (seen[item.Id]) { return; }
+                                seen[item.Id] = true;
+                                items.push(item);
+                            });
+                        });
+                        showItemArtwork(items);
                     })
                     .catch(function (err) {
                         gallery.innerHTML = '<div class="fieldDescription">Could not read the artwork: ' + err + '</div>';
@@ -883,8 +912,10 @@
                 if (!channel) { return; }
 
                 var itemId = artworkOf(channel).ImageItemId;
-                if (!itemId || itemId === EMPTY_GUID) {
-                    itemId = ((channel.Sources || [])[0] || {}).ItemId;
+                var chosen = !!(itemId && itemId !== EMPTY_GUID);
+                var firstSource = (channel.Sources || [])[0] || {};
+                if (!chosen) {
+                    itemId = firstSource.ItemId;
                 }
                 if (!itemId) {
                     gallery.innerHTML = '<div class="fieldDescription">Pick a title first — search the library below, or give the channel some content.</div>';
@@ -892,37 +923,86 @@
                 }
 
                 gallery.innerHTML = '<div class="fieldDescription">Asking the metadata providers…</div>';
+
+                // A collection is a name with a list behind it. The providers may know it - a
+                // film series often is a collection to them too - and may equally have nothing,
+                // which is what left "Marathon: Fünf Freunde Filmreihe" with an empty gallery.
+                // So ask about the collection, and if that comes back empty ask about the films
+                // inside it: they are what the channel actually airs.
+                remoteImages(itemId)
+                    .then(function (images) {
+                        if (images.length || chosen || firstSource.Type !== 'Collection') {
+                            return images;
+                        }
+
+                        return ApiClient
+                            .getJSON(ApiClient.getUrl('Items', { parentId: itemId, recursive: true, limit: 4 }))
+                            .then(function (result) {
+                                var children = result.Items || [];
+                                if (!children.length) { return []; }
+                                return Promise
+                                    .all(children.map(function (child) { return remoteImages(child.Id); }))
+                                    .then(function (lists) {
+                                        // Interleaved rather than concatenated, so the gallery
+                                        // opens on one picture of each film instead of four of
+                                        // the first one.
+                                        var merged = [];
+                                        for (var i = 0; ; i++) {
+                                            var any = false;
+                                            for (var j = 0; j < lists.length; j++) {
+                                                if (i < lists[j].length) { merged.push(lists[j][i]); any = true; }
+                                            }
+                                            if (!any) { break; }
+                                        }
+                                        return merged;
+                                    });
+                            });
+                    })
+                    .then(function (images) { drawWebArtwork(images); })
+                    .catch(function (err) {
+                        gallery.innerHTML = '<div class="fieldDescription">Could not reach the providers: ' + err + '</div>';
+                    });
+            }
+
+            /** What the providers hold for one title, German first. Never rejects. */
+            function remoteImages(itemId) {
                 // The providers hold a couple of hundred pictures for a well-known film and
                 // this asks for a fixed slice of them, so the limit decides which languages
                 // are even in the room before germanFirst gets to order them. A hundred and
                 // twenty thumbnails is a dashboard page that still loads.
-                ApiClient.getJSON(ApiClient.getUrl('Items/' + itemId + '/RemoteImages', {
+                return ApiClient.getJSON(ApiClient.getUrl('Items/' + itemId + '/RemoteImages', {
                     includeAllLanguages: true,
                     limit: 120
                 })).then(function (result) {
-                    var images = germanFirst(result.Images || []);
-                    gallery.innerHTML = '';
-                    if (!images.length) {
-                        gallery.innerHTML = '<div class="fieldDescription">The providers have no pictures for that title.</div>';
-                        return;
-                    }
-
-                    var hint = document.createElement('div');
-                    hint.className = 'fieldDescription';
-                    hint.textContent = 'German pictures first, then untitled ones. Click a picture to put it in the highlighted slot above. These are addresses on the provider\u2019s own servers — use Upload if you would rather the picture lived here.';
-                    gallery.appendChild(hint);
-
-                    var strip = document.createElement('div');
-                    strip.style.display = 'flex';
-                    strip.style.flexWrap = 'wrap';
-                    strip.style.gap = '0.5em';
-                    images.forEach(function (image) {
-                        strip.appendChild(remoteArtworkTile(image));
-                    });
-                    gallery.appendChild(strip);
-                }).catch(function (err) {
-                    gallery.innerHTML = '<div class="fieldDescription">Could not reach the providers: ' + err + '</div>';
+                    return germanFirst(result.Images || []);
+                }).catch(function () {
+                    // One title having no providers attached is not a failure of the gallery.
+                    return [];
                 });
+            }
+
+            /** Puts a set of provider pictures into the gallery. */
+            function drawWebArtwork(images) {
+                var gallery = q('#ArtworkGallery');
+                gallery.innerHTML = '';
+                if (!images.length) {
+                    gallery.innerHTML = '<div class="fieldDescription">The providers have no pictures for that title.</div>';
+                    return;
+                }
+
+                var hint = document.createElement('div');
+                hint.className = 'fieldDescription';
+                hint.textContent = 'German pictures first, then untitled ones. Click a picture to put it in the highlighted slot above. These are addresses on the provider\u2019s own servers — use Upload if you would rather the picture lived here.';
+                gallery.appendChild(hint);
+
+                var strip = document.createElement('div');
+                strip.style.display = 'flex';
+                strip.style.flexWrap = 'wrap';
+                strip.style.gap = '0.5em';
+                images.forEach(function (image) {
+                    strip.appendChild(remoteArtworkTile(image));
+                });
+                gallery.appendChild(strip);
             }
 
             /**

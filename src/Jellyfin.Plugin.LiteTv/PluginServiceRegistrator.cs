@@ -28,5 +28,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Turns the YouTube links a library holds instead of trailer files into streams a
         // player can be handed. Singleton so the resolved URLs are cached across requests.
         serviceCollection.AddSingleton<YouTubeStreamResolver>();
+
+        // Which parts of a trailer are not the trailer. Singleton for the same reason: the
+        // segments of a trailer a channel airs every few hours should be fetched once.
+        serviceCollection.AddSingleton<SponsorBlockClient>();
     }
 }
