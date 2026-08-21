@@ -38,7 +38,12 @@ jobs:
           echo "MD5 checksum for manifest.json:"
           md5sum "litetv-channels_${VERSION}.zip"
 
+      # Only ever from a tag. Dispatched against a branch this step would publish a release
+      # called "main" holding litetv-channels_main.zip, which is exactly what happened the
+      # first time the dispatch was tried - it was caught mid-run. Building and testing on a
+      # branch is useful; publishing from one never is.
       - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: litetv-channels_*.zip
