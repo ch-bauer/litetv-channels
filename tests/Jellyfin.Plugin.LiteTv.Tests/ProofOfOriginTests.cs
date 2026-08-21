@@ -104,4 +104,27 @@ public class ProofOfOriginTests : IDisposable
         Assert.Equal("visitor-2", ProofOfOrigin.Held?.VisitorData);
         Assert.Equal("player-2", ProofOfOrigin.Held?.PlayerToken);
     }
+
+    /// <summary>
+    /// A token does not merely improve the next resolution - it makes the last one wrong. A
+    /// trailer resolved seconds before a television minted is a capped stream, and anything
+    /// caching it has to be able to tell that it is stale.
+    /// </summary>
+    [Fact]
+    public void MovesOnAGenerationWheneverTheHeldTokenChanges()
+    {
+        var start = ProofOfOrigin.Generation;
+
+        ProofOfOrigin.Take("visitor-1", "token-1", null);
+        var afterFirst = ProofOfOrigin.Generation;
+
+        ProofOfOrigin.Take("visitor-2", "token-2", null);
+        var afterSecond = ProofOfOrigin.Generation;
+
+        ProofOfOrigin.Forget();
+
+        Assert.NotEqual(start, afterFirst);
+        Assert.NotEqual(afterFirst, afterSecond);
+        Assert.NotEqual(afterSecond, ProofOfOrigin.Generation);
+    }
 }

@@ -293,7 +293,9 @@ public sealed class YouTubeStreamResolver
             return string.IsNullOrEmpty(url) ? null : new ResolvedStream(url, null);
         }
 
-        if (_cache.TryGetValue(id, out var cached) && cached.ExpiresUtc > DateTime.UtcNow)
+        if (_cache.TryGetValue(id, out var cached)
+            && cached.ExpiresUtc > DateTime.UtcNow
+            && cached.Generation == ProofOfOrigin.Generation)
         {
             return cached.Stream;
         }
@@ -301,7 +303,7 @@ public sealed class YouTubeStreamResolver
         var resolved = await ResolveIdAsync(id, cancellationToken).ConfigureAwait(false);
         if (resolved is not null)
         {
-            _cache[id] = new CachedStream(resolved, DateTime.UtcNow.Add(CacheFor));
+            _cache[id] = new CachedStream(resolved, DateTime.UtcNow.Add(CacheFor), ProofOfOrigin.Generation);
         }
 
         return resolved;
@@ -1034,5 +1036,13 @@ public sealed class YouTubeStreamResolver
         public string UserAgent => UserAgentOverride ?? AndroidUserAgent(this);
     }
 
-    private sealed record CachedStream(ResolvedStream Stream, DateTime ExpiresUtc);
+    /// <summary>
+    /// A resolution kept for a moment, and the token generation it was made under.
+    /// <para>
+    /// The generation is what stops a capped answer outliving the token that would have lifted
+    /// it: a television that mints while a trailer's 360p resolution is still cached would
+    /// otherwise be ignored for the rest of the two minutes.
+    /// </para>
+    /// </summary>
+    private sealed record CachedStream(ResolvedStream Stream, DateTime ExpiresUtc, int Generation);
 }

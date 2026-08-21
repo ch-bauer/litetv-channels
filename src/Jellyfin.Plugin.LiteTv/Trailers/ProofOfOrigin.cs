@@ -39,6 +39,18 @@ public static class ProofOfOrigin
     private static readonly TimeSpan GoodFor = TimeSpan.FromHours(6);
 
     private static Minted? _held;
+    private static int _generation;
+
+    /// <summary>
+    /// Counts how many times the held token has changed.
+    /// <para>
+    /// Anything that caches a resolved address has to remember which generation it was resolved
+    /// under, because a token does not merely make a resolution better - it makes an earlier one
+    /// <b>wrong</b>. A trailer resolved seconds before a token arrived is a capped stream or a
+    /// 360p one, and without this it would go on being served for the rest of the cache's life.
+    /// </para>
+    /// </summary>
+    public static int Generation => _generation;
 
     /// <summary>
     /// What a television minted: the identity it was minted against, and the tokens themselves.
@@ -77,11 +89,16 @@ public static class ProofOfOrigin
             DateTime.UtcNow);
 
         _held = minted;
+        _generation++;
         return minted;
     }
 
     /// <summary>Forgets what is held. For testing, and for a television that knows its token is bad.</summary>
-    public static void Forget() => _held = null;
+    public static void Forget()
+    {
+        _held = null;
+        _generation++;
+    }
 
     /// <summary>
     /// Puts the token on a stream URL, which is where the sixty-second wall is enforced.
