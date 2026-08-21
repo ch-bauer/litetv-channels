@@ -80,7 +80,15 @@ public sealed class ChannelGuide
     public IEnumerable<Airing> Window(TvChannel channel, DateTime fromUtc, DateTime toUtc)
     {
         var airings = _builder.GetSchedule(channel).Enumerate(fromUtc, toUtc);
-        return channel.TrailersInGaps ? WithTrailers(channel, airings) : airings;
+        var withTrailers = channel.TrailersInGaps ? WithTrailers(channel, airings) : airings;
+        return ScheduleEditing.Apply(
+            withTrailers,
+            channel.ScheduleEdits,
+            fromUtc,
+            toUtc,
+            _builder.RuntimeOf,
+            _builder.NameOf,
+            channel.Name);
     }
 
     /// <summary>
