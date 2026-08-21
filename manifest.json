@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.53.0",
+        "changelog": "1080p is back, by asking the way ReVanced asks. Android VR was written off here as needing a login; it does not. It needs the request an application makes rather than the one a web page makes: the app endpoint at youtubei.googleapis.com instead of www.youtube.com, a deviceMake and deviceModel, and none of a browser's Origin and Referer headers - an Oculus user agent carrying a web page's headers is not a client YouTube has ever seen. Asked properly it answered with 22 renditions up to 2160p, every one of them carrying an address.\n\nThat matters because the plain Android client no longer carries addresses at all: nineteen adaptive renditions with no url on any of them, and one muxed 360p, which is exactly why trailers had dropped to 360p.\n\nAndroid VR is also refused a fair part of the time with \"Sign in to confirm you're not a bot\". That is a gate on the asker, not on the request, and the answer to it is to fall through to the next client rather than to hammer it - so a break gets 360p that day rather than nothing, and the good rendition whenever the gate is open.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.53.0/litetv-channels_1.0.53.0.zip",
+        "checksum": "8b5f4063f492be1cf3d15bf3e155b6d1",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
         "version": "1.0.52.0",
         "changelog": "The YouTube client can be pinned, and the answer says which one replied. What YouTube hands over depends on who is asking, and that cannot be settled from a server: measured on 21 August, the Android client returns nineteen adaptive renditions with no address on any of them - not obfuscated, simply withheld - and one muxed 360p with an address, while Android VR, which does return every rendition unobfuscated on a phone running ReVanced with microG, answers LOGIN_REQUIRED here because a server has no Google identity to offer. A visitor token does not change that.\n\nSo the client is a setting rather than a guess: leave it on \"try them all\" or name one and test it from the television. The resolve endpoint now reports the client that answered and the height it resolved, so a trailer that looks wrong can be explained without reading the server log.",
         "targetAbi": "10.11.0.0",
