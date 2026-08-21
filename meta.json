@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "The check for a stream that stops now looks near the end rather than past the opening. Two thirds of the way in was not far enough: an iOS 1080p pair measured on 21 August served its audio at half way and refused it at nine tenths, so the check passed and the trailer would still have stopped - later than a minute in, and just as wrong. It asks at 95% now, and whatever serves that serves the lot.",
+  "changelog": "A YouTube account can be pasted in. The setting was there and documented and did nothing; now the whole Cookie header from a logged-in tab is sent, and the request is signed the way YouTube's own web player signs it - SAPISIDHASH over the seconds, the session id and the origin, which carries no password because the secret is the cookie the browser already holds. Only the clients that are signed in in real life carry it: Android VR is logout-only and keeps asking exactly as it does today, so an empty setting changes nothing at all. Use an account you do not care about - it is stored in plain text and anybody who can read this configuration can act as it.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-21T00:00:00.000Z",
-  "version": "1.0.54.0",
+  "timestamp": "2026-08-22T00:00:00.000Z",
+  "version": "1.0.55.0",
   "status": "Active",
   "autoUpdate": false
 }
