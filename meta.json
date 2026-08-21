@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "The web gallery works for a channel that has never had a picture chosen. It compared the channel's artwork item against the empty guid spelled with dashes, and Jellyfin returns configuration guids with the dashes stripped - so thirty-two zeros matched nothing, the page decided a picture had been chosen, asked the providers about an id that names no title, and reported that they had no pictures for it. Every channel on this server was in that state. Ids are compared without their dashes now.\n\nFound by opening the page and pressing the button, which is the only way this kind of fault is ever found: everything about it looked correct, including the answer.",
+  "changelog": "An address the schedule names can be resolved. GET /LiteTv/Resolve?url= turns any address a break names - an advert, a bumper, a clip the library does not hold - into a stream the client can play, with the headers it has to be fetched with. It is the same resolving the trailer endpoint does; only where the address comes from differs.\n\nWithout it adverts were a schedule that could not be aired: the plugin placed them, the guide reported them, and the app had no way to turn one into anything playable, so it dropped them and ran the programmes together.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-08-21T00:00:00.000Z",
-  "version": "1.0.46.0",
+  "version": "1.0.47.0",
   "status": "Active",
   "autoUpdate": false
 }
