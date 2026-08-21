@@ -404,7 +404,13 @@ public sealed class YouTubeStreamResolver
                     "LiteTV: {Quality}p adaptive is capped today, falling back to {Fallback}",
                     adaptive.Quality,
                     muxed is null ? "nothing better" : Describe(muxed));
-                return muxed ?? adaptive;
+
+                // Ranked at the floor when this client has no muxed format to offer, so the
+                // ladder keeps looking and any other client's 360p wins - a capped stream is
+                // worth less than the worst thing that plays through. It is still returned
+                // rather than dropped, because a minute of a trailer beats silence when there
+                // is nothing else at all.
+                return muxed ?? adaptive with { Quality = Capped };
             }
 
             return adaptive;
@@ -715,6 +721,13 @@ public sealed class YouTubeStreamResolver
             ? length
             : 0;
     }
+
+    /// <summary>
+    /// The rank of a stream that will not play past its opening: below everything, so any
+    /// other client's muxed format beats it, and above nothing, so it is still there if the
+    /// whole ladder comes back capped.
+    /// </summary>
+    private const int Capped = 1;
 
     /// <summary>For the log, so a bad-looking trailer can be explained without guessing.</summary>
     private static string Describe(StreamCandidate candidate) =>
