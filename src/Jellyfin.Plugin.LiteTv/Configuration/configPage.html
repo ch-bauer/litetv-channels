@@ -146,13 +146,19 @@
                         <div class="fieldDescription" style="margin-bottom: 0.6em;">
                             Drag inside the picture to move the frame, and use the slider to zoom. The
                             frame is the shape the slot wants, so what you see is what the television
-                            will show — nothing is cropped for you afterwards.
+                            will show — nothing is cropped for you afterwards. Zoom out past the
+                            point where the picture fills the frame and the space around it is filled
+                            with a blurred copy of the picture, so a whole title still fits.
                         </div>
                         <canvas id="CropCanvas" width="640" height="360"
                                 style="max-width: 100%; border-radius: 4px; cursor: grab; background: #000;"></canvas>
                         <div style="display: flex; align-items: center; gap: 0.8em; margin-top: 0.6em;">
                             <span style="font-size: 0.85em; opacity: 0.7;">Zoom</span>
-                            <input type="range" id="CropZoom" min="100" max="400" value="100" style="flex-grow: 1;" />
+                            <input type="range" id="CropZoom" min="30" max="400" value="100" style="flex-grow: 1;" />
+                            <button is="emby-button" type="button" id="CropFit" class="raised emby-button"
+                                    style="flex-shrink: 0;">
+                                <span>Fit whole picture</span>
+                            </button>
                         </div>
                         <div style="display: flex; gap: 0.5em; margin-top: 0.6em;">
                             <button is="emby-button" type="button" id="CropSave" class="raised emby-button">
@@ -651,7 +657,16 @@
                     // Start at the smallest zoom that still covers the frame, centred. That is
                     // exactly what the automatic crop would have done, so the first thing shown
                     // is the old behaviour - and every drag from there is an improvement on it.
+                    //
+                    // Cover is where the slider *starts*, not where it stops. A banner is about
+                    // five and a half to one and a poster is two to three, so covering a banner
+                    // frame with a poster throws away four fifths of its height - and the title
+                    // lettering, which is usually across the middle, goes with it. There is no
+                    // zoom at which the whole title fits, because the whole picture inside the
+                    // frame would leave bars. So the slider runs down past cover to contain,
+                    // and the bars are filled in by drawCrop.
                     var cover = Math.max(canvas.width / image.width, canvas.height / image.height);
+                    var contain = Math.min(canvas.width / image.width, canvas.height / image.height);
                     cropState = {
                         image: image,
                         kind: kind,
@@ -662,6 +677,10 @@
                         dragging: false
                     };
                     centreCrop();
+
+                    // A little below contain, so the picture can be sat inside the frame with
+                    // some of the fill showing rather than wedged against two of its edges.
+                    q('#CropZoom').min = Math.max(5, Math.floor((contain / cover) * 100 * 0.85));
                     q('#CropZoom').value = 100;
                     q('#CropTitle').textContent = 'Crop for: ' + kind.label;
                     q('#CropPanel').style.display = 'block';
@@ -686,14 +705,51 @@
                 cropState.y = (canvas.height - cropState.image.height * scale) / 2;
             }
 
-            /** Keeps the picture covering the frame; a crop with a hole in it is never wanted. */
+            /**
+             * Keeps the picture where it can be seen.
+             *
+             * Two cases, one per axis. While the picture is bigger than the frame it must not
+             * be dragged far enough to leave a hole, so it is pinned to the frame's edges -
+             * that is the whole of what this used to do. Once it is smaller than the frame
+             * there is no hole to leave, only fill, so the rule inverts: it may be put
+             * anywhere inside the frame but not outside it, or it could be dragged off the
+             * picture entirely and the crop would be nothing but blur.
+             */
             function clampCrop() {
                 var canvas = q('#CropCanvas');
                 var scale = cropScale();
                 var w = cropState.image.width * scale;
                 var h = cropState.image.height * scale;
-                cropState.x = Math.min(0, Math.max(canvas.width - w, cropState.x));
-                cropState.y = Math.min(0, Math.max(canvas.height - h, cropState.y));
+                cropState.x = w >= canvas.width
+                    ? Math.min(0, Math.max(canvas.width - w, cropState.x))
+                    : Math.max(0, Math.min(canvas.width - w, cropState.x));
+                cropState.y = h >= canvas.height
+                    ? Math.min(0, Math.max(canvas.height - h, cropState.y))
+                    : Math.max(0, Math.min(canvas.height - h, cropState.y));
+            }
+
+            /**
+             * Fills the frame with a blurred, over-sized copy of the picture itself.
+             *
+             * Drawn behind the real picture whenever that no longer covers the frame. The
+             * alternatives were a flat colour sampled from the edge or a plain dark surface; a
+             * blurred copy is what streaming apps do, it always suits the picture because it
+             * *is* the picture, and it costs one extra drawImage. It is over-scaled because a
+             * canvas blur samples past the edges of what it drew and would otherwise leave a
+             * soft transparent border, and darkened a little so the picture in front of it
+             * still reads as the subject rather than as part of the wash.
+             */
+            function drawCropFill(ctx, canvas) {
+                var image = cropState.image;
+                var cover = Math.max(canvas.width / image.width, canvas.height / image.height) * 1.1;
+                var w = image.width * cover;
+                var h = image.height * cover;
+                ctx.save();
+                ctx.filter = 'blur(' + Math.round(canvas.width / 22) + 'px)';
+                ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+                ctx.restore();
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
 
             function drawCrop() {
@@ -702,14 +758,18 @@
                 var ctx = canvas.getContext('2d');
                 var scale = cropScale();
                 clampCrop();
+                var w = cropState.image.width * scale;
+                var h = cropState.image.height * scale;
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(
-                    cropState.image,
-                    cropState.x,
-                    cropState.y,
-                    cropState.image.width * scale,
-                    cropState.image.height * scale);
+
+                // Half a pixel of slack: a picture that covers the frame exactly should not pay
+                // for a blur nobody can see.
+                if (w < canvas.width - 0.5 || h < canvas.height - 0.5) {
+                    drawCropFill(ctx, canvas);
+                }
+
+                ctx.drawImage(cropState.image, cropState.x, cropState.y, w, h);
             }
 
             function saveCrop() {
@@ -1797,6 +1857,20 @@
             });
 
             q('#CropSave').addEventListener('click', saveCrop);
+            // Straight to the zoom at which the whole picture is inside the frame, centred.
+            // Finding that point by dragging the slider and watching for the moment the last
+            // edge comes in is fiddly, and it is what this panel is now for.
+            q('#CropFit').addEventListener('click', function () {
+                if (!cropState) { return; }
+                var canvas = q('#CropCanvas');
+                var image = cropState.image;
+                var contain = Math.min(canvas.width / image.width, canvas.height / image.height);
+                cropState.zoom = contain / cropState.base;
+                q('#CropZoom').value = Math.round(cropState.zoom * 100);
+                centreCrop();
+                drawCrop();
+            });
+
             q('#CropCancel').addEventListener('click', function () {
                 q('#CropPanel').style.display = 'none';
                 cropState = null;
