@@ -149,6 +149,29 @@ public sealed class ChannelGuide
                 }
             }
 
+            // Adverts first, then the trailer, which is television's order and not an accident
+            // of it: a break that ends on what is coming up leaves the viewer with the channel
+            // rather than with an advert. They are drawn deterministically from the gap's own
+            // start time, so every client works out the same break without anybody being told.
+            foreach (var advert in AdvertsFor(channel, airing, trailed, cursor))
+            {
+                var end = cursor + TimeSpan.FromSeconds(Math.Max(1, advert.DurationSeconds));
+                if (end > airing.EndUtc)
+                {
+                    break;
+                }
+
+                yield return airing with
+                {
+                    Entry = null,
+                    StartUtc = cursor,
+                    EndUtc = end,
+                    NextProgram = trailed,
+                    TrailerUrl = advert.Url
+                };
+                cursor = end;
+            }
+
             if (trailed is not null)
             {
                 foreach (var trailer in _builder.TrailersFor(trailed.ItemId))
@@ -169,6 +192,105 @@ public sealed class ChannelGuide
                 yield return airing with { StartUtc = cursor, NextProgram = trailed };
             }
         }
+    }
+
+    /// <summary>
+    /// Which adverts fill the front of a break, and in what order.
+    /// <para>
+    /// Two rules, both about the joke rather than the arithmetic. Adverts of the decade the
+    /// trailed programme was made in come first, because a 1980s advert before a 1980s film is
+    /// the entire point and a current one is noise. And the pool is walked from a position
+    /// derived from the break's own start time, so a channel that runs all evening does not
+    /// play the same advert every hour - while every client still works out the same break,
+    /// because the schedule has to be the same everywhere without anybody being told.
+    /// </para>
+    /// <para>
+    /// Room is left for the trailer. An advert that fits only by pushing the trailer out has
+    /// taken the break's reason for existing with it.
+    /// </para>
+    /// </summary>
+    private IEnumerable<Advert> AdvertsFor(
+        TvChannel channel,
+        Airing gap,
+        ScheduledEntry? trailed,
+        DateTime cursor)
+    {
+        var pool = channel.Adverts
+            .Where(a => a.Enabled && !string.IsNullOrWhiteSpace(a.Url) && a.DurationSeconds > 0)
+            .ToList();
+
+        if (pool.Count == 0)
+        {
+            yield break;
+        }
+
+        var decade = trailed is not null ? _builder.DecadeOf(trailed.ItemId) : 0;
+        var ordered = pool
+            .OrderBy(a => decade > 0 && a.Decade == decade ? 0 : 1)
+            .ThenBy(a => a.Decade == 0 ? 1 : 0)
+            .ToList();
+
+        // A number that is the same everywhere and different every break.
+        //
+        // Not the minute count itself, taken modulo the pool: breaks fall on round clock
+        // intervals, and a five-advert pool with a break every hour lands on 60 % 5 = 0 every
+        // single time - the same advert all evening, which is the exact thing this is for.
+        // Mixing first breaks that alignment; the channel is folded in so two channels
+        // breaking at once do not play the same one.
+        var seed = Draw(gap.StartUtc, channel.Id, ordered.Count);
+
+        // How long the trailer that follows will want, so the break does not end on an advert.
+        var reserved = trailed is not null
+            ? _builder.TrailersFor(trailed.ItemId).Select(t => t.RuntimeTicks).DefaultIfEmpty(0).Max()
+            : 0;
+
+        var room = gap.EndUtc - cursor - TimeSpan.FromTicks(reserved);
+
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var advert = ordered[(seed + i) % ordered.Count];
+            var length = TimeSpan.FromSeconds(Math.Max(1, advert.DurationSeconds));
+            if (length > room)
+            {
+                yield break;
+            }
+
+            room -= length;
+            yield return advert;
+        }
+    }
+
+    /// <summary>
+    /// Picks a starting position in the advert pool for one break: the same everywhere, and
+    /// different from the break before it.
+    /// <para>
+    /// Every client works the schedule out for itself, so this has to be a pure function of
+    /// things they all know - the moment and the channel - and never a random number. The
+    /// multiply-and-fold is there because the inputs are anything but random: breaks land on
+    /// round intervals, and a plain modulo of the clock repeats itself exactly as often as the
+    /// clock does.
+    /// </para>
+    /// </summary>
+    /// <param name="at">When the break starts.</param>
+    /// <param name="channelId">The channel, so two channels do not draw in step.</param>
+    /// <param name="count">How many adverts are in the pool.</param>
+    /// <returns>A position in the pool.</returns>
+    public static int Draw(DateTime at, Guid channelId, int count)
+    {
+        if (count <= 0)
+        {
+            return 0;
+        }
+
+        var minutes = at.Ticks / TimeSpan.TicksPerMinute;
+        var salt = BitConverter.ToInt32(channelId.ToByteArray(), 0);
+
+        var mixed = unchecked(minutes * 2654435761L + salt);
+        mixed ^= mixed >> 13;
+        mixed = unchecked(mixed * 1274126177L);
+        mixed ^= mixed >> 16;
+
+        return (int)(((mixed % count) + count) % count);
     }
 
     /// <summary>

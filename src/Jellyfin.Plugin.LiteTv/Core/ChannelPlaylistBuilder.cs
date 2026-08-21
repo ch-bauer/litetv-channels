@@ -191,6 +191,18 @@ public class ChannelPlaylistBuilder
     }
 
     /// <summary>
+    /// Which decade a library item was made in - 1980 for the eighties - or zero when nothing
+    /// says. Used to put an advert of the right vintage in front of it.
+    /// </summary>
+    /// <param name="itemId">The item.</param>
+    /// <returns>The decade, or zero.</returns>
+    public int DecadeOf(Guid itemId)
+    {
+        var year = _libraryManager.GetItemById(itemId)?.ProductionYear ?? 0;
+        return year > 0 ? year / 10 * 10 : 0;
+    }
+
+    /// <summary>
     /// Drops all cached queues and schedules (called when the plugin configuration changes).
     /// </summary>
     public void Invalidate()
