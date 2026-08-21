@@ -379,7 +379,11 @@
             var searchTimer = null;
             var artworkSearchTimer;
             var artworkLibraryTimer;
-            var EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+            // Written back to the server, so it is spelled the way the server reads guids:
+            // Jellyfin's own converter accepts the dash-less form and *only* that one, and a
+            // dashed guid in a saved configuration answers 500 with "Unrecognized Guid format".
+            // The empty string does the same, which is why nothing here may be blanked.
+            var EMPTY_GUID = '00000000000000000000000000000000';
 
             /**
              * Whether an id names nothing.
