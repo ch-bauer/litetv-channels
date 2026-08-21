@@ -441,6 +441,47 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
+    /// Turns an address the schedule named into something a player can be handed.
+    /// <para>
+    /// The trailer endpoint above starts from a library item and looks up what the metadata
+    /// providers linked to it. A break can also name an address outright - an advert, a bumper,
+    /// a clip that is not in the library at all - and there is no item behind those to start
+    /// from. The resolving is identical; only where the address comes from differs.
+    /// </para>
+    /// </summary>
+    /// <param name="url">The address to resolve, as the schedule gave it.</param>
+    /// <returns>The stream to play, or 404 when it cannot be resolved.</returns>
+    [HttpGet("Resolve")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ResolvedTrailerDto>> GetResolved([FromQuery] string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)
+            || !Uri.TryCreate(url, UriKind.Absolute, out var address)
+            || (address.Scheme != Uri.UriSchemeHttp && address.Scheme != Uri.UriSchemeHttps))
+        {
+            return BadRequest("give an http or https address");
+        }
+
+        var stream = await _trailers.ResolveAsync(url, HttpContext.RequestAborted).ConfigureAwait(false);
+        if (stream is null || string.IsNullOrEmpty(stream.Url))
+        {
+            return NotFound();
+        }
+
+        return new ResolvedTrailerDto
+        {
+            Name = string.Empty,
+            Url = stream.Url,
+            AudioUrl = stream.AudioUrl,
+            UserAgent = YouTubeStreamResolver.UserAgent,
+            Referer = YouTubeStreamResolver.Referer,
+            SkipSegments = await SkipSegmentsAsync(url).ConfigureAwait(false)
+        };
+    }
+
+    /// <summary>
     /// Suggests channels based on the media present in the library: genre channels,
     /// collection marathons and a kids channel. Used by the configuration page.
     /// </summary>
