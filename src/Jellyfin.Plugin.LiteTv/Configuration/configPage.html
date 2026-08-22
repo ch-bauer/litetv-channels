@@ -535,6 +535,29 @@
             overflow: visible;
         }
 
+        /* The engine strip on the new-channel screen: whether the good scoring is there. */
+        .ltvEngine { border-color: color-mix(in srgb, var(--ltv-accent) 30%, var(--ltv-line)); }
+
+        /* One shared signal, and how much of the pool shares it. */
+        .ltvSignal { display: flex; align-items: center; gap: 0.7em; padding: 0.3em 0; }
+        .ltvSignalName { flex: 0 0 7em; font-size: 0.82em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ltvSignalBar { flex: 0 0 5em; height: 5px; border-radius: 3px; background: var(--ltv-s3); overflow: hidden; }
+        .ltvSignalBar > div { height: 100%; background: var(--ltv-accent); }
+        .ltvSignalValue { flex: 1 1 0; min-width: 0; font-size: 0.78em; opacity: 0.6; }
+
+        /* A ticked row in the library and genre lists. */
+        .ltvTick { display: flex; align-items: center; gap: 0.6em; padding: 0.35em 0.5em; border-radius: 6px; cursor: pointer; }
+        .ltvTick:hover { background: var(--ltv-s2); }
+        .ltvTick.on { background: color-mix(in srgb, var(--ltv-accent) 12%, transparent); }
+        .ltvTickBox { flex: 0 0 auto; width: 1em; height: 1em; border-radius: 3px; border: 1px solid var(--ltv-line); display: inline-flex; align-items: center; justify-content: center; font-size: 0.8em; }
+        .ltvTick.on .ltvTickBox { background: var(--ltv-accent); border-color: var(--ltv-accent); color: #fff; }
+        .ltvTickName { flex: 1 1 0; min-width: 0; font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .ltvEvening { font-size: 0.8em; }
+        .ltvEveningRow { display: flex; gap: 0.6em; padding: 0.12em 0; }
+        .ltvEveningClock { flex: 0 0 3em; opacity: 0.6; }
+        .ltvEveningLabel { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
         .ltvEmpty {
             flex-grow: 1;
             display: flex;
@@ -1264,6 +1287,99 @@
                                 </div>
                             </div>
 
+                            <!--
+                                ------------------------------------------- new channel (design 7 and 8)
+
+                                Two ways of arriving at the same thing: name a few titles you
+                                like and let the scorer find what they have in common, or tick
+                                the libraries and genres you are in the mood for. The design is
+                                firm that these are never on one screen at once - a switch, and
+                                one of them at a time.
+                            -->
+                            <div class="litetvPane" data-pane="suggest">
+                                <div class="ltvRow" style="margin-bottom: 0.6em; align-items: flex-start;">
+                                    <div class="ltvGrow" style="min-width: 0;">
+                                        <div id="SuggestIntro" class="ltvCardNote" style="margin: 0;"></div>
+                                    </div>
+                                    <button type="button" id="SuggestFromNothing" class="ltvGhost">
+                                        Start from nothing instead →
+                                    </button>
+                                </div>
+
+                                <!-- Whether the good scoring is available, said plainly and
+                                     without nagging. -->
+                                <div class="ltvCard ltvEngine" id="SuggestEngine" style="flex: 0 0 auto;">
+                                    <div class="ltvRow" style="flex-wrap: nowrap;">
+                                        <span class="ltvSwatch" id="SuggestEngineDot"></span>
+                                        <div style="flex: 1 1 0; min-width: 0;">
+                                            <div class="ltvArtName" id="SuggestEngineTitle"></div>
+                                            <div class="ltvDim" id="SuggestEngineNote"></div>
+                                        </div>
+                                        <button type="button" id="SuggestInstall" class="ltvGhost" style="display: none;">
+                                            Install it
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="ltvSeg" id="SuggestMode" style="align-self: flex-start; margin-bottom: 0.8em;">
+                                    <button type="button" data-mode="titles" class="selected">From titles I pick</button>
+                                    <button type="button" data-mode="library">From a library or genre</button>
+                                </div>
+
+                                <div class="ltvCols">
+                                    <div class="ltvCol">
+                                        <!-- Titles mode -->
+                                        <div class="ltvCard" id="SuggestTitlesCard" style="flex: 0 0 auto;">
+                                            <div class="ltvCardTitle">Things you like</div>
+                                            <div class="paperList" id="SuggestSeedList"></div>
+                                            <div style="margin-top: 0.6em;">
+                                                <input is="emby-input" type="text" id="SuggestSeedSearch" placeholder="Add a film, series or collection…" style="margin: 0;" />
+                                            </div>
+                                            <div class="paperList" id="SuggestSeedResults" style="max-height: 9em; overflow-y: auto;"></div>
+                                        </div>
+
+                                        <div class="ltvCard" id="SuggestCommonCard" style="flex: 1 1 0; min-height: 0;">
+                                            <div class="ltvCardTitle">What they have in common</div>
+                                            <div class="ltvCardNote">
+                                                What the scoring found they share, and how strongly.
+                                            </div>
+                                            <div class="ltvScroll" id="SuggestCommon"></div>
+                                        </div>
+
+                                        <!-- Library and genre mode -->
+                                        <div class="ltvCard" id="SuggestLibraryCard" style="flex: 1 1 0; min-height: 0; display: none;">
+                                            <div class="ltvCardTitle">Libraries</div>
+                                            <div class="paperList" id="SuggestLibraries" style="margin-bottom: 0.8em;"></div>
+                                            <div class="ltvCardTitle">Genres</div>
+                                            <div class="ltvCardNote" style="margin-bottom: 0.4em;">
+                                                Ticking more than one asks for titles in <i>all</i> of them, which is how
+                                                “Sci-Fi + Horror” gets you creature features rather than both piles at once.
+                                            </div>
+                                            <div class="paperList ltvScroll" id="SuggestGenres"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ltvCol" style="flex: 0 0 26em;">
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
+                                            <div class="ltvCardTitle">What it would build</div>
+                                            <div class="ltvCardNote" id="SuggestBasis"></div>
+                                            <div class="ltvScroll" id="SuggestProposal"></div>
+                                        </div>
+
+                                        <div class="ltvRow" style="flex-wrap: nowrap;">
+                                            <button type="button" id="SuggestCreate" class="ltvGhost ltvPrimary" style="flex: 1 1 0;">Create</button>
+                                            <button type="button" id="SuggestTweak" class="ltvGhost">Tweak</button>
+                                            <button type="button" id="SuggestSkip" class="ltvGhost">Not that</button>
+                                        </div>
+
+                                        <div class="ltvCardNote" style="margin: 0.6em 0 0 0; opacity: 0.65;">
+                                            Creating one lays its week out straight away, so there is something on air to
+                                            look at. Nothing reaches the television until you switch it on.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- -------------------------------------- app updates (not a channel) -->
                             <div class="litetvPane" data-pane="updates">
                                 <div class="ltvCols">
@@ -1363,7 +1479,8 @@
                     // Only one thing in the rail is lit at a time. A destination is showing means
                     // the channel underneath is remembered, not selected - two lit rows would
                     // say the screen belongs to both.
-                    var onDestination = currentPane === 'server' || currentPane === 'updates';
+                    var onDestination = currentPane === 'server' || currentPane === 'updates'
+                        || currentPane === 'suggest';
                     var row = document.createElement('div');
                     row.className = 'ltvRailRow' + (i === currentIndex && !onDestination ? ' selected' : '');
 
@@ -1403,7 +1520,8 @@
                         currentIndex = i;
                         renderChannelSelect();
                         renderEditor();
-                        showPane(currentPane === 'server' || currentPane === 'updates' ? 'week' : currentPane);
+                        showPane(currentPane === 'server' || currentPane === 'updates'
+                            || currentPane === 'suggest' ? 'week' : currentPane);
                     });
 
                     host.appendChild(row);
@@ -1424,11 +1542,13 @@
             /** The channel's name, whether it is on, and when the page was last saved. */
             function renderHead() {
                 var channel = currentChannel();
-                var onDest = currentPane === 'server' || currentPane === 'updates';
+                var onDest = currentPane === 'server' || currentPane === 'updates'
+                    || currentPane === 'suggest';
                 var pill = q('#HeadPill');
 
                 if (onDest) {
-                    q('#HeadName').textContent = currentPane === 'server' ? 'Server settings' : 'App updates';
+                    q('#HeadName').textContent = currentPane === 'server' ? 'Server settings'
+                        : (currentPane === 'suggest' ? 'New channel' : 'App updates');
                     pill.style.display = 'none';
                     return;
                 }
@@ -4627,6 +4747,596 @@
                 return Math.round(seconds / 3600) + ' h ago';
             }
 
+            // =========================================================================
+            // New channel, from what the library already holds (design screens 7 and 8)
+            //
+            // Two ways in, never on one screen at once: name a few titles and let the scorer
+            // work out what they share, or tick the libraries and genres you are in the mood
+            // for. Both end in the same place - one proposal, what it is made of, a typical
+            // evening off it, and Create.
+            //
+            // The scoring is the Smart Similar plugin's when it is installed and LiteTV's own
+            // much rougher genre match when it is not. Which one answered is said plainly at
+            // the top rather than hidden, because the difference in the result is large.
+            // =========================================================================
+
+            var suggest = {
+                mode: 'titles',
+                seeds: [],
+                libraries: [],
+                genres: [],
+                pickedLibraries: {},
+                pickedGenres: {},
+                proposals: [],
+                index: 0,
+                catalogue: null,
+                token: 0
+            };
+
+            function showSuggestScreen() {
+                showPane('suggest');
+                renderSuggestMode();
+                loadSuggestEngine();
+                refreshSuggestProposal();
+            }
+
+            /** Says which scorer will answer, and offers the better one when it is missing. */
+            function loadSuggestEngine() {
+                ApiClient.fetch({ url: ApiClient.getUrl('LiteTv/Plugins'), type: 'GET', dataType: 'json' })
+                    .then(function (rows) {
+                        var smart = (rows || []).filter(function (r) {
+                            return r.Name === 'Smart Similar';
+                        })[0];
+                        paintSuggestEngine(smart && smart.Usable, smart && smart.Installed);
+                    })
+                    .catch(function () { paintSuggestEngine(false, false); });
+            }
+
+            function paintSuggestEngine(usable, installed) {
+                q('#SuggestEngineDot').style.background = usable ? '#2f9e8f' : '#d99a3a';
+                q('#SuggestEngineTitle').textContent = usable
+                    ? 'Scored by Smart Similar'
+                    : (installed ? 'Smart Similar is installed but not answering' : 'Rough genre match');
+                q('#SuggestEngineNote').textContent = usable
+                    ? 'Your library is scored against every title you name, and what scores well '
+                        + 'against all of them is what gets proposed.'
+                    : 'Without Smart Similar this falls back to a much coarser match on genre, '
+                        + 'year and rating. It still works; it is just blunter.';
+                q('#SuggestInstall').style.display = installed ? 'none' : '';
+            }
+
+            function renderSuggestMode() {
+                Array.prototype.forEach.call(q('#SuggestMode').children, function (button) {
+                    button.classList.toggle('selected', button.dataset.mode === suggest.mode);
+                });
+
+                var titles = suggest.mode === 'titles';
+                q('#SuggestTitlesCard').style.display = titles ? '' : 'none';
+                q('#SuggestCommonCard').style.display = titles ? '' : 'none';
+                q('#SuggestLibraryCard').style.display = titles ? 'none' : '';
+                q('#SuggestIntro').textContent = titles
+                    ? 'Name a few things you like. Your library is scored against all of them, and '
+                        + 'what scores well against every pick becomes a channel.'
+                    : 'Tell it what you are in the mood for and it works out channels your library '
+                        + 'can actually fill.';
+
+                if (titles) {
+                    renderSuggestSeeds();
+                } else {
+                    loadSuggestCatalogue().then(renderSuggestPicks);
+                }
+            }
+
+            // ------------------------------------------------------------ titles mode
+
+            function renderSuggestSeeds() {
+                var host = q('#SuggestSeedList');
+                host.innerHTML = '';
+
+                if (!suggest.seeds.length) {
+                    showListEmpty(host, 'Nothing named yet. Add two or three things you like.');
+                    return;
+                }
+
+                clearListEmpty(host);
+                suggest.seeds.forEach(function (seed, i) {
+                    var row = document.createElement('div');
+                    row.className = 'listItem';
+                    row.style.display = 'flex';
+                    row.style.alignItems = 'center';
+                    row.style.gap = '0.6em';
+
+                    var name = document.createElement('div');
+                    name.style.flexGrow = '1';
+                    name.style.minWidth = '0';
+                    name.style.overflow = 'hidden';
+                    name.style.textOverflow = 'ellipsis';
+                    name.style.whiteSpace = 'nowrap';
+                    name.textContent = seed.Name;
+                    row.appendChild(name);
+
+                    var kind = document.createElement('div');
+                    kind.className = 'ltvDim';
+                    kind.textContent = seed.Type;
+                    row.appendChild(kind);
+
+                    row.appendChild(scheduleButton('✕', function () {
+                        suggest.seeds.splice(i, 1);
+                        renderSuggestSeeds();
+                        refreshSuggestProposal();
+                    }));
+
+                    host.appendChild(row);
+                });
+            }
+
+            /** The shared signals, strongest first, with how much of the pool carries each. */
+            function renderSuggestCommon(results) {
+                var host = q('#SuggestCommon');
+                host.innerHTML = '';
+
+                if (!results || !results.length) {
+                    showListEmpty(host, 'Name something above and this fills in.');
+                    return;
+                }
+
+                clearListEmpty(host);
+
+                var tally = {};
+                function count(kind, values) {
+                    (values || []).forEach(function (value) {
+                        var key = kind + '\u0000' + value;
+                        tally[key] = (tally[key] || 0) + 1;
+                    });
+                }
+
+                results.forEach(function (r) {
+                    count('Genre', r.SharedGenres);
+                    count('Person', r.SharedPeople);
+                    count('Studio', r.SharedStudios);
+                    count('Tag', r.SharedTags);
+                });
+
+                var rows = Object.keys(tally).map(function (key) {
+                    var parts = key.split('\u0000');
+                    return { kind: parts[0], name: parts[1], n: tally[key] };
+                }).sort(function (a, b) { return b.n - a.n; }).slice(0, 12);
+
+                if (!rows.length) {
+                    showListEmpty(host, 'Nothing in common beyond the scoring itself.');
+                    return;
+                }
+
+                rows.forEach(function (row) {
+                    var share = Math.round((row.n / results.length) * 100);
+
+                    var line = document.createElement('div');
+                    line.className = 'ltvSignal';
+
+                    var name = document.createElement('div');
+                    name.className = 'ltvSignalName';
+                    name.textContent = row.name;
+                    name.title = row.kind + ': ' + row.name;
+
+                    var bar = document.createElement('div');
+                    bar.className = 'ltvSignalBar';
+                    var fill = document.createElement('div');
+                    fill.style.width = share + '%';
+                    bar.appendChild(fill);
+
+                    var value = document.createElement('div');
+                    value.className = 'ltvSignalValue';
+                    value.textContent = share + '%  ·  ' + row.kind.toLowerCase();
+
+                    line.appendChild(name);
+                    line.appendChild(bar);
+                    line.appendChild(value);
+                    host.appendChild(line);
+                });
+            }
+
+            // ------------------------------------------------- library and genre mode
+
+            /**
+             * Every film and series with its genres, fetched once.
+             *
+             * Counting genres needs the items themselves - Jellyfin's /Genres says what genres
+             * exist and not how much is in them - so this is one request rather than one per
+             * genre. Capped, and the cap is admitted on screen rather than quietly changing
+             * what the numbers mean.
+             */
+            function loadSuggestCatalogue() {
+                if (suggest.catalogue) { return Promise.resolve(suggest.catalogue); }
+
+                return ApiClient.getItems(ApiClient.getCurrentUserId(), {
+                    IncludeItemTypes: 'Movie,Series',
+                    Recursive: true,
+                    Limit: 2000,
+                    Fields: 'Genres,ParentId,RunTimeTicks'
+                }).then(function (result) {
+                    suggest.catalogue = result.Items || [];
+
+                    var genres = {};
+                    suggest.catalogue.forEach(function (item) {
+                        (item.Genres || []).forEach(function (g) { genres[g] = (genres[g] || 0) + 1; });
+                    });
+
+                    suggest.genres = Object.keys(genres).map(function (name) {
+                        return { name: name, count: genres[name] };
+                    }).sort(function (a, b) { return b.count - a.count; });
+
+                    return suggest.catalogue;
+                }).catch(function () {
+                    suggest.catalogue = [];
+                    suggest.genres = [];
+                    return [];
+                });
+            }
+
+            function loadSuggestLibraries() {
+                if (suggest.libraries.length) { return Promise.resolve(suggest.libraries); }
+                return ApiClient.getJSON(ApiClient.getUrl('Library/MediaFolders'))
+                    .then(function (result) {
+                        suggest.libraries = (result.Items || []).map(function (f) {
+                            return { id: f.Id, name: f.Name };
+                        });
+                        return suggest.libraries;
+                    })
+                    .catch(function () { return []; });
+            }
+
+            function tickRow(host, label, count, on, onToggle) {
+                var row = document.createElement('div');
+                row.className = 'ltvTick' + (on ? ' on' : '');
+
+                var box = document.createElement('span');
+                box.className = 'ltvTickBox';
+                box.textContent = on ? '✓' : '';
+
+                var name = document.createElement('div');
+                name.className = 'ltvTickName';
+                name.textContent = label;
+
+                var n = document.createElement('div');
+                n.className = 'ltvDim';
+                n.textContent = count === null ? '' : String(count);
+
+                row.appendChild(box);
+                row.appendChild(name);
+                row.appendChild(n);
+                row.addEventListener('click', onToggle);
+                host.appendChild(row);
+            }
+
+            function renderSuggestPicks() {
+                loadSuggestLibraries().then(function () {
+                    var libs = q('#SuggestLibraries');
+                    libs.innerHTML = '';
+                    if (!suggest.libraries.length) {
+                        showListEmpty(libs, 'No libraries could be listed.');
+                    } else {
+                        clearListEmpty(libs);
+                        suggest.libraries.forEach(function (lib) {
+                            var inLib = suggest.catalogue
+                                ? suggest.catalogue.filter(function (i) { return i.ParentId === lib.id; }).length
+                                : null;
+                            tickRow(libs, lib.name, inLib, !!suggest.pickedLibraries[lib.id], function () {
+                                if (suggest.pickedLibraries[lib.id]) {
+                                    delete suggest.pickedLibraries[lib.id];
+                                } else {
+                                    suggest.pickedLibraries[lib.id] = true;
+                                }
+                                renderSuggestPicks();
+                                refreshSuggestProposal();
+                            });
+                        });
+                    }
+
+                    var host = q('#SuggestGenres');
+                    host.innerHTML = '';
+                    if (!suggest.genres.length) {
+                        showListEmpty(host, 'No genres were found in this library.');
+                        return;
+                    }
+
+                    clearListEmpty(host);
+                    suggest.genres.forEach(function (g) {
+                        tickRow(host, g.name, g.count, !!suggest.pickedGenres[g.name], function () {
+                            if (suggest.pickedGenres[g.name]) {
+                                delete suggest.pickedGenres[g.name];
+                            } else {
+                                suggest.pickedGenres[g.name] = true;
+                            }
+                            renderSuggestPicks();
+                            refreshSuggestProposal();
+                        });
+                    });
+                });
+            }
+
+            // ---------------------------------------------------------- the proposal
+
+            function refreshSuggestProposal() {
+                suggest.token += 1;
+                var mine = suggest.token;
+
+                if (suggest.mode === 'titles') {
+                    if (!suggest.seeds.length) {
+                        suggest.proposals = [];
+                        renderSuggestCommon([]);
+                        drawSuggestProposal();
+                        return;
+                    }
+
+                    var ids = suggest.seeds.map(function (s) { return s.ItemId; }).join(',');
+                    ApiClient.fetch({
+                        url: ApiClient.getUrl('LiteTv/Suggestions/Scored', {
+                            itemIds: ids,
+                            userId: ApiClient.getCurrentUserId(),
+                            limit: 40
+                        }),
+                        type: 'GET',
+                        dataType: 'json'
+                    }).then(function (answer) {
+                        if (mine !== suggest.token) { return; }
+                        var results = answer.Results || [];
+                        renderSuggestCommon(results);
+                        suggest.proposals = proposalsFromScored(answer, results);
+                        suggest.index = 0;
+                        drawSuggestProposal();
+                    }).catch(function () {
+                        if (mine !== suggest.token) { return; }
+                        suggest.proposals = [];
+                        drawSuggestProposal();
+                    });
+                    return;
+                }
+
+                loadSuggestCatalogue().then(function () {
+                    if (mine !== suggest.token) { return; }
+                    suggest.proposals = proposalsFromPicks();
+                    suggest.index = 0;
+                    drawSuggestProposal();
+                });
+            }
+
+            /** One channel out of the scored pool, named after what the pool has in common. */
+            function proposalsFromScored(answer, results) {
+                if (!results.length) { return []; }
+
+                var genres = {};
+                results.forEach(function (r) {
+                    (r.SharedGenres || []).forEach(function (g) { genres[g] = (genres[g] || 0) + 1; });
+                });
+
+                var top = Object.keys(genres).sort(function (a, b) { return genres[b] - genres[a]; })[0];
+                var picked = results.slice(0, 24);
+                var average = Math.round(picked.reduce(function (a, r) { return a + (r.Score || 0); }, 0) / picked.length);
+                var seedNames = (answer.Seeds || []).map(function (s) { return s.Name; });
+
+                return [{
+                    name: top ? top + '-Kanal' : 'Wie ' + (seedNames[0] || 'das hier'),
+                    basis: (answer.Engine === 'SmartSimilar' ? 'Scored by Smart Similar' : 'Rough genre match')
+                        + ' against ' + seedNames.length + ' pick' + (seedNames.length === 1 ? '' : 's'),
+                    match: average + '% match',
+                    reasons: [
+                        top ? 'Mostly ' + top : null,
+                        'Closest to ' + (seedNames[0] || 'your picks'),
+                        picked.length + ' titles your library already holds'
+                    ].filter(Boolean),
+                    items: picked.map(function (r) {
+                        return { Type: r.Kind === 'Series' ? 'Series' : 'Movie', ItemId: r.Id, Name: r.Name };
+                    })
+                }];
+            }
+
+            /** One channel out of the ticked libraries and genres. */
+            function proposalsFromPicks() {
+                var libs = Object.keys(suggest.pickedLibraries);
+                var genres = Object.keys(suggest.pickedGenres);
+                if (!libs.length && !genres.length) { return []; }
+
+                var matches = (suggest.catalogue || []).filter(function (item) {
+                    if (libs.length && libs.indexOf(item.ParentId) < 0) { return false; }
+                    // Every ticked genre, not any of them: "Sci-Fi + Horror" is a creature
+                    // feature, not two piles at once.
+                    return genres.every(function (g) { return (item.Genres || []).indexOf(g) >= 0; });
+                });
+
+                if (!matches.length) { return []; }
+
+                var name = genres.length
+                    ? genres.join(' + ') + '-Kanal'
+                    : (suggest.libraries.filter(function (l) { return libs.indexOf(l.id) >= 0; })
+                        .map(function (l) { return l.name; }).join(' + ') + '-Kanal');
+
+                return [{
+                    name: name,
+                    basis: (genres.length ? genres.length + ' genre' + (genres.length === 1 ? '' : 's') : 'any genre')
+                        + ' · ' + (libs.length ? libs.length + ' librar' + (libs.length === 1 ? 'y' : 'ies') : 'every library'),
+                    match: matches.length + ' titles',
+                    reasons: genres.length
+                        ? ['Every one of: ' + genres.join(', ')]
+                        : ['Everything in the chosen libraries'],
+                    items: matches.slice(0, 60).map(function (item) {
+                        return { Type: item.Type === 'Series' ? 'Series' : 'Movie', ItemId: item.Id, Name: item.Name };
+                    })
+                }];
+            }
+
+            function drawSuggestProposal() {
+                var host = q('#SuggestProposal');
+                var basis = q('#SuggestBasis');
+                host.innerHTML = '';
+
+                var proposal = suggest.proposals[suggest.index];
+                if (!proposal) {
+                    basis.textContent = '';
+                    showListEmpty(host, suggest.mode === 'titles'
+                        ? 'Name something on the left and a channel appears here.'
+                        : 'Tick a library or a genre and a channel appears here.');
+                    setSuggestActions(false);
+                    return;
+                }
+
+                clearListEmpty(host);
+                basis.textContent = proposal.basis;
+                setSuggestActions(true);
+
+                var title = document.createElement('div');
+                title.className = 'ltvArtName';
+                title.style.fontSize = '1em';
+                title.textContent = proposal.name;
+                host.appendChild(title);
+
+                var match = document.createElement('div');
+                match.className = 'ltvDim';
+                match.style.marginBottom = '0.5em';
+                match.textContent = proposal.match + '  ·  ' + proposal.items.length + ' sources';
+                host.appendChild(match);
+
+                proposal.reasons.forEach(function (reason) {
+                    var line = document.createElement('div');
+                    line.className = 'ltvDim';
+                    line.textContent = '· ' + reason;
+                    host.appendChild(line);
+                });
+
+                var heading = document.createElement('div');
+                heading.className = 'ltvCardTitle';
+                heading.style.marginTop = '0.8em';
+                heading.style.fontSize = '0.72em';
+                heading.style.letterSpacing = '0.08em';
+                heading.style.opacity = '0.6';
+                heading.textContent = 'A TYPICAL EVENING';
+                host.appendChild(heading);
+
+                var evening = document.createElement('div');
+                evening.className = 'ltvEvening';
+                host.appendChild(evening);
+                drawSuggestEvening(evening, proposal);
+            }
+
+            /**
+             * What an evening off this channel would look like, laid on the same fifteen-minute
+             * grid a new channel gets. Runtimes come from the items themselves; anything the
+             * server has no runtime for is given the 45 minutes the scheduler assumes.
+             */
+            function drawSuggestEvening(host, proposal) {
+                var ids = proposal.items.slice(0, 8).map(function (i) { return i.ItemId; });
+                if (!ids.length) { return; }
+
+                ApiClient.getItems(ApiClient.getCurrentUserId(), {
+                    Ids: ids.join(','),
+                    Fields: 'RunTimeTicks'
+                }).then(function (result) {
+                    var byId = {};
+                    (result.Items || []).forEach(function (item) { byId[item.Id] = item; });
+
+                    var clock = 20 * 60;
+                    host.innerHTML = '';
+
+                    proposal.items.slice(0, 6).forEach(function (source) {
+                        var item = byId[source.ItemId];
+                        var minutes = item && item.RunTimeTicks
+                            ? Math.round(item.RunTimeTicks / 600000000)
+                            : 45;
+
+                        var row = document.createElement('div');
+                        row.className = 'ltvEveningRow';
+
+                        var when = document.createElement('div');
+                        when.className = 'ltvEveningClock';
+                        when.textContent = ('0' + Math.floor((clock / 60) % 24)).slice(-2)
+                            + ':' + ('0' + (clock % 60)).slice(-2);
+
+                        var label = document.createElement('div');
+                        label.className = 'ltvEveningLabel';
+                        label.textContent = source.Name;
+
+                        row.appendChild(when);
+                        row.appendChild(label);
+                        host.appendChild(row);
+
+                        // Rounded up to the next quarter hour, which is what leaves the gap a
+                        // break goes in.
+                        clock += Math.ceil(minutes / 15) * 15;
+                    });
+                }).catch(function () { host.innerHTML = ''; });
+            }
+
+            function setSuggestActions(on) {
+                ['#SuggestCreate', '#SuggestTweak', '#SuggestSkip'].forEach(function (id) {
+                    q(id).disabled = !on;
+                    q(id).style.opacity = on ? '' : '0.45';
+                });
+            }
+
+            /** Makes the proposed channel real, and optionally goes straight to editing it. */
+            function createSuggested(thenEdit) {
+                var proposal = suggest.proposals[suggest.index];
+                if (!proposal) { return; }
+
+                applyEditorToChannel();
+                config.Channels.push({
+                    Id: newGuid(),
+                    Name: proposal.name,
+                    Enabled: true,
+                    AnchorUtc: new Date().toISOString(),
+                    Order: 'Sequential',
+                    EpisodesPerBlock: 0,
+                    SlotMinutes: 15,
+                    TrailersInGaps: true,
+                    Sources: proposal.items,
+                    Blocks: [],
+                    Adverts: [],
+                    TrailerTitles: [],
+                    Artwork: {}
+                });
+
+                currentIndex = config.Channels.length - 1;
+                renderChannelSelect();
+                renderEditor();
+                showPane(thenEdit ? 'content' : 'week');
+
+                Dashboard.alert('“' + proposal.name + '” has been added. It is not saved until you '
+                    + 'press Save, and it reaches no television until then either.');
+            }
+
+            q('#SuggestMode').addEventListener('click', function (ev) {
+                var button = ev.target.closest('button[data-mode]');
+                if (!button) { return; }
+                suggest.mode = button.dataset.mode;
+                renderSuggestMode();
+                refreshSuggestProposal();
+            });
+
+            var suggestSeedTimer = null;
+            q('#SuggestSeedSearch').addEventListener('input', function () {
+                var term = this.value.trim();
+                if (suggestSeedTimer) { clearTimeout(suggestSeedTimer); }
+                suggestSeedTimer = setTimeout(function () {
+                    runSearch(term, q('#SuggestSeedResults'), function () {
+                        return { Sources: suggest.seeds };
+                    }, function () {
+                        renderSuggestSeeds();
+                        refreshSuggestProposal();
+                    });
+                }, 350);
+            });
+
+            q('#SuggestFromNothing').addEventListener('click', createBlankChannel);
+            q('#SuggestInstall').addEventListener('click', function () {
+                Dashboard.navigate('dashboard/plugins/catalog');
+            });
+            q('#SuggestCreate').addEventListener('click', function () { createSuggested(false); });
+            q('#SuggestTweak').addEventListener('click', function () { createSuggested(true); });
+            q('#SuggestSkip').addEventListener('click', function () {
+                suggest.index += 1;
+                if (suggest.index >= suggest.proposals.length) { suggest.index = 0; }
+                drawSuggestProposal();
+            });
+
             function loadSuggestions() {
                 var list = q('#SuggestionList');
                 list.innerHTML = '<div class="listItem">Analyzing library…</div>';
@@ -5107,9 +5817,16 @@
                 if (ev.key === 'Escape') { closeHelp(); }
             });
 
-            q('#EmptyNewChannel').addEventListener('click', function () { q('#AddChannel').click(); });
+            q('#EmptyNewChannel').addEventListener('click', showSuggestScreen);
 
-            q('#AddChannel').addEventListener('click', function () {
+            /**
+             * A channel with nothing in it, ready to be filled in by hand.
+             *
+             * The design puts this behind "Start from nothing instead" on the new-channel
+             * screen rather than on the + button: an empty channel is the thing you want least
+             * often, and the library already knows enough to propose better ones.
+             */
+            function createBlankChannel() {
                 applyEditorToChannel();
                 config.Channels.push({
                     Id: newGuid(),
@@ -5131,7 +5848,10 @@
                 currentIndex = config.Channels.length - 1;
                 renderChannelSelect();
                 renderEditor();
-            });
+                showPane('week');
+            }
+
+            q('#AddChannel').addEventListener('click', showSuggestScreen);
 
             q('#DeleteChannel').addEventListener('click', function () {
                 if (currentIndex < 0) { return; }
@@ -5275,7 +5995,8 @@
 
                 // The tabs belong to a channel; a destination is not one, so none of them is
                 // lit while Server settings or App updates is showing.
-                var channelPane = name !== 'server' && name !== 'updates' && name !== 'none';
+                var channelPane = name !== 'server' && name !== 'updates' && name !== 'none'
+                    && name !== 'suggest';
                 q('#ChannelTabs').style.visibility = channelPane ? '' : 'hidden';
 
                 // The timeline measures itself as it draws, and a hidden pane has no width to
