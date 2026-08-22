@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.66.0",
+        "changelog": "Found by comparing the installed page against the design, screen by screen. The schedule now draws a now line across the day it falls on, which the design has and the page did not - without it a stored week is seven identical columns with nothing saying which part of it matters. The day view also opens on today rather than on Monday. Play order is the design's pair of buttons rather than a dropdown: there are two answers and both should be readable without opening anything. The picture gallery gets the room it needs instead of a 323-pixel slot under two cards that were holding height they were not using. And the proof-of-origin line read \"Heldminted 37 min ago\" - two words with no space between them.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.66.0/litetv-channels_1.0.66.0.zip",
+        "checksum": "237a84517814cf46200e02f77a110a94",
+        "timestamp": "2026-08-23T03:30:00.000Z"
+      },
+      {
         "version": "1.0.65.0",
         "changelog": "A pass over the configuration page against a real server, which is where all of this was found. Nothing on the page moves when it should not any more: a channel with a long name used to widen the rail and carry the header, the tabs, the grid and the shelf with it, and opening a (?) explanation pushed every setting under it down the card. Explanations now float over the page and cost nothing to open. Several things could not be reached at all. The library and provider picture galleries could not be scrolled, because a card was not allowed to give room back to the thing scrolling inside it; the crop tool was appended below the gallery, so opening it pushed the column down past the picture being cropped with no way back, and it is a dialog now. The page also stops 74 pixels short of the window no longer. Content: the queue preview names the actual episodes and films in the order they would play, with their season and episode numbers and which source each came from - it used to repeat the series title, which said nothing. Boxes no longer resize as entries are added and removed, and an empty list is a quiet line rather than a grey slab the height of the screen. The schedule opens on the day view, and the week and the day each keep their own zoom, remembered between visits instead of being reset on the way past. Look is three compact rows - the picture in its own shape, what the slot is for, where the picture came from - rather than a column of large previews that had to be scrolled. Search results clear when you leave the box they belong to, text boxes shrink to their column instead of overflowing it, and the advert row fits on one line with a decade field that says what it is.",
         "targetAbi": "10.11.0.0",
