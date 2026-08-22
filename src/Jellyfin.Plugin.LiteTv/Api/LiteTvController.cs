@@ -1345,6 +1345,7 @@ public class LiteTvController : ControllerBase
         var scored = await _smartSimilar.ScoreAsync(
             new Uri(Request.Scheme + "://" + Request.Host.Value),
             Request.Headers.Authorization.ToString(),
+            Request.Headers["X-Emby-Token"].ToString(),
             seeds,
             userId,
             minScore,

@@ -16,7 +16,12 @@ public class SmartSimilarClient
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         // Jellyfin serves PascalCase, its own clients hedge for camelCase; take either.
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+
+        // And Jellyfin writes GUIDs with the dashes stripped, which System.Text.Json
+        // will not read back into a Guid on its own. Without this the whole answer is
+        // thrown away on the first id and the rough scorer quietly takes over.
+        Converters = { new LooseGuidConverter() }
     };
 
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
@@ -46,6 +51,7 @@ public class SmartSimilarClient
     /// </summary>
     /// <param name="baseUri">The server's own address, taken from the incoming request.</param>
     /// <param name="authorization">The caller's Authorization header, passed straight through.</param>
+    /// <param name="embyToken">The caller's X-Emby-Token, for callers that authenticate that way.</param>
     /// <param name="seeds">The titles the suggestions are built from.</param>
     /// <param name="userId">The user whose library access applies.</param>
     /// <param name="minScore">Floor on the score, or null for the plugin's own setting.</param>
@@ -55,6 +61,7 @@ public class SmartSimilarClient
     public async Task<SmartSimilarScore?> ScoreAsync(
         Uri baseUri,
         string? authorization,
+        string? embyToken,
         IReadOnlyList<Guid> seeds,
         Guid userId,
         int? minScore,
@@ -82,9 +89,19 @@ public class SmartSimilarClient
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(baseUri, query));
+
+            // Jellyfin accepts a token in either header, and which one arrives depends on
+            // the caller: the dashboard sends Authorization, plenty of scripts and clients
+            // send X-Emby-Token. Forwarding only the first meant those callers reached
+            // Smart Similar as nobody at all and were answered 401.
             if (!string.IsNullOrEmpty(authorization))
             {
                 request.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
+
+            if (!string.IsNullOrEmpty(embyToken))
+            {
+                request.Headers.TryAddWithoutValidation("X-Emby-Token", embyToken);
             }
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -113,6 +130,40 @@ public class SmartSimilarClient
             return null;
         }
     }
+}
+
+/// <summary>
+/// Reads a Guid written either way round.
+///
+/// Jellyfin serialises ids as 32 hex characters with no dashes; System.Text.Json will only
+/// parse the dashed form, and a single unreadable id fails the whole document. Writing is
+/// left in the dashed form because nothing here writes one.
+/// </summary>
+public sealed class LooseGuidConverter : JsonConverter<Guid>
+{
+    /// <inheritdoc />
+    public override Guid Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var text = reader.GetString();
+            if (Guid.TryParse(text, out var parsed))
+            {
+                return parsed;
+            }
+
+            if (text is not null && Guid.TryParseExact(text, "N", out var dashless))
+            {
+                return dashless;
+            }
+        }
+
+        return Guid.Empty;
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, Guid value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value);
 }
 
 /// <summary>Smart Similar's answer to a scoring request.</summary>
