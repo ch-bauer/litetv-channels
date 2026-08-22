@@ -59,6 +59,37 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string YouTubeClient { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the proof-of-origin token a television last minted, so it survives a
+    /// restart.
+    /// <para>
+    /// The token is what lifts YouTube's sixty-second wall on trailer streams, and only a
+    /// device with a browser engine can produce one - see
+    /// <see cref="Trailers.ProofOfOrigin"/>. Holding it only in memory meant every Jellyfin
+    /// restart threw it away, and a restart happens on every plugin install, so trailers went
+    /// back to 360p until somebody next opened the app on a television.
+    /// </para>
+    /// <para>
+    /// <b>It is a credential of a sort.</b> Not an account - it proves a request came from
+    /// something browser-shaped, not from anybody in particular, and it expires in hours - but
+    /// it is worth something to whoever holds it, so it is written masked on the configuration
+    /// page and belongs nowhere public.
+    /// </para>
+    /// </summary>
+    public string ProofOfOriginToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the visitor id the stored token was minted against.
+    /// <para>
+    /// Not optional: a token is bound to this, and one without the other is refused in a way
+    /// that looks exactly like sending neither.
+    /// </para>
+    /// </summary>
+    public string ProofOfOriginVisitorData { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets when the stored token was minted, so its age can be judged.</summary>
+    public DateTime? ProofOfOriginMintedUtc { get; set; }
+
 }
 
 /// <summary>
