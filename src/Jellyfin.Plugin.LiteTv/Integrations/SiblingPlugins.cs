@@ -12,13 +12,17 @@ namespace Jellyfin.Plugin.LiteTv.Integrations;
 public class SiblingPlugins
 {
     /// <summary>The plugins LiteTV asks about, in the order they are worth reporting.</summary>
+    /// <remarks>
+    /// Enhanced Poster Tags was here and was taken out on the owner's instruction: LiteTV does
+    /// not ask it for anything, so reporting it only put a plugin on the page that nothing on
+    /// the page uses. Do not add it back.
+    /// </remarks>
     private static readonly SiblingDefinition[] Known =
     {
         new("61b616fa-7ba8-4262-b2a9-fae29b015930", "Smart Similar", "Scores suggestions. Without it LiteTV falls back to a much rougher genre match."),
         new("b9f0c474-e1a9-4a06-9c8a-3f1d2e5b7a10", "Collection Row", "Shows a film's collections on the detail page in the TV app."),
         new("b7c3f1e2-9a4d-4e8b-b0c6-2f5d8a913c47", "FSK Rating Updater", "Normalises age ratings so the playback badge has something to draw."),
         new("684a50b4-3970-44ef-aab0-3a162b415374", "SponsorBlock Segments", "Trims sponsor and outro stretches off linked trailers."),
-        new("454cddc0-9ee6-4feb-bfbd-2eab3f847c4a", "Enhanced Poster Tags", "Extra artwork for channel pictures."),
         new("64c04809-0078-401f-a883-2fc0fddace8c", "Next Up Cleanup", string.Empty),
         new("c3cbb73c-59e6-4ec6-9cba-a86ba70e73c0", "Clear Transcodes", string.Empty)
     };

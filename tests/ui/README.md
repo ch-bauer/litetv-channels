@@ -33,6 +33,17 @@ showing exactly one pane · the week drawing seven days, opening on the evening,
 switching to a single day · the (?) toggles · the settings preview and the plugin strip arriving
 from the server · both destinations hiding the channel tabs · and the form posting on save.
 
+Since v1.0.64.0 it also covers the faults that made the grid unreadable and cut cards off, each
+of which shipped and had to be found by looking: **no bar overlaps the one above it** (a minimum
+bar height taller than a short programme's own slot is how labels came to be written across each
+other), **zooming enlarges the labels and not only the bars**, **the day header keeps sticking at
+a high zoom** (a column stretched to the frame rather than to its day stops sticking a few hundred
+pixels down), **no card is crushed below its own contents**, **the update address is visible in
+its card**, **Content carries the order controls and the dealt queue** the design puts there, and
+**a drag moves the bar while it happens and lands on a five-minute step** (the snap was being
+applied to the pointer rather than to the bar, so every drag looked unsnapped because every drag
+was).
+
 ## What it cannot cover
 
 The harness is not the dashboard. It has no `emby-*` component upgrade (so inputs look unlabelled

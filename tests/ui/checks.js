@@ -216,6 +216,144 @@
             return Math.round(before) + ' → ' + Math.round(after) + 'px';
         });
 
+        check('bars are never taller than their own slot, so none overlaps the next', function () {
+            clickTab('week');
+            // One day at a time: bars in different columns share the same tops by design, so
+            // comparing across the whole grid measures nothing.
+            var counted = 0;
+            var overlaps = 0;
+
+            all('#WeekTimeline [data-day-index]').forEach(function (track) {
+                var bars = Array.prototype.slice.call(track.children)
+                    .filter(function (b) { return b.style.position === 'absolute' && b.style.height; })
+                    .map(function (b) { return [parseFloat(b.style.top), parseFloat(b.style.height)]; })
+                    .sort(function (a, b) { return a[0] - b[0]; });
+
+                counted += bars.length;
+
+                // Half a pixel of slack for rounding; anything more is a label written across
+                // the bar underneath it, which is what an eleven-pixel floor used to cause.
+                for (var i = 1; i < bars.length; i++) {
+                    if (bars[i][0] < bars[i - 1][0] + bars[i - 1][1] - 0.6) { overlaps++; }
+                }
+            });
+
+            assert(counted > 2, 'only ' + counted + ' bars to look at');
+            assert(overlaps === 0, overlaps + ' of ' + counted + ' bars overlap the one above');
+            return counted + ' bars across seven days, none overlapping';
+        });
+
+        check('zooming in makes the labels bigger, not just the bars', function () {
+            clickTab('week');
+            var zoom = q('#WeekZoom');
+            var read = q('#WeekZoomRead');
+
+            zoom.value = '46';
+            zoom.dispatchEvent(new Event('input'));
+            var small = parseFloat(q('#WeekTimeline [data-day-index] > div').style.fontSize);
+            var farLabel = read.textContent;
+
+            zoom.value = '300';
+            zoom.dispatchEvent(new Event('input'));
+            var big = parseFloat(q('#WeekTimeline [data-day-index] > div').style.fontSize);
+            var nearLabel = read.textContent;
+
+            zoom.value = '46';
+            zoom.dispatchEvent(new Event('input'));
+
+            assert(big > small, 'the label stayed ' + small + 'px at every zoom');
+            assert(farLabel !== nearLabel, 'the readout said "' + farLabel + '" at both ends');
+            return small + 'px → ' + big + 'px  ·  "' + farLabel + '" → "' + nearLabel + '"';
+        });
+
+        check('the day header still shows when a zoomed-in grid is scrolled', function () {
+            clickTab('week');
+            var zoom = q('#WeekZoom');
+            zoom.value = '300';
+            zoom.dispatchEvent(new Event('input'));
+
+            var frame = q('#WeekTimeline').firstChild;
+            frame.scrollTop = 4000;
+            var header = frame.children[1].children[0].children[0];
+            var stuck = header.getBoundingClientRect().top >= frame.getBoundingClientRect().top - 1;
+
+            zoom.value = '46';
+            zoom.dispatchEvent(new Event('input'));
+
+            // The column used to be stretched to the frame rather than to the day it holds, so
+            // its box ran out a few hundred pixels down and the sticky header went with it.
+            assert(stuck, 'the day header scrolled away with the grid');
+            return header.textContent + ' stays put';
+        });
+
+        check('dragging moves the bar while it happens, and snaps', function () {
+            clickTab('week');
+            var track = q('#WeekTimeline [data-day-index]');
+            var bar = Array.prototype.slice.call(track.children)
+                .filter(function (b) { return b.style.position === 'absolute' && b.style.cursor === 'grab'; })[0];
+            assert(bar, 'no draggable bar on the grid');
+
+            var box = bar.getBoundingClientRect();
+            var before = parseFloat(bar.style.top);
+
+            bar.dispatchEvent(new MouseEvent('mousedown', {
+                bubbles: true, clientX: box.left + 20, clientY: box.top + 3
+            }));
+            document.dispatchEvent(new MouseEvent('mousemove', {
+                bubbles: true, clientX: box.left + 20, clientY: box.top + 137
+            }));
+
+            // The whole complaint: this used to be unchanged until the mouse came up, and the
+            // move only appeared once the server had answered.
+            var during = parseFloat(bar.style.top);
+            var readout = bar.textContent.match(/\d\d:\d\d/);
+
+            document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+            assert(during !== before, 'the bar did not move during the drag (top stayed ' + before + ')');
+
+            // Five-minute snap: every landing is a whole number of WEEK_SNAP steps from
+            // midnight, so the pixel offset lands on a multiple too.
+            var minutes = (during / (parseFloat(q('#WeekZoom').value))) * 60;
+            assert(Math.abs(minutes - Math.round(minutes / 5) * 5) < 0.35,
+                'landed on ' + minutes.toFixed(2) + ' min, which is not a five-minute step');
+            assert(readout, 'no time was shown on the bar while dragging');
+
+            return before + ' -> ' + during + 'px, snapped, showing ' + readout[0];
+        });
+
+        check('no card is crushed below the thing inside it', function () {
+            var crushed = [];
+            all('.litetvPane.selected .ltvCard').forEach(function (card) {
+                if (card.scrollHeight > card.clientHeight + 2) {
+                    crushed.push((card.querySelector('.ltvCardTitle') || {}).textContent || '?');
+                }
+            });
+            assert(crushed.length === 0, 'clipped: ' + crushed.join(', '));
+            return 'none';
+        });
+
+        check('the update address is visible, not clipped inside its card', function () {
+            q('.ltvRailDests [data-dest="updates"]').click();
+            var input = q('#UpdateUrl');
+            var card = input.closest('.ltvCard');
+            assert(input.getBoundingClientRect().height > 8, 'the address field is '
+                + Math.round(input.getBoundingClientRect().height) + 'px tall');
+            assert(card.scrollHeight <= card.clientHeight + 2,
+                'the card clips its own contents (' + card.scrollHeight + ' in ' + card.clientHeight + ')');
+            all('#ChannelRail .ltvRailRow')[0].click();
+            return 'visible';
+        });
+
+        check('content carries the order controls and the dealt queue', function () {
+            clickTab('content');
+            var pane = visiblePane()[0];
+            assert(pane.querySelector('#PlayOrder'), 'play order is not on Content');
+            assert(pane.querySelector('#EpisodesPerBlock'), 'episodes at a time is not on Content');
+            assert(pane.querySelector('#DealPreview'), 'there is no dealt queue');
+            return 'all three';
+        });
+
         // --- settings, help, destinations -------------------------------------------------
         check('a (?) opens its explanation and closes it again', function () {
             clickTab('settings');

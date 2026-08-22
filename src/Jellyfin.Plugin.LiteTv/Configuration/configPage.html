@@ -262,7 +262,12 @@
             margin-bottom: 0.9em;
             display: flex;
             flex-direction: column;
-            min-height: 0;
+            /* A card is at least as tall as what is in it. It used to be min-height: 0, which
+               let a column's spare-room maths crush a card below its own contents: the "Put
+               this in the app" card came out 69px tall with its own overflow hidden, and the
+               update address the television needs was scrolled out of sight inside it. A card
+               that is meant to give up room says flex-grow with min-height: 0 of its own. */
+            flex-shrink: 0;
         }
 
         .ltvCardTitle { font-size: 0.95em; font-weight: 700; margin-bottom: 0.15em; }
@@ -345,6 +350,18 @@
         #WeekTimeline { flex-grow: 1; min-height: 0; display: flex; flex-direction: column; }
 
         .ltvShelf { border-top: 1px solid var(--ltv-line); padding-top: 0.7em; margin-top: 0.7em; }
+        /* A card that is a caution rather than a control. */
+        .ltvWarn { border-color: rgba(226, 168, 60, 0.45); }
+        .ltvWarn .ltvCardTitle::before { content: '⚠'; margin-right: 0.45em; opacity: 0.8; }
+        /* The selected airing. Fixed height and flex-shrink: 0 so that selecting something
+           takes its room from the grid, which then re-fits, rather than being drawn over the
+           grid's last row. */
+        .ltvInspector {
+            display: flex; align-items: center; gap: 0.8em; flex-shrink: 0;
+            margin-top: 0.7em; padding: 0.55em 0.8em;
+            background: var(--ltv-s2); border: 1px solid var(--ltv-line);
+            border-left: 3px solid var(--ltv-programme); border-radius: 8px;
+        }
 
         .ltvEmpty {
             flex-grow: 1;
@@ -452,7 +469,8 @@
 
                                     <div class="ltvRow" style="gap: 0.4em; font-size: 0.8em; opacity: 0.6;">
                                         Zoom
-                                        <input type="range" id="WeekZoom" min="20" max="160" step="5" value="46" style="width: 7em;" />
+                                        <input type="range" id="WeekZoom" min="20" max="420" step="5" value="46" style="width: 9em;" />
+                                        <span id="WeekZoomRead" style="min-width: 4.6em;"></span>
                                     </div>
 
                                     <div class="ltvSeg" id="WeekDayPicker" style="display: none;"></div>
@@ -476,101 +494,180 @@
 
                                 <div id="WeekTimeline"></div>
 
-                                <div id="WeekInspector" style="display: none;"></div>
+                                <div id="WeekInspector" class="ltvInspector" style="display: none;"></div>
 
+                                <!--
+                                    One row for the two ways of putting something on the shelf,
+                                    each free to grow and floored at a width its own placeholder
+                                    fits in. The address field used to sit on a line of its own at
+                                    a fixed 22em that shrank below its text, so it read as
+                                    "…or an address to drop in (a" and nothing explained it.
+                                -->
                                 <div class="ltvShelf">
                                     <div class="ltvRow">
                                         <div style="font-size: 0.85em; font-weight: 700;">Shelf</div>
-                                        <div style="flex: 0 1 18em;">
+                                        <div style="flex: 1 1 15em; min-width: 11em;">
                                             <input is="emby-input" type="text" id="WeekShelfSearch" placeholder="Search films and episodes…" style="margin: 0;" />
                                         </div>
-                                        <div id="WeekShelfChips" class="ltvRow" style="gap: 0.4em;"></div>
+                                        <div style="flex: 1 1 17em; min-width: 13em;">
+                                            <input is="emby-input" type="text" id="WeekCustomUrl" placeholder="…or an address: a trailer, an ident" style="margin: 0;" />
+                                        </div>
+                                        <div id="WeekCustomLength" style="font-size: 0.78em; opacity: 0.6; white-space: nowrap;"></div>
                                         <div class="ltvGrow"></div>
-                                        <div style="font-size: 0.75em; opacity: 0.5;">drag onto the week · Alt for second-by-second</div>
+                                        <div style="font-size: 0.75em; opacity: 0.5; white-space: nowrap;">drag onto the week · Alt for second-by-second</div>
                                     </div>
                                     <div id="WeekShelfResults" class="paperList" style="max-height: 8em; overflow-y: auto;"></div>
-                                    <div class="ltvRow" style="margin-top: 0.5em;">
-                                        <div style="flex: 0 1 22em;">
-                                            <input is="emby-input" type="text" id="WeekCustomUrl" placeholder="…or an address to drop in (a trailer, an ident)" style="margin: 0;" />
-                                        </div>
-                                        <div id="WeekCustomLength" style="font-size: 0.78em; opacity: 0.6;"></div>
-                                    </div>
+                                    <div id="WeekShelfChips" class="ltvRow" style="gap: 0.4em; margin-top: 0.45em;"></div>
                                 </div>
                             </div>
 
                             <!-- ---------------------------------------------------- content -->
                             <div class="litetvPane" data-pane="content">
                                 <div class="ltvCols">
+                                    <!--
+                                        The design's Content screen: what the channel plays, and
+                                        underneath it the parts of the week that play something
+                                        else. How they are dealt out belongs on the right, beside
+                                        them, with the dealt queue under it so that "shuffled" and
+                                        "two at a time" stop being abstractions.
+                                    -->
                                     <div class="ltvCol">
-                                        <div class="ltvCard" style="flex-grow: 1;">
-                                            <div class="ltvCardTitle">What this channel plays</div>
-                                            <div class="ltvCardNote">
-                                                A series is every episode of it, a collection is everything in it.
-                                                The order here is the order they are laid out in.
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
+                                                <div class="ltvCardTitle">What this channel plays</div>
+                                                <div class="ltvCardNote">
+                                                    A series is every episode of it, a collection is everything in it.
+                                                    The order here is the order they are laid out in.
+                                                </div>
+                                                <div style="margin-bottom: 0.6em;">
+                                                    <input is="emby-input" type="text" id="ItemSearch" placeholder="Add a film, series or collection…" style="margin: 0;" />
+                                                </div>
+                                                <div class="paperList" id="SearchResults" style="max-height: 11em; overflow-y: auto;"></div>
+                                                <div class="paperList ltvScroll" id="SourceList"></div>
                                             </div>
-                                            <div style="margin-bottom: 0.6em;">
-                                                <input is="emby-input" type="text" id="ItemSearch" placeholder="Add a film, series or collection…" style="margin: 0;" />
+
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
+                                                <div class="ltvCardTitle">Parts of the week that play something else</div>
+                                                <div class="ltvCardNote">
+                                                    A block is a stretch of the day with content of its own — a children's
+                                                    afternoon, a late film. Drawn on the week below; drag one to move it.
+                                                    Blocks only shape a week that is laid out afresh.
+                                                </div>
+
+                                                <div id="Timeline" style="margin-bottom: 0.7em;"></div>
+
+                                                <div class="ltvRow" style="margin-bottom: 0.6em;">
+                                                    <div style="flex: 0 1 14em;">
+                                                        <select is="emby-select" id="BlockSelect" label="Block"></select>
+                                                    </div>
+                                                    <button type="button" id="AddBlock" class="ltvGhost">New block</button>
+                                                    <button type="button" id="DeleteBlock" class="ltvGhost danger">Delete</button>
+                                                </div>
+
+                                                <div id="BlockEditor" class="ltvScroll" style="display: none;">
+                                                    <div class="ltvRow">
+                                                        <div style="flex: 1 1 12em;">
+                                                            <input is="emby-input" type="text" id="BlockName" label="Block name" />
+                                                        </div>
+                                                        <div style="flex: 0 1 9em;">
+                                                            <input is="emby-input" type="time" id="BlockStart" label="Starts at" />
+                                                        </div>
+                                                        <div style="flex: 0 1 9em;">
+                                                            <input is="emby-input" type="number" id="BlockDuration" min="1" step="15" label="Runs for (min)" />
+                                                        </div>
+                                                    </div>
+                                                    <div class="checkboxContainer">
+                                                        <label>
+                                                            <input is="emby-checkbox" type="checkbox" id="BlockEnabled" />
+                                                            <span>Block is on</span>
+                                                        </label>
+                                                    </div>
+                                                    <div id="BlockDays" class="ltvRow" style="margin-bottom: 0.6em;"></div>
+                                                    <div class="ltvRow">
+                                                        <div style="flex: 0 1 12em;">
+                                                            <select is="emby-select" id="BlockOrder" label="Play order">
+                                                                <option value="Sequential">In order</option>
+                                                                <option value="Shuffled">Shuffled</option>
+                                                            </select>
+                                                        </div>
+                                                        <div style="flex: 0 1 14em;">
+                                                            <input is="emby-input" type="number" id="BlockEpisodesPerBlock" min="0" step="1" label="Episodes at a time (0 = all)" />
+                                                        </div>
+                                                    </div>
+                                                    <div style="margin-bottom: 0.5em;">
+                                                        <input is="emby-input" type="text" id="BlockItemSearch" placeholder="Add content to this block…" style="margin: 0;" />
+                                                    </div>
+                                                    <div class="paperList" id="BlockSearchResults" style="max-height: 8em; overflow-y: auto;"></div>
+                                                    <div class="paperList" id="BlockSourceList"></div>
+                                                </div>
                                             </div>
-                                            <div class="paperList" id="SearchResults" style="max-height: 11em; overflow-y: auto;"></div>
-                                            <div class="paperList ltvScroll" id="SourceList"></div>
-                                        </div>
                                     </div>
 
-                                    <div class="ltvCol">
-                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
-                                            <div class="ltvCardTitle">Blocks</div>
+                                    <div class="ltvCol" style="flex: 0 1 26em;">
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">How they are laid out</div>
                                             <div class="ltvCardNote">
-                                                A block is a stretch of the day with content of its own — a children's
-                                                afternoon, a late film. Drawn on the week below; drag one to move it.
-                                                Blocks only shape a week that is laid out afresh.
+                                                The order the sources above are dealt in, and how much of each is
+                                                played before the channel moves to the next.
                                             </div>
 
-                                            <div id="Timeline" style="margin-bottom: 0.7em;"></div>
+<div class="ltvSetting">
+                                                    <div class="ltvSettingHead">
+                                                        <div style="flex: 0 1 12em;">
+                                                            <select is="emby-select" id="PlayOrder" label="Play order">
+                                                                <option value="Sequential">In order</option>
+                                                                <option value="Shuffled">Shuffled</option>
+                                                            </select>
+                                                        </div>
+                                                        <div style="flex: 0 1 13em;">
+                                                            <input is="emby-input" type="number" id="EpisodesPerBlock" min="0" step="1" label="Episodes at a time" />
+                                                        </div>
+                                                        <button type="button" class="ltvWhy" data-help="OrderHelp">?</button>
+                                                    </div>
+                                                    <div class="ltvHelp" id="OrderHelp">
+                                                        Episodes at a time is how many of a series run before the channel
+                                                        moves to its next source — two of a sitcom, then a film. Zero plays
+                                                        each source through in full.
+                                                    </div>
+                                                </div>
 
-                                            <div class="ltvRow" style="margin-bottom: 0.6em;">
-                                                <div style="flex: 0 1 14em;">
-                                                    <select is="emby-select" id="BlockSelect" label="Block"></select>
+                                                <div class="ltvSetting">
+                                                    <div class="ltvSettingHead">
+                                                        <div style="flex: 0 1 14em;">
+                                                            <input is="emby-input" type="number" id="SlotMinutes" min="0" step="5" label="Start on a grid of (min)" />
+                                                        </div>
+                                                        <button type="button" class="ltvWhy" data-help="SlotHelp">?</button>
+                                                    </div>
+                                                    <div class="ltvSettingOne">Zero plays everything back to back.</div>
+                                                    <div class="ltvHelp" id="SlotHelp">
+                                                        Real channels start things on the half hour. A grid rounds each
+                                                        programme up to the next slot, and the gap it leaves is the break —
+                                                        which is where adverts and trailers go. Without a grid there are no
+                                                        gaps, and so no breaks at all.
+                                                    </div>
                                                 </div>
-                                                <button type="button" id="AddBlock" class="ltvGhost">New block</button>
-                                                <button type="button" id="DeleteBlock" class="ltvGhost danger">Delete</button>
-                                            </div>
 
-                                            <div id="BlockEditor" class="ltvScroll" style="display: none;">
-                                                <div class="ltvRow">
-                                                    <div style="flex: 1 1 12em;">
-                                                        <input is="emby-input" type="text" id="BlockName" label="Block name" />
+                                                <div class="ltvSetting">
+                                                    <div class="ltvSettingHead">
+                                                        <label style="flex-grow: 1;">
+                                                            <input is="emby-checkbox" type="checkbox" id="TrailersInGaps" />
+                                                            <span>Fill the gaps rather than leaving them dark</span>
+                                                        </label>
                                                     </div>
-                                                    <div style="flex: 0 1 9em;">
-                                                        <input is="emby-input" type="time" id="BlockStart" label="Starts at" />
-                                                    </div>
-                                                    <div style="flex: 0 1 9em;">
-                                                        <input is="emby-input" type="number" id="BlockDuration" min="1" step="15" label="Runs for (min)" />
-                                                    </div>
+                                                    <div class="ltvSettingOne">Off means the channel sits silent until the next slot.</div>
                                                 </div>
-                                                <div class="checkboxContainer">
-                                                    <label>
-                                                        <input is="emby-checkbox" type="checkbox" id="BlockEnabled" />
-                                                        <span>Block is on</span>
-                                                    </label>
-                                                </div>
-                                                <div id="BlockDays" class="ltvRow" style="margin-bottom: 0.6em;"></div>
-                                                <div class="ltvRow">
-                                                    <div style="flex: 0 1 12em;">
-                                                        <select is="emby-select" id="BlockOrder" label="Play order">
-                                                            <option value="Sequential">In order</option>
-                                                            <option value="Shuffled">Shuffled</option>
-                                                        </select>
-                                                    </div>
-                                                    <div style="flex: 0 1 14em;">
-                                                        <input is="emby-input" type="number" id="BlockEpisodesPerBlock" min="0" step="1" label="Episodes at a time (0 = all)" />
-                                                    </div>
-                                                </div>
-                                                <div style="margin-bottom: 0.5em;">
-                                                    <input is="emby-input" type="text" id="BlockItemSearch" placeholder="Add content to this block…" style="margin: 0;" />
-                                                </div>
-                                                <div class="paperList" id="BlockSearchResults" style="max-height: 8em; overflow-y: auto;"></div>
-                                                <div class="paperList" id="BlockSourceList"></div>
+                                        </div>
+
+                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                            <div class="ltvCardTitle">The first few, as they would fall</div>
+                                            <div class="ltvCardNote">
+                                                The sources above dealt out with the settings as they stand.
                                             </div>
+                                            <div class="paperList ltvScroll" id="DealPreview"></div>
+                                        </div>
+
+                                        <div class="ltvCardNote" style="opacity: 0.65;">
+                                            Changing any of this leaves the stored week alone. It applies when you lay
+                                            the week out again.
                                         </div>
                                     </div>
                                 </div>
@@ -596,8 +693,11 @@
                                                 <div style="flex: 0 1 10em;">
                                                     <input is="emby-input" type="text" id="AdvertName" placeholder="Name (optional)" style="margin: 0;" />
                                                 </div>
-                                                <div style="flex: 0 1 7em;">
-                                                    <input is="emby-input" type="number" id="AdvertDecade" min="0" step="10" value="0" placeholder="Decade" style="margin: 0;" />
+                                                <div style="flex: 0 1 8em;">
+                                                    <!-- A value of 0 hid the placeholder, so this read as an
+                                                         unexplained number box. Empty, labelled, and still 0 when
+                                                         nothing is typed. -->
+                                                    <input is="emby-input" type="number" id="AdvertDecade" min="0" step="10" placeholder="Decade, e.g. 1990" title="The decade this advert is from, so a channel can be given adverts of its own era. Leave empty for any." style="margin: 0;" />
                                                 </div>
                                                 <button type="button" id="AddAdvert" class="ltvGhost">Add</button>
                                             </div>
@@ -650,6 +750,32 @@
                                             </div>
                                         </div>
 
+                                        <!--
+                                            The design's two explanation cards. The first is why
+                                            the length field everyone expects is not here; the
+                                            second is the same argument done with numbers, on
+                                            whatever advert is actually on the shelf.
+                                        -->
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">Why there is no length to type</div>
+                                            <div class="ltvCardNote">
+                                                A trailer from YouTube is rarely only the trailer. The uploader wraps it
+                                                in a branded card and a plea to subscribe, and the television skips both
+                                                — so the number that matters is not how long the video is, but how long
+                                                it <i>plays</i> for.
+                                            </div>
+                                            <div class="ltvCardNote" style="margin-bottom: 0;">
+                                                Nobody can type that. The plugin asks YouTube for the length and
+                                                SponsorBlock for the parts that get skipped, and the break is sized by
+                                                what is left.
+                                            </div>
+                                        </div>
+
+                                        <div class="ltvCard" id="BreakWorkedExample" style="display: none;">
+                                            <div class="ltvCardTitle">A break, made of that</div>
+                                            <div id="BreakWorkedExampleBody"></div>
+                                        </div>
+
                                         <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
                                             <div class="ltvCardTitle">Advertise these titles</div>
                                             <div class="ltvCardNote">Only used by the two modes that mention chosen titles.</div>
@@ -679,6 +805,22 @@
                                     </div>
 
                                     <div class="ltvCol">
+                                        <!--
+                                            The design's "On the television": the three pictures
+                                            drawn the size and shape the app draws them, over the
+                                            backdrop, with the channel's name and what is on. The
+                                            page had every control for setting artwork and nothing
+                                            that showed what setting it did.
+                                        -->
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">On the television</div>
+                                            <div id="ArtworkPreview"></div>
+                                            <div class="ltvCardNote" style="margin-bottom: 0;">
+                                                The wide one is the row card; the tall one is for lists that show covers.
+                                                A slot left empty is drawn from whatever is on air instead.
+                                            </div>
+                                        </div>
+
                                         <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
                                             <div class="ltvCardTitle">Pictures your library already has</div>
                                             <div class="ltvCardNote">
@@ -781,58 +923,25 @@
                                             </div>
                                         </div>
 
-                                        <div class="ltvCard">
+                                        <!--
+                                            The controls that used to be here now sit on Content,
+                                            beside the sources they act on, exactly as the design
+                                            asks. What is left is the warning, which is about the
+                                            week rather than about any one setting.
+                                        -->
+                                        <div class="ltvCard ltvWarn">
                                             <div class="ltvCardTitle">These only shape a new week</div>
-                                            <div class="ltvCardNote">
-                                                Once a week is laid out it is the schedule, and nothing here rewrites
-                                                it. Change these, then lay the week out again if you want them applied.
+                                            <div class="ltvCardNote" style="margin-bottom: 0;">
+                                                This channel's week is written down, so changing anything does nothing
+                                                to what is already scheduled. It takes effect when you lay the week out
+                                                again — a button on the Week tab, which discards what you arranged by
+                                                hand.
                                             </div>
+                                        </div>
 
-                                            <div class="ltvSetting">
-                                                <div class="ltvSettingHead">
-                                                    <div style="flex: 0 1 12em;">
-                                                        <select is="emby-select" id="PlayOrder" label="Play order">
-                                                            <option value="Sequential">In order</option>
-                                                            <option value="Shuffled">Shuffled</option>
-                                                        </select>
-                                                    </div>
-                                                    <div style="flex: 0 1 13em;">
-                                                        <input is="emby-input" type="number" id="EpisodesPerBlock" min="0" step="1" label="Episodes at a time" />
-                                                    </div>
-                                                    <button type="button" class="ltvWhy" data-help="OrderHelp">?</button>
-                                                </div>
-                                                <div class="ltvHelp" id="OrderHelp">
-                                                    Episodes at a time is how many of a series run before the channel
-                                                    moves to its next source — two of a sitcom, then a film. Zero plays
-                                                    each source through in full.
-                                                </div>
-                                            </div>
-
-                                            <div class="ltvSetting">
-                                                <div class="ltvSettingHead">
-                                                    <div style="flex: 0 1 14em;">
-                                                        <input is="emby-input" type="number" id="SlotMinutes" min="0" step="5" label="Start on a grid of (min)" />
-                                                    </div>
-                                                    <button type="button" class="ltvWhy" data-help="SlotHelp">?</button>
-                                                </div>
-                                                <div class="ltvSettingOne">Zero plays everything back to back.</div>
-                                                <div class="ltvHelp" id="SlotHelp">
-                                                    Real channels start things on the half hour. A grid rounds each
-                                                    programme up to the next slot, and the gap it leaves is the break —
-                                                    which is where adverts and trailers go. Without a grid there are no
-                                                    gaps, and so no breaks at all.
-                                                </div>
-                                            </div>
-
-                                            <div class="ltvSetting">
-                                                <div class="ltvSettingHead">
-                                                    <label style="flex-grow: 1;">
-                                                        <input is="emby-checkbox" type="checkbox" id="TrailersInGaps" />
-                                                        <span>Fill the gaps rather than leaving them dark</span>
-                                                    </label>
-                                                </div>
-                                                <div class="ltvSettingOne">Off means the channel sits silent until the next slot.</div>
-                                            </div>
+                                        <div class="ltvCardNote" style="opacity: 0.65;">
+                                            Play order, episodes at a time and the slot grid live under Content, beside
+                                            the sources they act on.
                                         </div>
                                     </div>
 
@@ -933,6 +1042,21 @@
                                     </div>
 
                                     <div class="ltvCol">
+                                        <!--
+                                            The design's "Trailer quality". Whether a proof of
+                                            origin is held is the difference between trailers at
+                                            1080p and trailers capped at 360p, and nothing on the
+                                            page said which of those was happening.
+                                        -->
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">Trailer quality</div>
+                                            <div id="PoTokenStatus"></div>
+                                            <div class="ltvCardNote" style="margin-bottom: 0;">
+                                                A television mints this in the background. Without one YouTube caps this
+                                                server at 360p, so if it ever says none is held, open the app once.
+                                            </div>
+                                        </div>
+
                                         <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
                                             <div class="ltvCardTitle">Suggested channels</div>
                                             <div class="ltvCardNote">
@@ -1166,6 +1290,101 @@
             function renderSources() {
                 renderSourceList(q('#SourceList'), currentChannel());
                 renderTrailerTitles();
+                renderDealPreview();
+            }
+
+            /**
+             * The design's "The first few, as they would fall": the sources above dealt out with
+             * the order and the interleave as they stand.
+             *
+             * It is worked out here rather than asked for, because it is a statement about the
+             * settings in the form right now - the answer changes as the number in the box does,
+             * and a stored week cannot say what a setting nobody has applied yet would do. What
+             * it deals are sources: episodes inside a series run in their own order, so a series
+             * appearing twice in a row is two of that series.
+             */
+            function renderDealPreview() {
+                var host = q('#DealPreview');
+                if (!host) { return; }
+
+                var channel = currentChannel();
+                var sources = (channel && channel.Sources) || [];
+                host.innerHTML = '';
+
+                if (!sources.length) {
+                    var empty = document.createElement('div');
+                    empty.className = 'listItem';
+                    empty.textContent = 'Nothing to deal yet. Add a film, a series or a collection above.';
+                    host.appendChild(empty);
+                    return;
+                }
+
+                var shuffled = q('#PlayOrder').value === 'Shuffled';
+                var atATime = Math.max(0, parseInt(q('#EpisodesPerBlock').value, 10) || 0);
+
+                // Zero means "play each source through in full", which as a queue of sources is
+                // one of each in turn - there is no honest way to draw "all of them" as a list.
+                var run = atATime || 1;
+                var order = sources.slice();
+
+                if (shuffled) {
+                    // Seeded off the source names so the illustration does not reshuffle itself
+                    // every time the pane is redrawn, which would read as the setting flapping.
+                    var seed = order.map(function (x) { return (x.Name || '').length; })
+                        .reduce(function (a, b) { return a + b; }, order.length);
+                    order.sort(function (a, b) {
+                        return ((a.Name || '').charCodeAt(0) * seed % 97)
+                            - ((b.Name || '').charCodeAt(0) * seed % 97);
+                    });
+                }
+
+                var dealt = [];
+                for (var round = 0; dealt.length < 10 && round < 40; round++) {
+                    var source = order[round % order.length];
+                    for (var n = 0; n < run && dealt.length < 10; n++) {
+                        dealt.push(source);
+                    }
+                }
+
+                dealt.forEach(function (source, index) {
+                    var row = document.createElement('div');
+                    row.className = 'listItem';
+                    row.style.display = 'flex';
+                    row.style.gap = '0.7em';
+                    row.style.alignItems = 'baseline';
+
+                    var number = document.createElement('div');
+                    number.className = 'fieldDescription';
+                    number.style.margin = '0';
+                    number.style.flex = '0 0 1.4em';
+                    number.textContent = String(index + 1);
+
+                    var name = document.createElement('div');
+                    name.style.flexGrow = '1';
+                    name.style.minWidth = '0';
+                    name.style.overflow = 'hidden';
+                    name.style.textOverflow = 'ellipsis';
+                    name.style.whiteSpace = 'nowrap';
+                    name.textContent = source.Name || source.ItemId;
+
+                    var kind = document.createElement('div');
+                    kind.className = 'fieldDescription';
+                    kind.style.margin = '0';
+                    kind.style.whiteSpace = 'nowrap';
+                    kind.textContent = source.Type;
+
+                    row.appendChild(number);
+                    row.appendChild(name);
+                    row.appendChild(kind);
+                    host.appendChild(row);
+                });
+
+                var note = document.createElement('div');
+                note.className = 'listItem fieldDescription';
+                note.textContent = (shuffled ? 'Shuffled' : 'In order')
+                    + (atATime ? ', ' + atATime + ' at a time' : ', each source played through in full')
+                    + '  ·  ' + sources.length + ' source' + (sources.length === 1 ? '' : 's');
+                host.appendChild(note);
             }
 
             function renderTrailerTitles() {
@@ -1283,9 +1502,112 @@
                 return /^https?:/i.test(url) ? url : ApiClient.serverAddress() + url;
             }
 
+            /**
+             * The design's "On the television": the backdrop with the channel's name and what is
+             * on it, and the three slots drawn at the shapes the app draws them at.
+             *
+             * Every control for setting artwork was here and nothing showed the result, so the
+             * only way to find out what a picture looked like in place was to save and go and
+             * look at the television. Chosen and fallen-back-to are drawn differently, because
+             * "this slot is empty" and "this slot is set" are the thing being decided.
+             */
+            function renderArtworkPreview() {
+                var host = q('#ArtworkPreview');
+                if (!host) { return; }
+                host.innerHTML = '';
+
+                var channel = currentChannel();
+                if (!channel) { return; }
+                var art = artworkOf(channel);
+
+                var backdrop = artworkSrc(art.BackdropUrl) || fallbackSrc(channel, 'BackdropUrl', 800);
+
+                var screen = document.createElement('div');
+                screen.style.position = 'relative';
+                screen.style.aspectRatio = '16 / 9';
+                // A 16:9 box in a wide column is most of the pane, and this is a preview rather
+                // than the point of the screen.
+                screen.style.maxHeight = '13em';
+                screen.style.borderRadius = '6px';
+                screen.style.overflow = 'hidden';
+                screen.style.border = '1px solid var(--ltv-line)';
+                screen.style.background = backdrop
+                    ? 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.15) 55%), url("'
+                        + backdrop + '") center/cover no-repeat'
+                    : 'var(--ltv-s2)';
+
+                var caption = document.createElement('div');
+                caption.style.position = 'absolute';
+                caption.style.left = '0.8em';
+                caption.style.right = '0.8em';
+                caption.style.bottom = '0.7em';
+
+                var name = document.createElement('div');
+                name.style.fontWeight = '700';
+                name.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
+                name.textContent = channel.Name || 'Channel';
+
+                var now = document.createElement('div');
+                now.style.fontSize = '0.8em';
+                now.style.opacity = '0.85';
+                now.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
+                var line = railNow[String(channel.Id).replace(/-/g, '').toLowerCase()];
+                now.textContent = line ? line.text : '';
+
+                caption.appendChild(name);
+                caption.appendChild(now);
+                screen.appendChild(caption);
+                host.appendChild(screen);
+
+                // The three slots underneath, each at its own aspect, so the shapes are
+                // comparable at a glance rather than described in the label beside them.
+                var strip = document.createElement('div');
+                strip.style.display = 'flex';
+                strip.style.gap = '0.5em';
+                strip.style.alignItems = 'flex-end';
+                strip.style.margin = '0.6em 0 0.7em 0';
+
+                ARTWORK.forEach(function (kind) {
+                    var chosen = artworkSrc(art[kind.key]);
+                    var src = chosen || fallbackSrc(channel, kind.key, 400);
+
+                    // One height for all three, with the width following the aspect: that is
+                    // what makes the three shapes comparable rather than three boxes of
+                    // unrelated size.
+                    var cell = document.createElement('div');
+                    cell.style.flex = '0 0 auto';
+                    cell.style.minWidth = '0';
+
+                    var tile = document.createElement('div');
+                    tile.style.height = '4.2em';
+                    tile.style.aspectRatio = kind.ratio;
+                    tile.style.borderRadius = '4px';
+                    tile.style.border = '1px solid var(--ltv-line)';
+                    tile.style.background = src
+                        ? 'url("' + src + '") center/cover no-repeat'
+                        : 'repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0 6px, transparent 6px 12px)';
+                    tile.style.opacity = chosen ? '1' : '0.55';
+
+                    var label = document.createElement('div');
+                    label.className = 'fieldDescription';
+                    label.style.margin = '0.25em 0 0 0';
+                    label.style.overflow = 'hidden';
+                    label.style.textOverflow = 'ellipsis';
+                    label.style.whiteSpace = 'nowrap';
+                    label.textContent = chosen ? 'set' : (src ? 'from what is on' : 'empty');
+
+                    cell.appendChild(tile);
+                    cell.appendChild(label);
+                    strip.appendChild(cell);
+                });
+
+                host.appendChild(strip);
+            }
+
             function renderArtwork() {
                 var host = q('#ArtworkRows');
                 host.innerHTML = '';
+                renderArtworkPreview();
                 var channel = currentChannel();
                 if (!channel) { return; }
                 var art = artworkOf(channel);
@@ -2276,6 +2598,67 @@
 
                     host.appendChild(row);
                 });
+                renderBreakWorkedExample(list);
+            }
+
+            /**
+             * The design's "A break, made of that": the same argument as the card above it, done
+             * on the adverts this channel actually holds. Drawn from the stored playable lengths,
+             * so it says what a break really comes to rather than describing the arithmetic.
+             */
+            function renderBreakWorkedExample(list) {
+                var card = q('#BreakWorkedExample');
+                var body = q('#BreakWorkedExampleBody');
+                if (!card || !body) { return; }
+
+                var withLength = (list || []).filter(function (a) { return a.DurationSeconds > 0; });
+                if (!withLength.length) {
+                    card.style.display = 'none';
+                    return;
+                }
+
+                card.style.display = '';
+                body.innerHTML = '';
+
+                var total = 0;
+                var shown = withLength.slice(0, 4);
+                shown.forEach(function (advert) {
+                    total += advert.DurationSeconds;
+
+                    var row = document.createElement('div');
+                    row.style.display = 'flex';
+                    row.style.gap = '0.8em';
+                    row.style.alignItems = 'baseline';
+
+                    var name = document.createElement('div');
+                    name.style.flexGrow = '1';
+                    name.style.minWidth = '0';
+                    name.style.overflow = 'hidden';
+                    name.style.textOverflow = 'ellipsis';
+                    name.style.whiteSpace = 'nowrap';
+                    name.textContent = advert.Name || advert.Url;
+
+                    var length = document.createElement('div');
+                    length.className = 'fieldDescription';
+                    length.style.margin = '0';
+                    length.style.whiteSpace = 'nowrap';
+                    length.textContent = advert.DurationSeconds + ' s';
+
+                    row.appendChild(name);
+                    row.appendChild(length);
+                    body.appendChild(row);
+                });
+
+                var note = document.createElement('div');
+                note.className = 'ltvCardNote';
+                note.style.marginTop = '0.6em';
+                note.style.marginBottom = '0';
+                note.textContent = 'Those ' + shown.length + ' come to '
+                    + Math.floor(total / 60) + ':' + ('0' + (total % 60)).slice(-2)
+                    + ' of playing time, and a break is sized by that rather than by how long the '
+                    + 'videos are — the skipped top and tail of a trailer are routinely fifteen '
+                    + 'or twenty seconds of somebody else’s branding.';
+                body.appendChild(note);
             }
 
             /**
@@ -2378,7 +2761,11 @@
                 day: 0,
                 drag: null,
                 shelfTimer: null,
-                dropping: null
+                dropping: null,
+                // The hour to put at the top of the frame on the next render. Null means
+                // the evening, which is where a channel is opened on. Zooming and dragging
+                // set it so that rebuilding the grid does not throw away where you were.
+                scrollToHour: null
             };
 
             var WEEK_SNAP = 300;
@@ -2497,12 +2884,25 @@
             function renderWeek() {
                 var host = q('#WeekTimeline');
                 if (!host) { return; }
+
+                // Dragging a bar, dropping one, deleting one and zooming all rebuild the whole
+                // grid. Whatever the reason, stay where the eye already is: only a different
+                // channel is a good enough reason to jump back to the evening.
+                if (week.scrollToHour === null && week.frameChannelId === weekChannelId()) {
+                    week.scrollToHour = weekAnchorHour();
+                }
+
+                week.frameChannelId = weekChannelId();
+                week.frame = null;
                 host.innerHTML = '';
                 renderWeekShelfChips();
                 renderWeekInspector();
 
+                renderWeekZoomRead();
+
                 var channel = currentChannel();
                 if (!channel) {
+                    week.scrollToHour = null;
                     weekStatus('');
                     return;
                 }
@@ -2538,6 +2938,10 @@
                 columns.style.display = 'flex';
                 columns.style.flexGrow = '1';
                 columns.style.minWidth = '0';
+                // Each column carries its own full height below; without this they would be
+                // stretched to the frame's height instead, and a sticky day header can only
+                // stick inside its own column's box.
+                columns.style.alignItems = 'flex-start';
 
                 // A week cannot draw a thirty-second advert as anything but a hairline, so one
                 // day at a time is where a break gets edited. Same grid, same drag, one column.
@@ -2548,13 +2952,54 @@
 
                 frame.appendChild(columns);
                 host.appendChild(frame);
+                week.frame = frame;
 
                 // Open on the evening. A grid that starts at midnight opens on eight empty hours
                 // and pushes the part of the day a channel is actually about below the fold.
                 // Deliberately a fixed hour rather than "the first airing": a channel whose week
                 // wraps past midnight has an airing at 00:40, and following it lands back at the
                 // top again - the same nothing, arrived at cleverly.
-                frame.scrollTop = (17 * week.pxPerHour) - 8;
+                if (week.scrollToHour === null) {
+                    weekScrollToHour(frame, 17, 'top');
+                } else {
+                    weekScrollToHour(frame, week.scrollToHour, 'centre');
+                }
+
+                week.scrollToHour = null;
+            }
+
+            /**
+             * Puts one hour at the top of the frame, or in the middle of it, and keeps putting
+             * it there while the pane settles. The grid is built before the layout has finished
+             * measuring - fitApp runs on a timeout - and a frame that is briefly full height
+             * clamps scrollTop to a much smaller number, which is how a grid told to open at
+             * 17:00 opened on the morning instead.
+             */
+            function weekScrollToHour(frame, hour, mode) {
+                var apply = function () {
+                    if (!frame.isConnected) { return; }
+                    var target = (hour * week.pxPerHour) + weekHeaderHeight();
+                    if (mode === 'centre') { target -= frame.clientHeight / 2; } else { target -= 8; }
+                    frame.scrollTop = Math.max(0, target);
+                };
+
+                apply();
+                requestAnimationFrame(apply);
+                setTimeout(apply, 130);
+                setTimeout(apply, 460);
+            }
+
+            /**
+             * The hour in the middle of the grid, for holding it across a rebuild. The middle
+             * rather than the top: at a week's zoom a whole day is barely taller than the frame,
+             * so scrollTop is pinned near zero while the evening sits in plain view - anchor on
+             * the top and zooming in walks away from the very thing being looked at.
+             */
+            function weekAnchorHour() {
+                var frame = week.frame;
+                if (!frame || !frame.isConnected) { return null; }
+                var middle = frame.scrollTop + (frame.clientHeight / 2) - weekHeaderHeight();
+                return middle / week.pxPerHour;
             }
 
             function weekEmptyNote() {
@@ -2586,17 +3031,26 @@
                 gutter.style.flex = '0 0 3.4em';
                 gutter.style.position = 'relative';
                 gutter.style.height = (24 * week.pxPerHour + weekHeaderHeight()) + 'px';
-                gutter.style.fontSize = '0.72em';
+                gutter.style.fontSize = Math.max(10, Math.min(13, weekFontPx())) + 'px';
                 gutter.style.opacity = '0.7';
                 gutter.style.borderRight = '1px solid rgba(255,255,255,0.12)';
 
-                var step = week.pxPerHour >= 90 ? 1 : week.pxPerHour >= 50 ? 2 : 3;
+                // Once an hour is tall enough to hold two labels without them touching, the
+                // clock counts in half hours - otherwise a zoomed-in grid is a wall of bars
+                // between two distant numbers and there is no telling what time anything is.
+                var step = week.pxPerHour >= 200 ? 0.5
+                    : week.pxPerHour >= 90 ? 1
+                        : week.pxPerHour >= 50 ? 2 : 3;
+
                 for (var h = 0; h < 24; h += step) {
                     var label = document.createElement('div');
                     label.style.position = 'absolute';
                     label.style.right = '0.4em';
                     label.style.top = (weekHeaderHeight() + (h * week.pxPerHour) - 6) + 'px';
-                    label.textContent = ('0' + h).slice(-2) + ':00';
+                    label.style.whiteSpace = 'nowrap';
+                    if (h % 1 !== 0) { label.style.opacity = '0.55'; }
+                    label.textContent = ('0' + Math.floor(h)).slice(-2)
+                        + ':' + (h % 1 === 0 ? '00' : '30');
                     gutter.appendChild(label);
                 }
 
@@ -2610,6 +3064,10 @@
                 column.style.flex = '1 1 0';
                 column.style.minWidth = '7em';
                 column.style.borderLeft = '1px solid rgba(255,255,255,0.08)';
+                // As tall as the day it holds. It used to be stretched to the frame instead, so
+                // its box ended a few hundred pixels down and the sticky header scrolled away
+                // with it - invisible for most of a day at anything past the default zoom.
+                column.style.height = ((24 * week.pxPerHour) + weekHeaderHeight()) + 'px';
 
                 var header = document.createElement('div');
                 header.style.height = weekHeaderHeight() + 'px';
@@ -2625,8 +3083,15 @@
                 var track = document.createElement('div');
                 track.style.position = 'relative';
                 track.style.height = (24 * week.pxPerHour) + 'px';
-                track.style.background = 'repeating-linear-gradient(to bottom, '
-                    + 'rgba(255,255,255,0.07) 0 1px, transparent 1px ' + week.pxPerHour + 'px)';
+                // An hour line always; a fainter half-hour line once there is room between them,
+                // so a bar zoomed in on can still be read against the clock.
+                track.style.background = week.pxPerHour >= 120
+                    ? 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.07) 0 1px, '
+                        + 'transparent 1px ' + week.pxPerHour + 'px), '
+                        + 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.035) 0 1px, '
+                        + 'transparent 1px ' + (week.pxPerHour / 2) + 'px)'
+                    : 'repeating-linear-gradient(to bottom, '
+                        + 'rgba(255,255,255,0.07) 0 1px, transparent 1px ' + week.pxPerHour + 'px)';
                 track.dataset.dayIndex = String(dayIndex);
                 week.tracks = week.tracks || {};
                 week.tracks[dayIndex] = track;
@@ -2684,21 +3149,41 @@
                 Advert: 'rgba(150, 96, 200, 0.85)'
             };
 
+            /**
+             * How big a label is drawn. It used to be a flat 0.7em however far you had zoomed
+             * in, so a bar four times as tall was four times as much empty colour around the
+             * same tiny line - the reason zooming in never made the schedule readable.
+             */
+            function weekFontPx() {
+                return Math.max(10, Math.min(16, Math.round(9 + (week.pxPerHour / 22))));
+            }
+
+            /** The shortest bar that can hold one line of label without clipping it. */
+            function weekLabelFloorPx() {
+                return Math.round((weekFontPx() * 1.25) + 3);
+            }
+
             function weekBar(piece, track) {
                 var airing = piece.airing;
                 var isGap = !airing.Id;
+                var tall = (piece.seconds / 3600) * week.pxPerHour;
 
                 var bar = document.createElement('div');
                 bar.style.position = 'absolute';
                 bar.style.left = '2px';
                 bar.style.right = '2px';
                 bar.style.top = ((piece.fromSecondOfDay / 3600) * week.pxPerHour) + 'px';
-                bar.style.height = Math.max(11, (piece.seconds / 3600) * week.pxPerHour) + 'px';
+
+                // Exactly as tall as it is long, floored only at the hairline the design asks
+                // for. The old eleven-pixel floor made every short programme taller than its
+                // own slot, so consecutive airings sat on top of each other and every label
+                // was written across the bar below it.
+                bar.style.height = Math.max(2, tall) + 'px';
                 bar.style.borderRadius = '3px';
                 bar.style.overflow = 'hidden';
-                bar.style.fontSize = '0.7em';
-                bar.style.lineHeight = '1.15';
-                bar.style.padding = '1px 3px';
+                bar.style.fontSize = weekFontPx() + 'px';
+                bar.style.lineHeight = '1.25';
+                bar.style.padding = '1px 4px';
                 bar.style.boxSizing = 'border-box';
                 bar.style.userSelect = 'none';
 
@@ -2719,36 +3204,77 @@
                 // A ten-minute advert at a week's zoom is eight pixels tall, and a label in it
                 // is a line of text lying across whatever is underneath. Below the height of a
                 // line, the bar is its colour and nothing else - which is what the day view and
-                // the tooltip are for.
-                var tall = (piece.seconds / 3600) * week.pxPerHour;
-                bar.textContent = tall < 15
-                    ? ''
-                    : (piece.continued ? '↳ ' : weekClock(airing.StartSecond) + ' ') + weekTitle(airing);
+                // the tooltip are for. Zooming in lowers that floor in real minutes, which is
+                // the whole point of the zoom.
+                var floor = weekLabelFloorPx();
+                if (tall >= floor) {
+                    var name = document.createElement('div');
+                    name.dataset.role = 'name';
+                    name.style.whiteSpace = 'nowrap';
+                    name.style.overflow = 'hidden';
+                    name.style.textOverflow = 'ellipsis';
+                    name.textContent = (piece.continued ? '↳ ' : weekClock(airing.StartSecond) + '  ')
+                        + weekTitle(airing);
+                    bar.appendChild(name);
+
+                    // Room for a second line: spend it on when the thing actually runs, so a
+                    // zoomed-in grid reads like a schedule rather than a list of names.
+                    if (tall >= (floor * 2.2) && !piece.continued) {
+                        var when = document.createElement('div');
+                        when.dataset.role = 'when';
+                        when.style.whiteSpace = 'nowrap';
+                        when.style.overflow = 'hidden';
+                        when.style.textOverflow = 'ellipsis';
+                        when.style.opacity = '0.75';
+                        when.textContent = weekClock(airing.StartSecond) + '–'
+                            + weekClock(airing.StartSecond + airing.DurationSeconds)
+                            + '  ·  ' + Math.round(airing.DurationSeconds / 60) + ' min'
+                            + (airing.BlockName ? '  ·  ' + airing.BlockName : '');
+                        bar.appendChild(when);
+                    }
+                }
+
                 bar.title = weekTooltip(airing);
 
                 // The lower eighth resizes, floored at four pixels and capped at ten: any more
-                // and a thirty-second advert is nothing but handle, any less and nobody can hit it.
-                var handle = document.createElement('div');
-                handle.style.position = 'absolute';
-                handle.style.left = '0';
-                handle.style.right = '0';
-                handle.style.bottom = '0';
-                handle.style.height = Math.max(4, Math.min(10, (piece.seconds / 3600) * week.pxPerHour / 8)) + 'px';
-                handle.style.cursor = 'ns-resize';
-                handle.style.background = 'rgba(255,255,255,0.25)';
-                bar.appendChild(handle);
+                // and a thirty-second advert is nothing but handle, any less and nobody can hit
+                // it. A bar too short to hold a handle without becoming one is left without.
+                var handle = null;
+                if (tall >= 14) {
+                    handle = document.createElement('div');
+                    handle.style.position = 'absolute';
+                    handle.style.left = '0';
+                    handle.style.right = '0';
+                    handle.style.bottom = '0';
+                    handle.style.height = Math.max(4, Math.min(10, tall / 8)) + 'px';
+                    handle.style.cursor = 'ns-resize';
+                    handle.style.background = 'rgba(255,255,255,0.25)';
+                    bar.appendChild(handle);
+                }
 
                 bar.addEventListener('mousedown', function (ev) {
                     ev.preventDefault();
                     week.selectedId = airing.Id;
                     week.drag = {
                         airing: airing,
-                        mode: ev.target === handle ? 'resize' : 'move',
+                        mode: (handle !== null && ev.target === handle) ? 'resize' : 'move',
                         grabbedSecond: weekSecondAt(track, ev.clientY, Number(track.dataset.dayIndex), false),
                         startSecond: airing.StartSecond,
                         duration: airing.DurationSeconds,
-                        moved: false
+                        moved: false,
+
+                        // The bar being dragged, so the drag can be drawn while it happens
+                        // rather than only after the server has answered. A row that runs past
+                        // midnight is several bars; this is the one under the hand, and how far
+                        // into the row it begins - the rest are put right by the redraw on drop.
+                        element: bar,
+                        pieceOffset: weekInto(
+                            (Number(track.dataset.dayIndex) * WEEK_DAY) + piece.fromSecondOfDay,
+                            airing.StartSecond),
+                        pieceSeconds: piece.seconds
                     };
+
+                    weekDragBegin();
                     renderWeekInspector();
                 });
 
@@ -2808,38 +3334,212 @@
                 return (((second - start) % span) + span) % span;
             }
 
-            /** Which day column a pointer is over, so a bar can be dragged across days. */
-            function weekTrackAt(clientX, clientY) {
-                var found = null;
-                Object.keys(week.tracks || {}).forEach(function (key) {
-                    var track = week.tracks[key];
-                    var box = track.getBoundingClientRect();
-                    if (clientX >= box.left && clientX < box.right) {
-                        found = { track: track, dayIndex: Number(key) };
-                    }
+            // -------------------------------------------------------------- live dragging
+            //
+            // A drag used to change nothing but a number: the bar stayed where it was until the
+            // mouse came up, and then jumped once the server had answered. So there was no
+            // telling where a thing was going, and the five-minute snap - which was there the
+            // whole time - could not be felt, because nothing ever moved against it.
+            //
+            // Now the bar itself moves as the pointer does, snapped, with the time it will land
+            // on written on it. The drop still redraws from the server's answer, which is the
+            // authority; by then the bar is already where that answer puts it, so there is
+            // nothing left to see.
+
+            function weekDragBegin() {
+                var drag = week.drag;
+                if (!drag) { return; }
+
+                drag.bands = weekDragBands();
+                drag.originalCursor = document.body.style.cursor;
+                document.body.style.cursor = drag.mode === 'resize' ? 'ns-resize' : 'grabbing';
+
+                if (drag.element) {
+                    drag.element.style.zIndex = '5';
+                    drag.element.style.boxShadow = '0 6px 18px rgba(0,0,0,0.45)';
+                    drag.element.style.cursor = 'grabbing';
+                }
+            }
+
+            /**
+             * Where each day column sits across the screen, measured once at the start of a
+             * drag. Only the left and right edges are wanted, and scrolling the grid does not
+             * move those - so this replaces a getBoundingClientRect on all seven columns on
+             * every single mouse move.
+             */
+            function weekDragBands() {
+                return Object.keys(week.tracks || {}).map(function (key) {
+                    var box = week.tracks[key].getBoundingClientRect();
+                    return { dayIndex: Number(key), left: box.left, right: box.right };
                 });
-                return found;
+            }
+
+            function weekBandAt(clientX) {
+                var bands = (week.drag && week.drag.bands) || [];
+                for (var i = 0; i < bands.length; i++) {
+                    if (clientX >= bands[i].left && clientX < bands[i].right) { return bands[i]; }
+                }
+
+                // Past the outermost column, stay in the nearest one rather than stopping dead:
+                // a drag that wanders off the side of the grid should still follow the pointer.
+                if (!bands.length) { return null; }
+                return clientX < bands[0].left ? bands[0] : bands[bands.length - 1];
+            }
+
+            /** Puts the dragged bar where the drag currently says it goes. */
+            function weekDragPaint() {
+                var drag = week.drag;
+                if (!drag || !drag.element) { return; }
+
+                var span = 7 * WEEK_DAY;
+
+                if (drag.mode === 'resize') {
+                    // Only the stretch this bar draws can grow here: the rest of a row that runs
+                    // past midnight belongs to the next day's column, and the redraw on drop is
+                    // what puts that right.
+                    var visible = Math.max(WEEK_SNAP, drag.duration - drag.pieceOffset);
+                    var begins = (((drag.startSecond + drag.pieceOffset) % WEEK_DAY) + WEEK_DAY) % WEEK_DAY;
+                    var room = WEEK_DAY - begins;
+                    drag.element.style.height =
+                        Math.max(2, (Math.min(visible, room) / 3600) * week.pxPerHour) + 'px';
+
+                    weekDragReadout(drag, weekClock(drag.startSecond) + '–'
+                        + weekClock(drag.startSecond + drag.duration)
+                        + '  ·  ' + Math.round(drag.duration / 60) + ' min');
+                    weekDragRelabel(drag);
+                    return;
+                }
+
+                var at = (((drag.startSecond + drag.pieceOffset) % span) + span) % span;
+                var dayIndex = Math.floor(at / WEEK_DAY);
+                var track = (week.tracks || {})[dayIndex];
+
+                if (track && drag.element.parentNode !== track) { track.appendChild(drag.element); }
+                drag.element.style.top = (((at % WEEK_DAY) / 3600) * week.pxPerHour) + 'px';
+
+                weekDragReadout(drag, weekDayName(drag.startSecond) + ' ' + weekClock(drag.startSecond));
+                weekDragRelabel(drag);
+            }
+
+            /**
+             * The bar's own label, kept in step with where the bar now is. Without this the bar
+             * goes on stating the time it was dragged away from while the readout above it
+             * states the time it is being dragged to - two clocks on one object, disagreeing.
+             */
+            function weekDragRelabel(drag) {
+                var airing = drag.airing;
+                var name = drag.element.querySelector('[data-role="name"]');
+                var when = drag.element.querySelector('[data-role="when"]');
+
+                if (name) {
+                    name.textContent = weekClock(drag.startSecond) + '  ' + weekTitle(airing);
+                }
+
+                if (when) {
+                    when.textContent = weekClock(drag.startSecond) + '–'
+                        + weekClock(drag.startSecond + drag.duration)
+                        + '  ·  ' + Math.round(drag.duration / 60) + ' min';
+                }
+            }
+
+            /**
+             * The time under the hand, drawn on the bar. Without it a snapped drag reads as a
+             * sticky one - the number is what makes five-minute steps look deliberate rather
+             * than like the pointer being ignored.
+             */
+            function weekDragReadout(drag, text) {
+                if (!drag.readout) {
+                    drag.readout = document.createElement('div');
+                    drag.readout.style.position = 'absolute';
+                    drag.readout.style.right = '4px';
+                    drag.readout.style.top = '-1.45em';
+                    drag.readout.style.padding = '0.1em 0.45em';
+                    drag.readout.style.borderRadius = '4px';
+                    drag.readout.style.fontSize = '11px';
+                    drag.readout.style.whiteSpace = 'nowrap';
+                    drag.readout.style.background = 'rgba(0,0,0,0.82)';
+                    drag.readout.style.color = '#fff';
+                    drag.readout.style.pointerEvents = 'none';
+                    drag.readout.style.zIndex = '6';
+
+                    // A bar shorter than its own label would otherwise clip it away.
+                    drag.element.style.overflow = 'visible';
+                    drag.element.appendChild(drag.readout);
+                }
+
+                drag.readout.textContent = text;
+            }
+
+            /**
+             * Drag to the edge of the frame and the frame follows. At a zoom where an hour is
+             * three hundred pixels a day is ten thousand of them, so without this a bar can only
+             * be moved as far as the window is tall.
+             */
+            function weekDragEdgeScroll(clientY) {
+                var frame = week.frame;
+                if (!frame || !frame.isConnected) { return; }
+
+                var box = frame.getBoundingClientRect();
+                var margin = 34;
+                var step = 0;
+
+                if (clientY < box.top + margin) {
+                    step = -Math.ceil((box.top + margin - clientY) / 2);
+                } else if (clientY > box.bottom - margin) {
+                    step = Math.ceil((clientY - (box.bottom - margin)) / 2);
+                }
+
+                if (step) { frame.scrollTop += step; }
             }
 
             document.addEventListener('mousemove', function (ev) {
                 if (!week.drag) { return; }
-                var over = weekTrackAt(ev.clientX, ev.clientY);
-                if (!over) { return; }
+
+                var band = weekBandAt(ev.clientX);
+                if (!band) { return; }
+
+                weekDragEdgeScroll(ev.clientY);
+
+                var track = (week.tracks || {})[band.dayIndex];
+                if (!track) { return; }
 
                 week.drag.moved = true;
-                var at = weekSecondAt(over.track, ev.clientY, over.dayIndex, !ev.altKey);
+
+                // Snap what is being dragged, not the pointer. The pointer used to be rounded
+                // to five minutes and the bar then placed at that rounded point *minus* however
+                // far down the bar it had been grabbed - so the bar itself could come to rest on
+                // any second at all. Every drag looked unsnapped, because every drag was.
+                var at = weekSecondAt(track, ev.clientY, band.dayIndex, false);
+                var snap = ev.altKey ? 1 : WEEK_SNAP;
 
                 if (week.drag.mode === 'resize') {
-                    week.drag.duration = Math.max(WEEK_SNAP, weekInto(at, week.drag.airing.StartSecond));
+                    // The end is the edge under the hand, so the end is what lands on the grid.
+                    var length = weekInto(at, week.drag.airing.StartSecond);
+                    week.drag.duration = Math.max(WEEK_SNAP, Math.round(length / snap) * snap);
                 } else {
-                    week.drag.startSecond = at - weekInto(week.drag.grabbedSecond, week.drag.airing.StartSecond);
+                    var start = at - weekInto(week.drag.grabbedSecond, week.drag.airing.StartSecond);
+                    week.drag.startSecond = Math.round(start / snap) * snap;
                 }
+
+                weekDragPaint();
             });
 
             document.addEventListener('mouseup', function () {
                 var drag = week.drag;
                 week.drag = null;
                 if (!drag) { return; }
+
+                document.body.style.cursor = drag.originalCursor || '';
+
+                if (drag.readout && drag.readout.parentNode) {
+                    drag.readout.parentNode.removeChild(drag.readout);
+                }
+
+                if (drag.element) {
+                    drag.element.style.zIndex = '';
+                    drag.element.style.boxShadow = '';
+                    drag.element.style.cursor = 'grab';
+                }
 
                 if (!drag.moved) {
                     renderWeekInspector();
@@ -2849,6 +3549,13 @@
                 var row = weekRowOf(drag.airing);
                 row.StartSecond = ((Math.round(drag.startSecond) % (7 * WEEK_DAY)) + 7 * WEEK_DAY) % (7 * WEEK_DAY);
                 row.DurationSeconds = Math.max(WEEK_SNAP, Math.round(drag.duration));
+
+                // The bar is already where this puts it, so the redraw from the answer will not
+                // be seen - but the inspector would go on quoting the old time until it lands.
+                drag.airing.StartSecond = row.StartSecond;
+                drag.airing.DurationSeconds = row.DurationSeconds;
+                renderWeekInspector();
+
                 weekPlace(row);
             });
 
@@ -2892,29 +3599,46 @@
                     return;
                 }
 
-                host.style.display = '';
+                // A card, the way the design draws it: a raised surface with the kind's own
+                // colour down its left edge, so what is selected reads as one object rather
+                // than as loose text lying under the grid.
+                host.style.display = 'flex';
                 host.innerHTML = '';
+
+                var body = document.createElement('div');
+                body.style.flexGrow = '1';
+                body.style.minWidth = '0';
 
                 var title = document.createElement('div');
                 title.style.fontWeight = 'bold';
-                title.style.marginBottom = '0.4em';
+                title.style.marginBottom = '0.2em';
+                title.style.overflow = 'hidden';
+                title.style.textOverflow = 'ellipsis';
+                title.style.whiteSpace = 'nowrap';
                 title.textContent = weekTitle(airing);
-                host.appendChild(title);
+                body.appendChild(title);
 
                 var note = document.createElement('div');
                 note.className = 'fieldDescription';
+                note.style.overflow = 'hidden';
+                note.style.textOverflow = 'ellipsis';
+                note.style.whiteSpace = 'nowrap';
                 note.textContent = airing.Kind + '  ·  ' + weekDayName(airing.StartSecond) + ' '
                     + weekClock(airing.StartSecond) + '–'
                     + weekClock(airing.StartSecond + airing.DurationSeconds)
                     + '  ·  ' + Math.round(airing.DurationSeconds / 60) + ' min'
                     + (airing.Url ? '  ·  ' + airing.Url : '');
-                host.appendChild(note);
+                body.appendChild(note);
+                host.appendChild(body);
+
+                host.style.borderLeftColor = WEEK_COLOURS[airing.Kind] || WEEK_COLOURS.Programme;
 
                 var buttons = document.createElement('div');
                 buttons.style.display = 'flex';
                 buttons.style.flexWrap = 'wrap';
                 buttons.style.gap = '0.4em';
-                buttons.style.marginTop = '0.6em';
+                buttons.style.flexShrink = '0';
+                buttons.style.alignItems = 'center';
 
                 buttons.appendChild(scheduleButton('Take it off the week', function () {
                     weekRemove(airing.Id);
@@ -3503,6 +4227,60 @@
                 });
             }
 
+            /**
+             * Whether the server is holding a proof of origin, which is what decides whether a
+             * trailer resolves to a 1080p ladder or to YouTube's 360p cap. Only ever the state:
+             * the tokens themselves are a proof of identity and the endpoint never returns them.
+             */
+            function loadPoToken() {
+                var host = q('#PoTokenStatus');
+                if (!host) { return; }
+                host.innerHTML = '<div class="fieldDescription">Asking…</div>';
+
+                ApiClient.fetch({ url: ApiClient.getUrl('LiteTv/PoToken'), type: 'GET', dataType: 'json' })
+                    .then(function (state) {
+                        host.innerHTML = '';
+
+                        var row = document.createElement('div');
+                        row.style.display = 'flex';
+                        row.style.alignItems = 'baseline';
+                        row.style.gap = '0.6em';
+                        row.style.marginBottom = '0.5em';
+
+                        var dot = document.createElement('span');
+                        dot.className = 'ltvSwatch';
+                        dot.style.background = state.Held ? '#2f9e8f' : '#d99a3a';
+
+                        var label = document.createElement('div');
+                        label.style.flexGrow = '1';
+                        label.textContent = state.Held ? 'Held' : 'None held';
+
+                        var detail = document.createElement('div');
+                        detail.className = 'fieldDescription';
+                        detail.style.margin = '0';
+                        detail.style.whiteSpace = 'nowrap';
+                        detail.textContent = state.Held
+                            ? ('minted ' + poAge(state.AgeSeconds)
+                                + (state.HasPlayerToken ? '  ·  with a player token' : '  ·  no player token'))
+                            : 'trailers are capped at 360p';
+
+                        row.appendChild(dot);
+                        row.appendChild(label);
+                        row.appendChild(detail);
+                        host.appendChild(row);
+                    })
+                    .catch(function () {
+                        host.innerHTML = '<div class="fieldDescription">Could not be asked.</div>';
+                    });
+            }
+
+            function poAge(seconds) {
+                if (!seconds && seconds !== 0) { return 'at an unknown time'; }
+                if (seconds < 120) { return seconds + ' s ago'; }
+                if (seconds < 7200) { return Math.round(seconds / 60) + ' min ago'; }
+                return Math.round(seconds / 3600) + ' h ago';
+            }
+
             function loadSuggestions() {
                 var list = q('#SuggestionList');
                 list.innerHTML = '<div class="listItem">Analyzing library…</div>';
@@ -3672,6 +4450,7 @@
                     setTimeout(fitApp, 60);
                     setTimeout(fitApp, 400);
                     loadSuggestions();
+                    loadPoToken();
                     loadBuilds();
                     Dashboard.hideLoadingMsg();
                     loading = false;
@@ -4109,9 +4888,21 @@
             q('#WeekDiscard').addEventListener('click', weekDiscard);
 
             q('#WeekZoom').addEventListener('input', function () {
+                // Zoom about the top of the frame. Rebuilding the grid used to put the scroll
+                // back to 17:00, so every nudge of the slider threw away whatever you had
+                // scrolled to - which is why zooming in never appeared to show you anything.
+                week.scrollToHour = weekAnchorHour();
                 week.pxPerHour = Math.max(20, parseInt(this.value, 10) || 46);
                 renderWeek();
+                renderWeekZoomRead();
             });
+
+            function renderWeekZoomRead() {
+                // What the zoom buys, in the only unit that means anything here: the shortest
+                // airing that can still carry its name.
+                var minutes = Math.ceil((weekLabelFloorPx() / week.pxPerHour) * 60);
+                q('#WeekZoomRead').textContent = 'names from ' + minutes + ' min';
+            }
 
             // Week or one day. Switching to a day opens on the day you were nearest, and the
             // zoom comes up with it: a day is the view you go to in order to see small things.
@@ -4122,17 +4913,20 @@
                         other.classList.toggle('selected', other === button);
                     });
 
-                    if (week.view === 'day' && week.pxPerHour < 90) {
-                        week.pxPerHour = 110;
-                        q('#WeekZoom').value = 110;
+                    // One column has all the width in the world and none of the height, so a
+                    // day opens far enough in that a fifteen-minute episode carries its name.
+                    if (week.view === 'day' && week.pxPerHour < 130) {
+                        week.pxPerHour = 170;
+                        q('#WeekZoom').value = 170;
                     }
-                    if (week.view === 'week' && week.pxPerHour > 70) {
+                    if (week.view === 'week' && week.pxPerHour > 90) {
                         week.pxPerHour = 46;
                         q('#WeekZoom').value = 46;
                     }
 
                     renderWeekDayPicker();
                     renderWeek();
+                    renderWeekZoomRead();
                 });
             });
 
@@ -4348,6 +5142,13 @@
 
             ['#BlockStart', '#BlockDuration', '#BlockName', '#BlockEnabled'].forEach(function (id) {
                 q(id).addEventListener('change', applyBlockAndRedraw);
+            });
+
+            // The dealt queue is a statement about these two boxes, so it has to answer to them
+            // as they are typed in rather than only when the channel is next drawn.
+            ['#PlayOrder', '#EpisodesPerBlock'].forEach(function (id) {
+                q(id).addEventListener('change', renderDealPreview);
+                q(id).addEventListener('input', renderDealPreview);
             });
             q('#BlockDays').addEventListener('change', applyBlockAndRedraw);
 
