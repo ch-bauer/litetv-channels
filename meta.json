@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Two things. A break no longer needs anybody to type how long a trailer or advert is: the schedule works out how much of the video actually plays - its length minus the stretches SponsorBlock skips - and the seconds boxes are gone from the configuration page, replaced by a readout that says what it found. And LiteTV now uses the plugins beside it rather than guessing: it reports which of them are installed at /LiteTv/Plugins, and suggestions are scored by the Smart Similar plugin through /LiteTv/Suggestions/Scored, falling back to a deliberately rough genre match - and saying so - when that plugin is not there.",
+  "changelog": "The configuration page is rebuilt. A channel rail down the side with a filter, what each channel is showing and a tag for the ones with no week of their own; the editor beside it as tabs. Every screen now fits the window - only the channel list scrolls - and the week grid fills the height it is given and opens on the evening rather than on eight empty hours after midnight. New: a Day view for editing breaks too small to grab on a week, a strip showing which of the sibling plugins are installed and usable, and a Settings screen that shows a real evening from the server instead of describing what the numbers do. Every setting says one line and keeps its full explanation behind a (?).",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-22T19:00:00.000Z",
-  "version": "1.0.60.0",
+  "timestamp": "2026-08-22T20:15:00.000Z",
+  "version": "1.0.61.0",
   "status": "Active",
   "autoUpdate": false
 }
