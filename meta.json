@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "The proof-of-origin token is stored but no longer shown. Nobody types it - a television mints it and posts it - so there was nothing to show, and showing it was worse than useless: the configuration page posts back the whole configuration as it was when the page loaded, so opening the page before a television minted and saving it afterwards for some unrelated reason wiped the stored token. The field is gone, and any save that has forgotten the token now has it filled back in rather than clearing it. Ask GET /LiteTv/PoToken whether one is held; it answers without disclosing it.",
+  "changelog": "A channel's schedule is now a stored week you can edit. Every airing - programmes, adverts, trailers - is written down in the channel's own file, and the guide is that week read over and over, so what is on at nine on Thursday stays what is on at nine on Thursday even when a collection the channel plays gains a title. The configuration page opens on a week-long timeline: drag a bar to move it, drag its lower edge to resize it, drop films, episodes, adverts or an address onto empty time. Laying a week out from the channel's content is a button you press, never a side effect of saving. The printed schedule preview and the old list of schedule exceptions are gone, and the channel editor is now five tabs rather than one long scroll. A channel with no stored week is unchanged and still airs whatever its content and settings work out to.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-22T00:00:00.000Z",
-  "version": "1.0.58.0",
+  "timestamp": "2026-08-22T14:00:00.000Z",
+  "version": "1.0.59.0",
   "status": "Active",
   "autoUpdate": false
 }

@@ -19,14 +19,17 @@ public sealed class ChannelGuide
     private static readonly TimeSpan LinkedTrailerReserve = TimeSpan.FromSeconds(150);
 
     private readonly ChannelPlaylistBuilder _builder;
+    private readonly WeekStore _weeks;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelGuide"/> class.
     /// </summary>
     /// <param name="builder">The playlist builder.</param>
-    public ChannelGuide(ChannelPlaylistBuilder builder)
+    /// <param name="weeks">The stored weeks.</param>
+    public ChannelGuide(ChannelPlaylistBuilder builder, WeekStore weeks)
     {
         _builder = builder;
+        _weeks = weeks;
     }
 
     /// <summary>
@@ -87,12 +90,81 @@ public sealed class ChannelGuide
     /// <summary>
     /// Walks a channel's schedule over a window of time, with the gaps between programs
     /// filled in.
+    /// <para>
+    /// A channel with a stored week is read from it and nothing else: that week <em>is</em> the
+    /// schedule, and the queue, the blocks and the break arithmetic below had their say when it
+    /// was laid out. A channel without one is a channel nobody has curated yet, and answers the
+    /// way every channel used to.
+    /// </para>
     /// </summary>
     /// <param name="channel">The channel.</param>
     /// <param name="fromUtc">The start of the window; the first airing may start before it.</param>
     /// <param name="toUtc">The end of the window.</param>
     /// <returns>The airings, in order.</returns>
     public IEnumerable<Airing> Window(TvChannel channel, DateTime fromUtc, DateTime toUtc)
+    {
+        var week = _weeks.Get(channel.Id);
+        return week is not null && week.Airings.Count > 0
+            ? WeekReader.Enumerate(week, fromUtc, toUtc, TimeZoneInfo.Local)
+            : GeneratedWindow(channel, fromUtc, toUtc);
+    }
+
+    /// <summary>
+    /// Lays a week out for a channel from its sources and settings, as the schedule it would
+    /// have aired with nobody curating it.
+    /// <para>
+    /// Only ever called because somebody asked: giving a channel its first week, or asking for
+    /// one to be laid out again in place of a curated one. Nothing here saves anything - the
+    /// caller does, having said out loud what it is about to discard.
+    /// </para>
+    /// </summary>
+    /// <param name="channel">The channel.</param>
+    /// <returns>The week, unsaved.</returns>
+    public StoredWeek GenerateWeek(TvChannel channel)
+    {
+        var timeZone = TimeZoneInfo.Local;
+        var nowLocal = DateTime.SpecifyKind(
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone),
+            DateTimeKind.Unspecified);
+
+        var weekStartLocal = WeekReader.WeekStart(nowLocal);
+        var fromUtc = ToUtc(weekStartLocal, timeZone);
+        var toUtc = ToUtc(weekStartLocal.AddDays(7), timeZone);
+
+        // Capped because this walks a generated schedule, and a channel configured into a
+        // corner - a slot grid of one minute, say - could otherwise hand back a week of
+        // hundreds of thousands of rows and a file to match.
+        var airings = GeneratedWindow(channel, fromUtc, toUtc).Take(8192);
+
+        var advertUrls = channel.Adverts
+            .Where(a => !string.IsNullOrWhiteSpace(a.Url))
+            .Select(a => a.Url)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return WeekGenerator.Build(channel.Id, airings, weekStartLocal, timeZone, advertUrls);
+    }
+
+    private static DateTime ToUtc(DateTime local, TimeZoneInfo timeZone)
+    {
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        if (timeZone.IsInvalidTime(unspecified))
+        {
+            unspecified = unspecified.AddHours(1);
+        }
+
+        return TimeZoneInfo.ConvertTimeToUtc(unspecified, timeZone);
+    }
+
+    /// <summary>
+    /// The old computed schedule: the queue and the blocks, with breaks filled and hand-made
+    /// exceptions laid over the top. What every channel aired before weeks were stored, and
+    /// what a channel with no stored week still airs.
+    /// </summary>
+    /// <param name="channel">The channel.</param>
+    /// <param name="fromUtc">The start of the window.</param>
+    /// <param name="toUtc">The end of the window.</param>
+    /// <returns>The airings, in order.</returns>
+    private IEnumerable<Airing> GeneratedWindow(TvChannel channel, DateTime fromUtc, DateTime toUtc)
     {
         var airings = _builder.GetSchedule(channel).Enumerate(fromUtc, toUtc);
         var withTrailers = channel.TrailersInGaps ? WithTrailers(channel, airings) : airings;

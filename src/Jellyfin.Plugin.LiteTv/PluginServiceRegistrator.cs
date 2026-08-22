@@ -17,6 +17,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddSingleton<ChannelPlaylistBuilder>();
 
+        // The stored weeks: one file per channel, and the schedule itself rather than a cache
+        // of one. Singleton so the files are read once and held.
+        serviceCollection.AddSingleton<WeekStore>();
+
         // The single answer to "what is on this channel", shared by the guide endpoints and
         // anything else that needs to know.
         serviceCollection.AddSingleton<ChannelGuide>();
