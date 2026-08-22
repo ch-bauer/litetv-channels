@@ -1,6 +1,7 @@
 ﻿using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Core;
+using Jellyfin.Plugin.LiteTv.Integrations;
 using Jellyfin.Plugin.LiteTv.Sessions;
 using Jellyfin.Plugin.LiteTv.Trailers;
 using MediaBrowser.Controller.Entities;
@@ -36,6 +37,8 @@ public class LiteTvController : ControllerBase
     private readonly YouTubeStreamResolver _trailers;
     private readonly SponsorBlockClient _sponsorBlock;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly SiblingPlugins _siblings;
+    private readonly SmartSimilarClient _smartSimilar;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
@@ -47,6 +50,8 @@ public class LiteTvController : ControllerBase
     /// <param name="trailers">Resolves linked trailers into playable streams.</param>
     /// <param name="sponsorBlock">Says which parts of a trailer are not the trailer.</param>
     /// <param name="httpClientFactory">Fetches artwork chosen from somewhere else.</param>
+    /// <param name="siblings">Which of the other plugins are installed.</param>
+    /// <param name="smartSimilar">Scores suggestions, when that plugin is there.</param>
     public LiteTvController(
         ChannelGuide guide,
         WeekStore weeks,
@@ -54,7 +59,9 @@ public class LiteTvController : ControllerBase
         ChannelPlaybackUser playbackUser,
         YouTubeStreamResolver trailers,
         SponsorBlockClient sponsorBlock,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        SiblingPlugins siblings,
+        SmartSimilarClient smartSimilar)
     {
         _guide = guide;
         _weeks = weeks;
@@ -63,6 +70,8 @@ public class LiteTvController : ControllerBase
         _trailers = trailers;
         _sponsorBlock = sponsorBlock;
         _httpClientFactory = httpClientFactory;
+        _siblings = siblings;
+        _smartSimilar = smartSimilar;
     }
 
     /// <summary>
@@ -201,6 +210,54 @@ public class LiteTvController : ControllerBase
             // exactly when a break is on - which is when the screen has nothing else to draw.
             Image = ChannelImage(channel, artwork),
             Upcoming = listed.Take(Math.Clamp(upcoming, 0, 64)).Select(a => ToProgram(a, artwork)).ToList()
+        };
+    }
+
+    /// <summary>
+    /// Gets how long an address actually plays for: the video's own length, less the parts
+    /// SponsorBlock says the player will skip.
+    /// <para>
+    /// This is what replaced typing a number into a box beside the address. The typed number
+    /// was a guess at the length and knew nothing about the skipping, so a break built from it
+    /// either ran quiet at the end or cut the trailer off. Both halves are answered here, and
+    /// the page stores what comes back.
+    /// </para>
+    /// </summary>
+    /// <param name="url">The address - a YouTube link, or anything the resolver knows.</param>
+    /// <returns>The lengths, and the segments they were worked out from.</returns>
+    [HttpGet("Duration")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<DurationDto>> GetDuration([FromQuery] string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return BadRequest("url is required");
+        }
+
+        var videoId = YouTubeStreamResolver.VideoId(url);
+        var length = await _trailers.LengthAsync(url, HttpContext.RequestAborted).ConfigureAwait(false);
+
+        // Asked for even when the length could not be established, so the page can say which
+        // half failed rather than reporting a flat "could not work it out". This answers with
+        // nothing when skipping is switched off, which is right: with no skipping the whole
+        // video plays and its length is the whole of it.
+        var segments = await SkipSegmentsAsync(url).ConfigureAwait(false);
+
+        var asSegments = segments
+            .Select(s => new SponsorBlockClient.Segment(s.StartSeconds, s.EndSeconds, s.Category))
+            .ToList();
+
+        var skipped = PlayableLength.SkippedSeconds(length, asSegments);
+
+        return new DurationDto
+        {
+            VideoId = videoId,
+            LengthSeconds = length,
+            SkippedSeconds = (int)Math.Round(skipped, MidpointRounding.AwayFromZero),
+            PlayableSeconds = PlayableLength.Of(length, asSegments),
+            SkipSegments = segments
         };
     }
 
@@ -1234,6 +1291,201 @@ public class LiteTvController : ControllerBase
 
         return name.Contains("Trailer", StringComparison.OrdinalIgnoreCase) ? 1 : 5;
     }
+
+    /// <summary>
+    /// Reports which of the plugins LiteTV can lean on are installed, and in what state.
+    /// One place for it: the configuration page draws the strip from this, and the TV app
+    /// asks the same question rather than interrogating Jellyfin itself.
+    /// </summary>
+    /// <returns>One row per known plugin, installed or not.</returns>
+    [HttpGet("Plugins")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<SiblingPluginStatus>> GetPlugins()
+    {
+        return Ok(_siblings.All());
+    }
+
+    /// <summary>
+    /// Scores the library against a handful of chosen titles, for the suggestions screens.
+    /// The scoring itself belongs to the Smart Similar plugin - LiteTV asks it rather than
+    /// carrying a second copy of it - and falls back to a deliberately rough genre match
+    /// when that plugin is not installed. The answer always says which of the two replied.
+    /// </summary>
+    /// <param name="itemIds">Comma-separated seed item ids.</param>
+    /// <param name="userId">The user whose library access applies; empty for all of it.</param>
+    /// <param name="minScore">Floor on the score, or null for Smart Similar's own setting.</param>
+    /// <param name="limit">Maximum results, default 40.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The scored pool.</returns>
+    [HttpGet("Suggestions/Scored")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ScoredSuggestionsDto>> GetScoredSuggestions(
+        [FromQuery] string? itemIds,
+        [FromQuery] Guid userId,
+        [FromQuery] int? minScore,
+        [FromQuery] int? limit,
+        CancellationToken cancellationToken)
+    {
+        var seeds = ParseItemIds(itemIds);
+        var result = new ScoredSuggestionsDto
+        {
+            SmartSimilar = _siblings.All().FirstOrDefault(
+                p => string.Equals(p.Id, SiblingPlugins.SmartSimilarId.ToString(), StringComparison.OrdinalIgnoreCase))
+        };
+
+        if (seeds.Count == 0)
+        {
+            result.Engine = "None";
+            return Ok(result);
+        }
+
+        int max = Math.Clamp(limit ?? 40, 1, 200);
+
+        var scored = await _smartSimilar.ScoreAsync(
+            new Uri(Request.Scheme + "://" + Request.Host.Value),
+            Request.Headers.Authorization.ToString(),
+            seeds,
+            userId,
+            minScore,
+            max,
+            cancellationToken).ConfigureAwait(false);
+
+        if (scored != null && scored.Active)
+        {
+            result.Engine = "SmartSimilar";
+            foreach (var seed in scored.Seeds)
+            {
+                result.Seeds.Add(new SuggestionSeedDto
+                {
+                    Id = seed.Id,
+                    Name = seed.Name,
+                    Kind = seed.Kind,
+                    Active = seed.Active,
+                    Source = seed.Source
+                });
+            }
+
+            foreach (var match in scored.Results)
+            {
+                var item = _libraryManager.GetItemById(match.Id);
+                if (item == null)
+                {
+                    continue;
+                }
+
+                var dto = Describe(item, match.Score);
+                dto.SharedGenres = match.Shared?.Genres.ToList() ?? new List<string>();
+                dto.SharedPeople = match.Shared?.People.ToList() ?? new List<string>();
+                dto.SharedTags = match.Shared?.Tags.ToList() ?? new List<string>();
+                dto.SharedStudios = match.Shared?.Studios.ToList() ?? new List<string>();
+                dto.YearGap = match.Shared?.YearGap;
+                dto.SameOfficialRating = match.Shared?.OfficialRating ?? false;
+                dto.PerSeed = match.PerSeed.ToList();
+                result.Results.Add(dto);
+            }
+
+            return Ok(result);
+        }
+
+        // No Smart Similar, or it could not answer. Say so, and answer roughly.
+        result.Engine = "Rough";
+
+        var seedItems = seeds
+            .Select(id => _libraryManager.GetItemById(id))
+            .OfType<BaseItem>()
+            .Where(item => item is Movie or Series)
+            .ToList();
+
+        foreach (var seed in seedItems)
+        {
+            result.Seeds.Add(new SuggestionSeedDto
+            {
+                Id = seed.Id,
+                Name = seed.Name ?? string.Empty,
+                Kind = seed is Series ? "Series" : "Movie",
+                Active = true,
+                Source = "Rough"
+            });
+        }
+
+        if (seedItems.Count == 0)
+        {
+            return Ok(result);
+        }
+
+        var candidates = _libraryManager.GetItemList(new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Series },
+            Recursive = true,
+            IsVirtualItem = false
+        });
+
+        var ranked = RoughSimilarity.Rank(
+            seedItems.Select(ToSimilarityInput).ToList(),
+            candidates.Select(ToSimilarityInput),
+            minScore ?? 15,
+            max);
+
+        foreach (var match in ranked)
+        {
+            var item = _libraryManager.GetItemById(match.Id);
+            if (item == null)
+            {
+                continue;
+            }
+
+            var dto = Describe(item, match.Score);
+            dto.SharedGenres = match.SharedGenres.ToList();
+            dto.YearGap = match.YearGap;
+            result.Results.Add(dto);
+        }
+
+        return Ok(result);
+    }
+
+    private static SimilarityInput ToSimilarityInput(BaseItem item)
+    {
+        return new SimilarityInput(
+            item.Id,
+            item is Series ? "Series" : "Movie",
+            item.Genres ?? Array.Empty<string>(),
+            item.ProductionYear,
+            item.CommunityRating);
+    }
+
+    private static SuggestionMatchDto Describe(BaseItem item, double score)
+    {
+        return new SuggestionMatchDto
+        {
+            Id = item.Id,
+            Name = item.Name ?? string.Empty,
+            Kind = item is Series ? "Series" : "Movie",
+            Year = item.ProductionYear,
+            CommunityRating = item.CommunityRating,
+            OfficialRating = item.OfficialRating,
+            Score = score
+        };
+    }
+
+    private static List<Guid> ParseItemIds(string? itemIds)
+    {
+        var ids = new List<Guid>();
+        if (string.IsNullOrWhiteSpace(itemIds))
+        {
+            return ids;
+        }
+
+        foreach (var part in itemIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            // Configuration guids come back dash-less; Guid.TryParse takes either spelling.
+            if (Guid.TryParse(part, out var id) && id != Guid.Empty && !ids.Contains(id))
+            {
+                ids.Add(id);
+            }
+        }
+
+        return ids;
+    }
 }
 
 /// <summary>
@@ -1716,4 +1968,123 @@ public class WeekAiringDto
     /// guide cannot disagree about it.
     /// </summary>
     public bool OffAir { get; set; }
+}
+
+/// <summary>
+/// How long an address plays for, and what was taken out of it.
+/// </summary>
+public class DurationDto
+{
+    /// <summary>Gets or sets the YouTube video id, when the address is one.</summary>
+    public string? VideoId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the video's own length in seconds, or zero when YouTube would not say -
+    /// which the page has to be able to tell apart from "it is very short".
+    /// </summary>
+    public int LengthSeconds { get; set; }
+
+    /// <summary>Gets or sets how much of it the player will skip over.</summary>
+    public int SkippedSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets what is left, and what the schedule should give it. Zero when the length
+    /// is unknown, or when the skips leave too little behind to believe.
+    /// </summary>
+    public int PlayableSeconds { get; set; }
+
+    /// <summary>Gets or sets the segments the skipping is worked out from.</summary>
+    public List<SkipSegmentDto> SkipSegments { get; set; } = new();
+}
+
+/// <summary>
+/// The scored pool behind a suggestions screen, and which engine produced it.
+/// </summary>
+public class ScoredSuggestionsDto
+{
+    /// <summary>
+    /// Gets or sets what answered: "SmartSimilar", "Rough" when that plugin is absent or
+    /// silent, or "None" when nothing was asked for. The screen shows this rather than
+    /// pretending the two are the same.
+    /// </summary>
+    public string Engine { get; set; } = "None";
+
+    /// <summary>Gets or sets the Smart Similar plugin's state, for the strip on the page.</summary>
+    public SiblingPluginStatus? SmartSimilar { get; set; }
+
+    /// <summary>Gets the seeds as the engine understood them.</summary>
+    public List<SuggestionSeedDto> Seeds { get; } = new();
+
+    /// <summary>Gets the ranked candidates.</summary>
+    public List<SuggestionMatchDto> Results { get; } = new();
+}
+
+/// <summary>
+/// One title the suggestions were built from.
+/// </summary>
+public class SuggestionSeedDto
+{
+    /// <summary>Gets or sets the item id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Gets or sets its name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets "Movie" or "Series".</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets a value indicating whether this seed could be scored at all.</summary>
+    public bool Active { get; set; }
+
+    /// <summary>Gets or sets which engine answered for it: Local, Tmdb, Hybrid or Rough.</summary>
+    public string Source { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// One suggested title, with enough of itself to be drawn and enough of the reasoning
+/// to be explained.
+/// </summary>
+public class SuggestionMatchDto
+{
+    /// <summary>Gets or sets the item id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Gets or sets its name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets "Movie" or "Series".</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets its production year.</summary>
+    public int? Year { get; set; }
+
+    /// <summary>Gets or sets its community rating.</summary>
+    public float? CommunityRating { get; set; }
+
+    /// <summary>Gets or sets its age rating.</summary>
+    public string? OfficialRating { get; set; }
+
+    /// <summary>Gets or sets the mean score over the comparable seeds, 0-100.</summary>
+    public double Score { get; set; }
+
+    /// <summary>Gets or sets the score against each seed, in the order they were sent.</summary>
+    public List<double?> PerSeed { get; set; } = new();
+
+    /// <summary>Gets or sets the genres it shares with the seeds.</summary>
+    public List<string> SharedGenres { get; set; } = new();
+
+    /// <summary>Gets or sets the tags it shares. Empty under the rough engine, which has none.</summary>
+    public List<string> SharedTags { get; set; } = new();
+
+    /// <summary>Gets or sets the directors, writers and actors it shares. Empty under the rough engine.</summary>
+    public List<string> SharedPeople { get; set; } = new();
+
+    /// <summary>Gets or sets the studios it shares. Empty under the rough engine.</summary>
+    public List<string> SharedStudios { get; set; } = new();
+
+    /// <summary>Gets or sets how many years separate it from the closest seed.</summary>
+    public int? YearGap { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether it carries the same age rating as a seed.</summary>
+    public bool SameOfficialRating { get; set; }
 }

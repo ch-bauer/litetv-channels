@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.LiteTv.Core;
+using Jellyfin.Plugin.LiteTv.Integrations;
 using Jellyfin.Plugin.LiteTv.Sessions;
 using Jellyfin.Plugin.LiteTv.Trailers;
 using MediaBrowser.Controller;
@@ -32,6 +33,14 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Turns the YouTube links a library holds instead of trailer files into streams a
         // player can be handed. Singleton so the resolved URLs are cached across requests.
         serviceCollection.AddSingleton<YouTubeStreamResolver>();
+
+        // Which of the owner's other plugins are installed, asked by GUID rather than by
+        // firing a request at an endpoint and reading the failure.
+        serviceCollection.AddSingleton<SiblingPlugins>();
+
+        // Suggestions are scored by the Smart Similar plugin rather than by a scorer copied
+        // into here; this is the call to it.
+        serviceCollection.AddSingleton<SmartSimilarClient>();
 
         // Which parts of a trailer are not the trailer. Singleton for the same reason: the
         // segments of a trailer a channel airs every few hours should be fetched once.

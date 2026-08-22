@@ -223,6 +223,13 @@ public sealed class YouTubeStreamResolver
     private readonly ConcurrentDictionary<string, CachedStream> _cache = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// How long each video is, learned from the player response that was fetched for its
+    /// streams. Kept apart from <see cref="_cache"/> and never expired: stream URLs go stale
+    /// within minutes and a video's length does not change at all.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, int> _lengths = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="YouTubeStreamResolver"/> class.
     /// </summary>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
@@ -443,7 +450,7 @@ public sealed class YouTubeStreamResolver
     /// </summary>
     private const string AppPlayerEndpoint =
         "https://youtubei.googleapis.com/youtubei/v1/player"
-        + "?prettyPrint=false&fields=playabilityStatus,streamingData";
+        + "?prettyPrint=false&fields=playabilityStatus,streamingData,videoDetails.lengthSeconds";
 
     /// <summary>
     /// The reel endpoint, for the one client ReVanced does not give the player endpoint.
@@ -454,7 +461,7 @@ public sealed class YouTubeStreamResolver
     /// </summary>
     private const string ReelPlayerEndpoint =
         "https://youtubei.googleapis.com/youtubei/v1/reel/reel_item_watch"
-        + "?prettyPrint=false&fields=playerResponse.playabilityStatus,playerResponse.streamingData";
+        + "?prettyPrint=false&fields=playerResponse.playabilityStatus,playerResponse.streamingData,playerResponse.videoDetails.lengthSeconds";
 
     /// <summary>
     /// The <c>context.client</c> object, in ReVanced's own field order.
@@ -496,6 +503,65 @@ public sealed class YouTubeStreamResolver
         context["gl"] = "US";
 
         return context;
+    }
+
+    /// <summary>
+    /// Gets how long a video is, in seconds, without asking YouTube again if it is already
+    /// known - which it is for anything that has been resolved for playback.
+    /// </summary>
+    /// <param name="url">The address.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The length, or zero when it could not be established.</returns>
+    public async Task<int> LengthAsync(string? url, CancellationToken cancellationToken)
+    {
+        var id = VideoId(url);
+        if (id is null)
+        {
+            return 0;
+        }
+
+        if (_lengths.TryGetValue(id, out var known) && known > 0)
+        {
+            return known;
+        }
+
+        // Nothing here asks for the length on its own: resolving the streams fetches the
+        // player response the length is written on, so the way to learn it is to resolve.
+        // That work is not wasted - it is the same call playback would make, and it warms
+        // the same cache.
+        await ResolveAsync(url, cancellationToken).ConfigureAwait(false);
+
+        return _lengths.TryGetValue(id, out var found) ? found : 0;
+    }
+
+    /// <summary>
+    /// Gets a length already learned, without going anywhere near the network. For callers
+    /// that cannot wait - the guide is walked synchronously on the request thread.
+    /// </summary>
+    /// <param name="url">The address.</param>
+    /// <returns>The length, or zero when it is not known here.</returns>
+    public int KnownLength(string? url)
+    {
+        var id = VideoId(url);
+        return id is not null && _lengths.TryGetValue(id, out var known) ? known : 0;
+    }
+
+    /// <summary>
+    /// Keeps the length off a player response, whatever else that response turned out to be
+    /// good for. A client that answers with no playable stream usually still says how long the
+    /// video is, and that answer is as true as any other client's.
+    /// </summary>
+    /// <param name="id">The video.</param>
+    /// <param name="root">The player response.</param>
+    private void RememberLength(string id, System.Text.Json.JsonElement root)
+    {
+        if (root.TryGetProperty("videoDetails", out var details)
+            && details.TryGetProperty("lengthSeconds", out var length)
+            && int.TryParse(length.GetString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
+            && seconds > 0)
+        {
+            _lengths[id] = seconds;
+        }
     }
 
     private async Task<StreamCandidate?> TryInnertubeAsync(string id, InnertubeClient client, CancellationToken cancellationToken)
@@ -587,6 +653,8 @@ public sealed class YouTubeStreamResolver
                 .ConfigureAwait(false);
 
             var root = PlayerResponse(json.RootElement);
+            RememberLength(id, root);
+
             if (root.TryGetProperty("playabilityStatus", out var playability)
                 && playability.TryGetProperty("status", out var status)
                 && status.GetString() is { } text

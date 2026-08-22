@@ -231,6 +231,38 @@ public class ChannelPlaylistBuilder
     }
 
     /// <summary>
+    /// The address of a programme's linked trailer, where it has one. The library holds far
+    /// more trailers as links than as files, and a link is the case the schedule knows least
+    /// about - so this is what lets the length of one be looked up.
+    /// </summary>
+    /// <param name="itemId">The programme.</param>
+    /// <returns>The address, or null.</returns>
+    public string? RemoteTrailerUrl(Guid itemId)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        if (item is null)
+        {
+            return null;
+        }
+
+        var url = item.RemoteTrailers.FirstOrDefault(t => !string.IsNullOrEmpty(t.Url))?.Url;
+        if (!string.IsNullOrEmpty(url))
+        {
+            return url;
+        }
+
+        // An episode's trailers live on its series - nobody cuts one per episode - which is
+        // the same fallback HasTrailer makes.
+        if (item is MediaBrowser.Controller.Entities.TV.Episode episode && episode.SeriesId != Guid.Empty)
+        {
+            return _libraryManager.GetItemById(episode.SeriesId)?
+                .RemoteTrailers.FirstOrDefault(t => !string.IsNullOrEmpty(t.Url))?.Url;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Which decade a library item was made in - 1980 for the eighties - or zero when nothing
     /// says. Used to put an advert of the right vintage in front of it.
     /// </summary>
