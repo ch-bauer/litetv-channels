@@ -63,25 +63,6 @@
                     </div>
                 </div>
 
-                <div class="inputContainer">
-                    <input is="emby-input" type="password" id="ProofOfOriginToken" label="Proof-of-origin token (minted by the TV app)" />
-                    <div class="fieldDescription">
-                        Filled in by the television, not by you. Without one, YouTube serves this
-                        server a 1080p trailer for about sixty seconds and then stops, or one 360p
-                        stream that plays to the end &mdash; and the token that lifts that comes from
-                        Google's BotGuard, which needs a browser engine the server does not have and
-                        an Android TV does. The app mints one at start-up and posts it here, and it
-                        is kept so a restart does not throw it away.
-                        <br /><br />
-                        It expires after a few hours and the next app launch replaces it. Clear the
-                        box and save to forget it. It proves a request came from something
-                        browser-shaped rather than from anybody in particular, so it is not an
-                        account &mdash; but it is worth something to whoever holds it, which is why
-                        it is masked here and why a dump of this configuration does not belong
-                        anywhere public.
-                    </div>
-                </div>
-
                 <h3 style="margin-top: 1.5em;">Suggested channels</h3>
                 <div class="fieldDescription" style="margin-bottom: 0.6em;">
                     Based on the media in your library. Adding a suggestion creates a channel you can still edit below.
@@ -1512,7 +1493,6 @@
                 config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
                 config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
                 config.YouTubeClient = q('#YouTubeClient').value || '';
-                config.ProofOfOriginToken = q('#ProofOfOriginToken').value || '';
 
                 list.innerHTML = '<div class="listItem">Saving, then asking the server…</div>';
                 ApiClient.updatePluginConfiguration(pluginId, config)
@@ -2457,7 +2437,6 @@
                     q('#ChannelUserName').value = config.ChannelUserName || 'LiteTV';
                     q('#SkipTrailerSegments').checked = config.SkipTrailerSegments !== false;
                     q('#YouTubeClient').value = config.YouTubeClient || '';
-                    q('#ProofOfOriginToken').value = config.ProofOfOriginToken || '';
                     currentIndex = config.Channels.length ? 0 : -1;
                     renderChannelSelect();
                     loadEffectiveArt().then(function () { renderEditor(); renderScheduleEdits(); });
@@ -2886,7 +2865,6 @@
                     config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
                 config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
                 config.YouTubeClient = q('#YouTubeClient').value || '';
-                config.ProofOfOriginToken = q('#ProofOfOriginToken').value || '';
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         renderChannelSelect();
                         renderBlockSelect();
