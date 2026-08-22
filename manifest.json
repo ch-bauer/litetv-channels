@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.69.0",
+        "changelog": "Suggestions were quietly using the blunt scorer. Two faults, both in LiteTV's own call to the Smart Similar plugin, and neither of them visible: the answer was being read with a serialiser that cannot parse the ids Jellyfin actually writes - 32 hex characters with no dashes - so the whole scored pool was thrown away on its very first field and the fallback took over. And the call forwarded only the Authorization header, so a caller who had authenticated with X-Emby-Token reached Smart Similar as nobody at all and was answered 401. Both are fixed, with tests for the reading. The new-channel screen already said which engine had answered, which is how this was noticed at all.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.69.0/litetv-channels_1.0.69.0.zip",
+        "checksum": "b850d6f0a4202469c6dfc51788667b8a",
+        "timestamp": "2026-08-23T06:00:00.000Z"
+      },
+      {
         "version": "1.0.68.0",
         "changelog": "A programme's bar can no longer be resized, because its length was never yours to set. The plugin plays an episode or a film for as long as the file runs and ignores whatever length the stored week carries, so dragging the bottom of one never made it shorter - it changed how much room the programme was given, and if that room came out under the runtime the programme silently did not play at all. Dragging to move it is unchanged, and the tooltip now says where the length comes from. An address dropped onto the week still resizes, because there its stored length really is the one that is used.",
         "targetAbi": "10.11.0.0",
