@@ -167,8 +167,8 @@
                         <div class="inputContainer" style="flex: 1 1 20em; margin: 0;">
                             <input is="emby-input" type="text" id="WeekCustomUrl" label="…or an address to drop in (a trailer, an ident)" />
                         </div>
-                        <div class="inputContainer" style="flex: 0 1 7em; margin: 0;">
-                            <input is="emby-input" type="number" id="WeekCustomSeconds" min="1" step="5" value="30" label="Seconds" />
+                        <div id="WeekCustomLength" class="fieldDescription" style="flex: 0 1 16em; margin: 0 0 0.4em 0;">
+                            Paste an address and its length is worked out.
                         </div>
                     </div>
                     </div>
@@ -262,8 +262,8 @@
                         <div class="inputContainer" style="flex: 1 1 12em; margin: 0;">
                             <input is="emby-input" type="text" id="AdvertName" label="Name (optional)" />
                         </div>
-                        <div class="inputContainer" style="flex: 0 1 8em; margin: 0;">
-                            <input is="emby-input" type="number" id="AdvertSeconds" min="1" step="1" value="30" label="Seconds" />
+                        <div id="AdvertLength" class="fieldDescription" style="flex: 0 1 17em; margin: 0 0 0.4em 0;">
+                            Length is worked out from the address.
                         </div>
                         <div class="inputContainer" style="flex: 0 1 8em; margin: 0;">
                             <input is="emby-input" type="number" id="AdvertDecade" min="0" step="10" value="0" label="Decade" />
@@ -1625,6 +1625,61 @@
                 });
             }
 
+            /**
+             * How long an address actually plays for.
+             *
+             * The server asks YouTube how long the video is and SponsorBlock which parts of it
+             * the player will skip, and answers with what is left. That is the number the
+             * schedule needs: a break sized by the video's full length runs quiet at the end,
+             * because on a trailer the skipped top and tail are routinely fifteen or twenty
+             * seconds of somebody else's branding.
+             *
+             * This is why there is no "seconds" box any more. It asked for a number nobody
+             * knows - a guess at a length, made before the skipping was taken into account -
+             * and the schedule believed it.
+             */
+            function lookUpDuration(url, host, onResolved) {
+                if (!url) {
+                    host.textContent = 'Paste an address and its length is worked out.';
+                    return;
+                }
+
+                host.textContent = 'Asking how long that is…';
+                ApiClient.getJSON(ApiClient.getUrl('LiteTv/Duration', { url: url }))
+                    .then(function (answer) {
+                        if (!answer.PlayableSeconds) {
+                            // Said plainly, because the fallback is a real one: the schedule
+                            // gives it thirty seconds and the break may not fit it.
+                            host.textContent = answer.LengthSeconds
+                                ? 'Length known but nothing left after the skips — using 30 s.'
+                                : 'Could not work out its length — using 30 s.';
+                            onResolved(30, answer);
+                            return;
+                        }
+
+                        var skipped = answer.SkippedSeconds
+                            ? '  ·  ' + answer.SkippedSeconds + ' s skipped ('
+                                + (answer.SkipSegments || []).map(function (x) { return x.Category; }).join(', ') + ')'
+                            : '';
+                        host.textContent = clockOfSeconds(answer.PlayableSeconds) + ' of playing time'
+                            + (answer.LengthSeconds ? '  ·  ' + clockOfSeconds(answer.LengthSeconds) + ' long' : '')
+                            + skipped;
+                        onResolved(answer.PlayableSeconds, answer);
+                    })
+                    .catch(function () {
+                        host.textContent = 'Could not reach the server — using 30 s.';
+                        onResolved(30, null);
+                    });
+            }
+
+            function clockOfSeconds(seconds) {
+                var whole = Math.max(0, Math.round(seconds || 0));
+                return Math.floor(whole / 60) + ':' + ('0' + (whole % 60)).slice(-2);
+            }
+
+            /** What the last lookup settled on, per field. */
+            var resolvedLength = { advert: 0, custom: 0 };
+
             function addAdvert() {
                 var url = (q('#AdvertUrl').value || '').trim();
                 if (!url) { return; }
@@ -1632,13 +1687,15 @@
                 channelAdverts().push({
                     Name: (q('#AdvertName').value || '').trim(),
                     Url: url,
-                    DurationSeconds: Math.max(1, parseInt(q('#AdvertSeconds').value, 10) || 30),
+                    DurationSeconds: Math.max(1, resolvedLength.advert || 30),
                     Decade: Math.max(0, parseInt(q('#AdvertDecade').value, 10) || 0),
                     Enabled: true
                 });
 
                 q('#AdvertUrl').value = '';
                 q('#AdvertName').value = '';
+                resolvedLength.advert = 0;
+                q('#AdvertLength').textContent = 'Length is worked out from the address.';
                 renderAdverts();
             }
 
@@ -2262,7 +2319,7 @@
                         Kind: 'Trailer',
                         Name: 'Vorschau',
                         Url: url,
-                        DurationSeconds: Math.max(1, parseInt(q('#WeekCustomSeconds').value, 10) || 30)
+                        DurationSeconds: Math.max(1, resolvedLength.custom || 30)
                     };
                 }, 'the address below'));
             }
@@ -3141,6 +3198,30 @@
             });
 
             showPane('week');
+
+            var advertLengthTimer = null;
+            q('#AdvertUrl').addEventListener('input', function () {
+                var url = this.value.trim();
+                resolvedLength.advert = 0;
+                if (advertLengthTimer) { clearTimeout(advertLengthTimer); }
+                advertLengthTimer = setTimeout(function () {
+                    lookUpDuration(url, q('#AdvertLength'), function (seconds) {
+                        resolvedLength.advert = seconds;
+                    });
+                }, 500);
+            });
+
+            var customLengthTimer = null;
+            q('#WeekCustomUrl').addEventListener('input', function () {
+                var url = this.value.trim();
+                resolvedLength.custom = 0;
+                if (customLengthTimer) { clearTimeout(customLengthTimer); }
+                customLengthTimer = setTimeout(function () {
+                    lookUpDuration(url, q('#WeekCustomLength'), function (seconds) {
+                        resolvedLength.custom = seconds;
+                    });
+                }, 500);
+            });
 
             q('#WeekGenerate').addEventListener('click', weekGenerate);
             q('#WeekDiscard').addEventListener('click', weekDiscard);

@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.LiteTv.Configuration;
+using Jellyfin.Plugin.LiteTv.Trailers;
 
 namespace Jellyfin.Plugin.LiteTv.Core;
 
@@ -20,16 +21,55 @@ public sealed class ChannelGuide
 
     private readonly ChannelPlaylistBuilder _builder;
     private readonly WeekStore _weeks;
+    private readonly YouTubeStreamResolver _trailers;
+    private readonly SponsorBlockClient _sponsorBlock;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelGuide"/> class.
     /// </summary>
     /// <param name="builder">The playlist builder.</param>
     /// <param name="weeks">The stored weeks.</param>
-    public ChannelGuide(ChannelPlaylistBuilder builder, WeekStore weeks)
+    /// <param name="trailers">Knows how long a linked trailer is, once it has resolved one.</param>
+    /// <param name="sponsorBlock">Knows which parts of it will be skipped.</param>
+    public ChannelGuide(
+        ChannelPlaylistBuilder builder,
+        WeekStore weeks,
+        YouTubeStreamResolver trailers,
+        SponsorBlockClient sponsorBlock)
     {
         _builder = builder;
         _weeks = weeks;
+        _trailers = trailers;
+        _sponsorBlock = sponsorBlock;
+    }
+
+    /// <summary>
+    /// How much room a programme's linked trailer needs, when that is actually known.
+    /// <para>
+    /// Both halves have to be at hand already - the length from a resolution, the segments from
+    /// a lookup - because the guide is walked while a request waits on it. When either is
+    /// missing the caller falls back to <see cref="LinkedTrailerReserve"/>, which is what every
+    /// break was sized by before any of this existed.
+    /// </para>
+    /// </summary>
+    /// <param name="itemId">The programme being trailed.</param>
+    /// <returns>The seconds to reserve, or zero when nothing is known.</returns>
+    private int KnownTrailerSeconds(Guid itemId)
+    {
+        var url = _builder.RemoteTrailerUrl(itemId);
+        if (string.IsNullOrEmpty(url))
+        {
+            return 0;
+        }
+
+        var length = _trailers.KnownLength(url);
+        if (length <= 0)
+        {
+            return 0;
+        }
+
+        var segments = _sponsorBlock.SegmentsIfCached(YouTubeStreamResolver.VideoId(url));
+        return PlayableLength.Of(length, segments);
     }
 
     /// <summary>
@@ -341,9 +381,15 @@ public sealed class ChannelGuide
             ? _builder.TrailersFor(trailed.ItemId).Select(t => t.RuntimeTicks).DefaultIfEmpty(0).Max()
             : 0;
 
+        // A file's runtime, then the linked trailer's real playable length, then the flat
+        // reservation. Only the last is a guess, and it is now the last resort rather than the
+        // usual answer.
+        var linkedSeconds = trailed is null ? 0 : KnownTrailerSeconds(trailed.ItemId);
         var reserved = trailed is null
             ? TimeSpan.Zero
-            : localTicks > 0 ? TimeSpan.FromTicks(localTicks) : LinkedTrailerReserve;
+            : localTicks > 0 ? TimeSpan.FromTicks(localTicks)
+            : linkedSeconds > 0 ? TimeSpan.FromSeconds(linkedSeconds)
+            : LinkedTrailerReserve;
 
         var room = gap.EndUtc - cursor - reserved;
 

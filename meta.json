@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "A channel's schedule is now a stored week you can edit. Every airing - programmes, adverts, trailers - is written down in the channel's own file, and the guide is that week read over and over, so what is on at nine on Thursday stays what is on at nine on Thursday even when a collection the channel plays gains a title. The configuration page opens on a week-long timeline: drag a bar to move it, drag its lower edge to resize it, drop films, episodes, adverts or an address onto empty time. Laying a week out from the channel's content is a button you press, never a side effect of saving. The printed schedule preview and the old list of schedule exceptions are gone, and the channel editor is now five tabs rather than one long scroll. A channel with no stored week is unchanged and still airs whatever its content and settings work out to.",
+  "changelog": "Two things. A break no longer needs anybody to type how long a trailer or advert is: the schedule works out how much of the video actually plays - its length minus the stretches SponsorBlock skips - and the seconds boxes are gone from the configuration page, replaced by a readout that says what it found. And LiteTV now uses the plugins beside it rather than guessing: it reports which of them are installed at /LiteTv/Plugins, and suggestions are scored by the Smart Similar plugin through /LiteTv/Suggestions/Scored, falling back to a deliberately rough genre match - and saying so - when that plugin is not there.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-22T14:00:00.000Z",
-  "version": "1.0.59.0",
+  "timestamp": "2026-08-22T19:00:00.000Z",
+  "version": "1.0.60.0",
   "status": "Active",
   "autoUpdate": false
 }

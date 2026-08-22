@@ -84,6 +84,29 @@ public sealed class SponsorBlockClient
         return segments;
     }
 
+    /// <summary>
+    /// Gets segments already fetched, without going anywhere near the network.
+    /// <para>
+    /// For the guide, which is walked synchronously while a request waits on it and must never
+    /// be the thing that blocks on somebody else's service. A break sized without the segments
+    /// is the behaviour this plugin had all along; a break sized with them is better whenever
+    /// the answer happens to be at hand, which it is for any trailer that has aired recently.
+    /// </para>
+    /// </summary>
+    /// <param name="videoId">The video.</param>
+    /// <returns>The segments, or null when none have been fetched or the answer has aged out.</returns>
+    public IReadOnlyList<Segment>? SegmentsIfCached(string? videoId)
+    {
+        if (string.IsNullOrEmpty(videoId))
+        {
+            return null;
+        }
+
+        return _cache.TryGetValue(videoId, out var cached) && cached.ExpiresUtc > DateTime.UtcNow
+            ? cached.Segments
+            : null;
+    }
+
     private async Task<IReadOnlyList<Segment>> FetchAsync(string videoId, CancellationToken cancellationToken)
     {
         try
