@@ -3693,11 +3693,25 @@
 
                 bar.title = weekTooltip(airing);
 
+                // Only a bar whose length is actually a choice can be resized.
+                //
+                // A programme's length is its file's: ChannelGuide asks the library for the
+                // runtime and ignores the stored duration entirely. So dragging the bottom of an
+                // episode never made it shorter - it changed how much room the episode was given,
+                // and if that room came out under the runtime the entry failed the
+                // `slotEnd <= airing.EndUtc` test and the programme silently did not play at all.
+                // A control that looks like "make this shorter" and means "give this less room,
+                // and possibly break it" is worse than no control.
+                //
+                // A dropped address has no item behind it, so its stored duration is the length
+                // that is used, and that one is genuinely yours to set.
+                var resizable = !airing.ItemId;
+
                 // The lower eighth resizes, floored at four pixels and capped at ten: any more
                 // and a thirty-second advert is nothing but handle, any less and nobody can hit
                 // it. A bar too short to hold a handle without becoming one is left without.
                 var handle = null;
-                if (tall >= 14) {
+                if (resizable && tall >= 14) {
                     handle = document.createElement('div');
                     handle.style.position = 'absolute';
                     handle.style.left = '0';
@@ -3752,7 +3766,10 @@
                     + '–' + weekClock(airing.StartSecond + airing.DurationSeconds)
                     + '  (' + Math.round(airing.DurationSeconds / 60) + ' min)'
                     + (airing.BlockName ? '\n' + airing.BlockName : '')
-                    + (airing.OffsetTicks ? '\nresumes ' + Math.round(airing.OffsetTicks / 600000000) + ' min in' : '');
+                    + (airing.OffsetTicks ? '\nresumes ' + Math.round(airing.OffsetTicks / 600000000) + ' min in' : '')
+                    // Why this one carries no resize handle, said where anybody looking
+                    // for one would look.
+                    + (airing.ItemId ? '\nLength is the file’s — drag to move it' : '');
             }
 
             function weekClock(second) {

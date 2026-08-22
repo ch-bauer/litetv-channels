@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "The two screens of the design that had never been built: making a channel out of what the library already holds. The + button opens them instead of dropping an empty channel on you. Name a few things you like and the library is scored against all of them - by the Smart Similar plugin where it is installed, by a rougher genre match where it is not, and which one answered is said at the top rather than hidden. What the results have in common is drawn as signals with how much of the pool carries each. Or switch to the other half and tick libraries and genres; ticking two genres asks for titles in both, which is how Sci-Fi plus Horror gets you creature features rather than two piles. Either way it proposes one channel, says what it is made of, lays out a typical evening from the real runtimes, and Create makes it - Tweak makes it and opens it, Not that moves on. Nothing reaches a television until you save.",
+  "changelog": "A programme's bar can no longer be resized, because its length was never yours to set. The plugin plays an episode or a film for as long as the file runs and ignores whatever length the stored week carries, so dragging the bottom of one never made it shorter - it changed how much room the programme was given, and if that room came out under the runtime the programme silently did not play at all. Dragging to move it is unchanged, and the tooltip now says where the length comes from. An address dropped onto the week still resizes, because there its stored length really is the one that is used.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-23T04:30:00.000Z",
-  "version": "1.0.67.0",
+  "timestamp": "2026-08-23T05:10:00.000Z",
+  "version": "1.0.68.0",
   "status": "Active",
   "autoUpdate": false
 }
