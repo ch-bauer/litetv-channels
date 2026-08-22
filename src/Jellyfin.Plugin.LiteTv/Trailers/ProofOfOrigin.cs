@@ -40,6 +40,7 @@ public static class ProofOfOrigin
 
     private static Minted? _held;
     private static int _generation;
+    private static bool _loaded;
 
     /// <summary>
     /// Counts how many times the held token has changed.
@@ -70,8 +71,49 @@ public static class ProofOfOrigin
     public sealed record Minted(string VisitorData, string StreamToken, string? PlayerToken, DateTime MintedUtc);
 
     /// <summary>Gets what is held, or null when nothing has been minted lately.</summary>
-    public static Minted? Held =>
-        _held is { } held && DateTime.UtcNow - held.MintedUtc < GoodFor ? held : null;
+    public static Minted? Held
+    {
+        get
+        {
+            Load();
+            return _held is { } held && DateTime.UtcNow - held.MintedUtc < GoodFor ? held : null;
+        }
+    }
+
+    /// <summary>
+    /// Reads back the token the configuration was left holding, once per run.
+    /// <para>
+    /// Without this every Jellyfin restart threw the token away - and a restart happens on
+    /// every plugin install, so trailers dropped to 360p until somebody next opened the app on
+    /// a television. A stale one costs nothing: <see cref="GoodFor"/> ignores it and the next
+    /// launch replaces it.
+    /// </para>
+    /// </summary>
+    private static void Load()
+    {
+        if (_loaded)
+        {
+            return;
+        }
+
+        _loaded = true;
+
+        var config = Plugin.Instance?.Configuration;
+        if (config is null
+            || string.IsNullOrWhiteSpace(config.ProofOfOriginToken)
+            || string.IsNullOrWhiteSpace(config.ProofOfOriginVisitorData)
+            || config.ProofOfOriginMintedUtc is not { } minted)
+        {
+            return;
+        }
+
+        _held = new Minted(
+            config.ProofOfOriginVisitorData,
+            config.ProofOfOriginToken,
+            null,
+            minted);
+        _generation++;
+    }
 
     /// <summary>
     /// Takes a token a television has minted.
@@ -88,16 +130,51 @@ public static class ProofOfOrigin
             string.IsNullOrWhiteSpace(playerToken) ? null : playerToken.Trim(),
             DateTime.UtcNow);
 
+        _loaded = true;
         _held = minted;
         _generation++;
+        Store(minted);
         return minted;
     }
 
     /// <summary>Forgets what is held. For testing, and for a television that knows its token is bad.</summary>
     public static void Forget()
     {
+        _loaded = true;
         _held = null;
         _generation++;
+        Store(null);
+    }
+
+    /// <summary>
+    /// Writes the token to configuration so a restart does not lose it.
+    /// <para>
+    /// Failures are swallowed. A token that could not be written back is a token that has to be
+    /// minted again after the next restart, which is what used to happen every time anyway -
+    /// not a reason to fail the request that carried it.
+    /// </para>
+    /// </summary>
+    /// <param name="minted">What to store, or null to clear it.</param>
+    private static void Store(Minted? minted)
+    {
+        try
+        {
+            var plugin = Plugin.Instance;
+            if (plugin is null)
+            {
+                return;
+            }
+
+            var config = plugin.Configuration;
+            config.ProofOfOriginToken = minted?.StreamToken ?? string.Empty;
+            config.ProofOfOriginVisitorData = minted?.VisitorData ?? string.Empty;
+            config.ProofOfOriginMintedUtc = minted?.MintedUtc;
+            plugin.UpdateConfiguration(config);
+        }
+        catch (Exception)
+        {
+            // See the note above: losing the write is survivable, losing the request is not.
+        }
     }
 
     /// <summary>
