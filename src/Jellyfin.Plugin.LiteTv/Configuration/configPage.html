@@ -4,39 +4,350 @@
     <title>LiteTV Channels</title>
     <style>
         /*
-         * The channel editor is five screens' worth of controls, and nobody edits five at
-         * once: artwork on Tuesday, the week on Wednesday, the settings once and never
-         * again. One long scroll made finding any of it a hunt, which is the complaint this
-         * page was rebuilt to answer.
+         * LiteTV's configuration page, second design.
          *
-         * Hand-written because Jellyfin's dashboard has no tab component a plugin page can
-         * borrow, and deliberately thin: it borrows the dashboard's own accent and border
-         * colours so it stays right in both themes rather than picking its own.
+         * Two rules shape all of it. A screen fits the window it is given - the page itself
+         * never scrolls, and what does not fit is a layout problem to solve rather than
+         * something to push below the fold; the channel rail is the one exception, because a
+         * lineup is unbounded and everything else on the screen is not. And every surface is
+         * white-alpha over whatever the theme paints, with the accent read from the theme, so
+         * the page looks native under ElegantFin, under Jellyfin's own dark, and under light,
+         * without knowing which of them it is standing on.
          */
+
+        #LiteTvConfigPage .content-primary { padding: 0 !important; }
+
+        .ltv {
+            --ltv-accent: var(--activeColor, #00a4dc);
+            --ltv-line: rgba(128, 128, 128, 0.25);
+            --ltv-s1: rgba(255, 255, 255, 0.03);
+            --ltv-s2: rgba(255, 255, 255, 0.05);
+            --ltv-s3: rgba(255, 255, 255, 0.08);
+            --ltv-text: inherit;
+            --ltv-dim: rgba(128, 128, 128, 1);
+            --ltv-programme: #5b6ee1;
+            --ltv-trailer: #d99a3a;
+            --ltv-advert: #2f9e8f;
+
+            display: flex;
+            /* The dashboard's own header and padding sit above us; the rest is ours. */
+            height: calc(100vh - 7.5em);
+            min-height: 34em;
+            overflow: hidden;
+            font-size: 15px;
+        }
+
+        /* Light themes cannot use white-alpha for a surface - it disappears. */
+        @media (prefers-color-scheme: light) {
+            .ltv {
+                --ltv-s1: rgba(0, 0, 0, 0.03);
+                --ltv-s2: rgba(0, 0, 0, 0.05);
+                --ltv-s3: rgba(0, 0, 0, 0.09);
+            }
+        }
+
+        /* ---------------------------------------------------------------- the rail */
+
+        .ltvRail {
+            flex: 0 0 16.5em;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            border-right: 1px solid var(--ltv-line);
+        }
+
+        .ltvRailHead {
+            display: flex;
+            align-items: center;
+            gap: 0.6em;
+            padding: 0.2em 0.8em 0.7em 0.8em;
+        }
+
+        .ltvRailTitle { font-size: 1.15em; font-weight: 700; }
+
+        .ltvRailFilter {
+            margin: 0 0.7em 0.6em 0.7em;
+            display: flex;
+            align-items: center;
+            gap: 0.45em;
+            background: var(--ltv-s2);
+            border: 1px solid var(--ltv-line);
+            border-radius: 6px;
+            padding: 0.35em 0.6em;
+        }
+
+        .ltvRailFilter input {
+            flex-grow: 1;
+            min-width: 0;
+            background: transparent;
+            border: 0;
+            outline: none;
+            color: inherit;
+            font-size: 0.85em;
+            font-family: inherit;
+        }
+
+        /* The only thing on the page that scrolls. */
+        .ltvRailList {
+            flex-grow: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 0 0.5em;
+        }
+
+        .ltvRailRow {
+            display: flex;
+            align-items: center;
+            gap: 0.6em;
+            padding: 0.45em 0.6em;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .ltvRailRow:hover { background: var(--ltv-s3); }
+
+        .ltvRailRow.selected {
+            background: color-mix(in srgb, var(--ltv-accent) 16%, transparent);
+            box-shadow: inset 2px 0 0 0 var(--ltv-accent);
+        }
+
+        .ltvRailDot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; }
+
+        .ltvRailText { flex-grow: 1; min-width: 0; }
+
+        .ltvRailName {
+            font-size: 0.87em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ltvRailRow.selected .ltvRailName { font-weight: 700; }
+
+        .ltvRailNow {
+            font-size: 0.73em;
+            opacity: 0.55;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ltvTag {
+            flex: 0 0 auto;
+            padding: 0.05em 0.5em;
+            border-radius: 999px;
+            font-size: 0.63em;
+            font-weight: 700;
+            background: rgba(217, 154, 58, 0.18);
+            color: #d99a3a;
+        }
+
+        .ltvRailFoot {
+            border-top: 1px solid var(--ltv-line);
+            padding: 0.5em 0.9em;
+            font-size: 0.73em;
+            opacity: 0.55;
+        }
+
+        .ltvRailDests { border-top: 1px solid var(--ltv-line); padding: 0.4em; }
+
+        /* ---------------------------------------------------------------- the channel */
+
+        .ltvMain {
+            flex-grow: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .ltvHead {
+            display: flex;
+            align-items: center;
+            gap: 0.8em;
+            padding: 0.2em 1.2em 0 1.2em;
+        }
+
+        .ltvHeadName { font-size: 1.35em; font-weight: 700; }
+
+        .ltvPill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4em;
+            padding: 0.15em 0.65em;
+            border-radius: 999px;
+            font-size: 0.8em;
+            font-weight: 600;
+            background: color-mix(in srgb, var(--ltv-accent) 14%, transparent);
+            border: 1px solid color-mix(in srgb, var(--ltv-accent) 30%, transparent);
+            color: var(--ltv-accent);
+        }
+
+        .ltvPillDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+        .ltvSaved { font-size: 0.8em; opacity: 0.5; }
+
+        /* Pill tabs, filled and glowing when they are the one you are on. */
         .litetvTabs {
             display: flex;
+            gap: 0.5em;
+            padding: 0.8em 1.2em;
+            border-bottom: 1px solid var(--ltv-line);
             flex-wrap: wrap;
-            gap: 0.3em;
-            margin: 0.6em 0 1em 0;
-            border-bottom: 1px solid rgba(128, 128, 128, 0.3);
-            padding-bottom: 0.4em;
         }
 
         .litetvTab {
-            opacity: 0.6;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45em;
+            padding: 0.4em 0.9em;
+            border-radius: 6px;
+            border: 1px solid var(--ltv-line);
+            background: var(--ltv-s2);
+            color: inherit;
+            opacity: 0.65;
+            font-size: 0.88em;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
         }
+
+        .litetvTab:hover { opacity: 0.9; }
 
         .litetvTab.selected {
             opacity: 1;
-            box-shadow: inset 0 -3px 0 0 currentColor;
+            background: var(--ltv-accent);
+            border-color: var(--ltv-accent);
+            color: #fff;
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--ltv-accent) 30%, transparent);
         }
 
-        .litetvPane {
-            display: none;
-        }
+        .litetvTab svg { flex: 0 0 auto; }
+
+        .ltvPanes { flex-grow: 1; min-height: 0; display: flex; }
+
+        .litetvPane { display: none; }
 
         .litetvPane.selected {
-            display: block;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            min-width: 0;
+            min-height: 0;
+            padding: 0.9em 1.2em 1.1em 1.2em;
+        }
+
+        /* A pane that is a form rather than a timeline scrolls inside itself: the page
+           still does not scroll, and an unbounded list of sources cannot be helped. */
+        .ltvScroll { flex-grow: 1; min-height: 0; overflow-y: auto; padding-right: 0.4em; }
+
+        .ltvCols { display: flex; gap: 1.1em; min-height: 0; flex-grow: 1; }
+        .ltvCol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+
+        .ltvCard {
+            /* Nothing inside a card may push the page sideways. */
+            overflow-x: hidden;
+            background: var(--ltv-s1);
+            border: 1px solid var(--ltv-line);
+            border-radius: 8px;
+            padding: 0.9em 1em;
+            margin-bottom: 0.9em;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .ltvCardTitle { font-size: 0.95em; font-weight: 700; margin-bottom: 0.15em; }
+
+        .ltvCardNote { font-size: 0.8em; opacity: 0.55; margin-bottom: 0.7em; }
+
+        /* Every setting: a label, one line, and the rest behind (?). */
+        .ltvSetting { padding: 0.55em 0; border-bottom: 1px solid var(--ltv-line); }
+        .ltvSetting:last-child { border-bottom: 0; }
+        .ltvSettingHead { display: flex; align-items: baseline; gap: 0.5em; }
+        .ltvSettingOne { font-size: 0.8em; opacity: 0.6; }
+
+        .ltvWhy {
+            flex: 0 0 auto;
+            width: 1.25em;
+            height: 1.25em;
+            border-radius: 50%;
+            border: 1px solid var(--ltv-line);
+            background: var(--ltv-s2);
+            color: inherit;
+            opacity: 0.6;
+            font-size: 0.75em;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .ltvWhy:hover { opacity: 1; }
+
+        .ltvHelp {
+            display: none;
+            margin: 0.5em 0 0.2em 0;
+            padding-left: 0.9em;
+            border-left: 2px solid color-mix(in srgb, var(--ltv-accent) 55%, transparent);
+            font-size: 0.82em;
+            opacity: 0.75;
+        }
+
+        .ltvHelp.open { display: block; }
+
+        .ltvRow { display: flex; align-items: center; gap: 0.7em; flex-wrap: wrap; }
+        .ltvGrow { flex-grow: 1; }
+        .ltvLegend { display: flex; align-items: center; gap: 0.9em; font-size: 0.75em; opacity: 0.55; }
+        .ltvSwatch { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 0.35em; }
+
+        .ltvSeg { display: flex; border: 1px solid var(--ltv-line); border-radius: 6px; overflow: hidden; }
+        .ltvSeg button {
+            padding: 0.35em 0.9em;
+            font-size: 0.85em;
+            font-weight: 600;
+            background: transparent;
+            border: 0;
+            color: inherit;
+            opacity: 0.6;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .ltvSeg button.selected { background: var(--ltv-accent); color: #fff; opacity: 1; }
+
+        .ltvGhost {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45em;
+            padding: 0.4em 0.85em;
+            border-radius: 6px;
+            background: var(--ltv-s2);
+            border: 1px solid var(--ltv-line);
+            font-size: 0.85em;
+            font-weight: 600;
+            color: inherit;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .ltvGhost:hover { background: var(--ltv-s3); }
+        .ltvGhost.danger { background: rgba(169, 29, 29, 0.18); border-color: rgba(217, 84, 84, 0.35); color: #e88; }
+
+        /* The week grid fills what is left of the screen and scrolls inside its own frame. */
+        #WeekTimeline { flex-grow: 1; min-height: 0; display: flex; flex-direction: column; }
+
+        .ltvShelf { border-top: 1px solid var(--ltv-line); padding-top: 0.7em; margin-top: 0.7em; }
+
+        .ltvEmpty {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.7em;
+            text-align: center;
+            opacity: 0.6;
+            font-size: 0.9em;
         }
     </style>
 </head>
@@ -45,419 +356,624 @@
     <div data-role="content">
         <div class="content-primary">
             <form id="LiteTvConfigForm">
-                <div class="sectionTitleContainer flex align-items-center">
-                    <h2 class="sectionTitle">LiteTV Channels</h2>
-                </div>
+                <div class="ltv">
 
-                <div class="inputContainer">
-                    <label class="inputLabel inputLabelUnfocused" for="ChannelUserName">Channel playback account</label>
-                    <input is="emby-input" type="text" id="ChannelUserName" />
-                    <div class="fieldDescription">
-                        Channel viewing is recorded against this Jellyfin account instead of yours, which
-                        is what keeps it out of Continue Watching, Next Up and the watched flags. The
-                        account is created on first use, hidden from the login screen, and can do nothing
-                        but play. Leave it as it is unless the name clashes with a real account.
-                        <br /><br />
-                        Two things worth knowing. Anyone who can reach this server's API can ask for this
-                        account's token, so on a server with several people and libraries not everyone may
-                        see, restrict this account to match in Dashboard &rarr; Users. And the same title
-                        watched deliberately while a channel is on will not be recorded either — it is the
-                        account that decides, not what is playing.
-                    </div>
-                </div>
-
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label>
-                        <input is="emby-checkbox" type="checkbox" id="SkipTrailerSegments" />
-                        <span>Skip the parts of a trailer that are not the trailer</span>
-                    </label>
-                    <div class="fieldDescription checkboxFieldDescription">
-                        Uses SponsorBlock's public database to seek past an uploader's branded card, a
-                        plea to subscribe, or a read for something unrelated — the things German trailer
-                        channels wrap a trailer in, and which a minute-long break has no room for. The
-                        lookup asks about a four-character hash of the video id rather than the id
-                        itself, so the service is never told what is playing; switching this off stops
-                        the request being made at all.
-                    </div>
-                </div>
-
-                <div class="selectContainer">
-                    <select is="emby-select" id="YouTubeClient" label="YouTube client for trailers">
-                        <option value="">Try them all, best first</option>
-                        <option value="ANDROID_VR">Android VR (Quest 3, both app versions)</option>
-                        <option value="ANDROID">Android (reel endpoint)</option>
-                        <option value="ANDROID_CREATOR">Android Creator</option>
-                        <option value="VISIONOS">visionOS</option>
-                        <option value="WEB">Web</option>
-                    </select>
-                    <div class="fieldDescription">
-                        What YouTube hands over depends on who is asking, and it differs by client, by
-                        day, and by whether the asker looks like a real device — Android VR gives every
-                        rendition unobfuscated to a phone running microG, and answers "login required"
-                        to a server with no Google identity to offer. This is the one thing about
-                        trailers that cannot be settled from here, so it can be pinned and tried from
-                        the television. Leave it on "try them all" unless you are testing.
-                    </div>
-                </div>
-
-                <h3 style="margin-top: 1.5em;">Suggested channels</h3>
-                <div class="fieldDescription" style="margin-bottom: 0.6em;">
-                    Based on the media in your library. Adding a suggestion creates a channel you can still edit below.
-                </div>
-                <div class="paperList" id="SuggestionList" style="margin-bottom: 1.5em;"></div>
-
-                <h3 style="margin-top: 1.5em;">Channels</h3>
-
-                <div class="selectContainer">
-                    <select is="emby-select" id="ChannelSelect" label="Channel"></select>
-                </div>
-                <div style="margin-bottom: 1.5em;">
-                    <button is="emby-button" type="button" id="AddChannel" class="raised"><span>New channel</span></button>
-                    <button is="emby-button" type="button" id="DeleteChannel" class="raised"><span>Delete channel</span></button>
-                </div>
-
-                <div id="ChannelEditor" style="display: none;">
-                    <div class="litetvTabs" id="ChannelTabs">
-                        <button is="emby-button" type="button" class="litetvTab raised" data-pane="week"><span>This week</span></button>
-                        <button is="emby-button" type="button" class="litetvTab raised" data-pane="content"><span>Content</span></button>
-                        <button is="emby-button" type="button" class="litetvTab raised" data-pane="breaks"><span>Breaks</span></button>
-                        <button is="emby-button" type="button" class="litetvTab raised" data-pane="look"><span>Look</span></button>
-                        <button is="emby-button" type="button" class="litetvTab raised" data-pane="settings"><span>Settings</span></button>
-                    </div>
-
-                    <div class="litetvPane" data-pane="week">
-                    <h4 style="margin-top: 1.5em;">This week</h4>
-                    <div class="fieldDescription" style="margin-bottom: 0.6em;">
-                        The channel's schedule, written down. A week is the whole of it: what is
-                        here airs this week, next week and every week after. Drag a bar to move it,
-                        drag its lower edge to make it longer, drop something from the shelf below
-                        onto an empty stretch to schedule it. Anything you drop holds its own time
-                        and what was there bends around it.
-                    </div>
-
-                    <div id="WeekBar" style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.6em; margin-bottom: 0.6em;">
-                        <button is="emby-button" type="button" id="WeekGenerate" class="raised emby-button">
-                            <span>Lay this week out</span>
-                        </button>
-                        <button is="emby-button" type="button" id="WeekDiscard" class="raised emby-button">
-                            <span>Discard this week</span>
-                        </button>
-                        <label style="display: flex; align-items: center; gap: 0.4em; font-size: 0.85em; opacity: 0.85;">
-                            Zoom
-                            <input type="range" id="WeekZoom" min="30" max="240" step="10" value="60" style="width: 8em;" />
-                        </label>
-                        <span id="WeekStatus" style="font-size: 0.85em; opacity: 0.8;"></span>
-                    </div>
-
-                    <div id="WeekTimeline"></div>
-
-                    <div id="WeekInspector" style="display: none; margin: 0.8em 0; padding: 0.8em; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;"></div>
-
-                    <h4 style="margin-top: 1.2em;">The shelf</h4>
-                    <div class="fieldDescription" style="margin-bottom: 0.6em;">
-                        What you can drop onto the week. Films and episodes bring their own runtime;
-                        an advert or an address is as long as you say it is.
-                    </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="text" id="WeekShelfSearch" label="Search films and episodes to schedule" />
-                    </div>
-                    <div class="paperList" id="WeekShelfResults" style="margin-bottom: 0.8em;"></div>
-                    <div id="WeekShelfChips" style="display: flex; flex-wrap: wrap; gap: 0.4em; margin-bottom: 0.8em;"></div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.6em; align-items: flex-end; margin-bottom: 1.5em;">
-                        <div class="inputContainer" style="flex: 1 1 20em; margin: 0;">
-                            <input is="emby-input" type="text" id="WeekCustomUrl" label="…or an address to drop in (a trailer, an ident)" />
-                        </div>
-                        <div id="WeekCustomLength" class="fieldDescription" style="flex: 0 1 16em; margin: 0 0 0.4em 0;">
-                            Paste an address and its length is worked out.
-                        </div>
-                    </div>
-                    </div>
-                    <div class="litetvPane" data-pane="content">
-                    <h4>Program (looping forever)</h4>
-                    <div class="paperList" id="SourceList" style="margin-bottom: 1em;"></div>
-
-                    <div class="inputContainer">
-                        <input is="emby-input" type="text" id="ItemSearch" label="Add content (search movies, series, collections)" />
-                    </div>
-                    <div class="paperList" id="SearchResults" style="margin-bottom: 1em;"></div>
-
-                    <h4 style="margin-top: 1.5em;">Program blocks</h4>
-                    <div class="fieldDescription" style="margin-bottom: 0.6em;">
-                        Parts of the week that air something else — the kids' programming until noon, the film on Saturday evening. Whatever no block covers airs the channel's own program above. A block picks up where it left off the last time it was on.
-                    </div>
-
-                    <div id="Timeline" style="margin-bottom: 1em;"></div>
-                    <div class="fieldDescription" style="margin-bottom: 1em;">
-                        Click a bar to edit it, drag it to move it, drag its right edge to make it longer
-                        or shorter. Click an empty stretch to start a block there. Everything snaps to a
-                        quarter of an hour. Thin marks are trailer slots.
-                    </div>
-
-                    <div class="selectContainer">
-                        <select is="emby-select" id="BlockSelect" label="Block"></select>
-                    </div>
-                    <div style="margin-bottom: 1em;">
-                        <button is="emby-button" type="button" id="AddBlock" class="raised"><span>New block</span></button>
-                        <button is="emby-button" type="button" id="DeleteBlock" class="raised"><span>Delete block</span></button>
-                    </div>
-
-                    <div id="BlockEditor" style="display: none; border-left: 3px solid rgba(255,255,255,0.15); padding-left: 1em; margin-bottom: 1.5em;">
-                        <div class="inputContainer">
-                            <input is="emby-input" type="text" id="BlockName" label="Block name" />
-                        </div>
-
-                        <div class="checkboxContainer">
-                            <label>
-                                <input is="emby-checkbox" type="checkbox" id="BlockEnabled" />
-                                <span>In use</span>
-                            </label>
-                        </div>
-
-                        <div class="inputContainer">
-                            <input is="emby-input" type="time" id="BlockStart" label="Starts at" />
-                        </div>
-
-                        <div class="inputContainer">
-                            <input is="emby-input" type="number" id="BlockDuration" min="1" step="15" label="Runs for (minutes)" />
-                            <div class="fieldDescription">May run past midnight; it then continues into the following day.</div>
-                        </div>
-
-                        <div class="checkboxContainer" id="BlockDays" style="display: flex; flex-wrap: wrap; gap: 0.9em;"></div>
-                        <div class="fieldDescription" style="margin-bottom: 0.8em;">Days the block starts on. None ticked means every day.</div>
-
-                        <div class="selectContainer">
-                            <select is="emby-select" id="BlockOrder" label="Play order">
-                                <option value="Sequential">In order (marathon)</option>
-                                <option value="Shuffle">Shuffled</option>
-                            </select>
-                        </div>
-
-                        <div class="inputContainer">
-                            <input is="emby-input" type="number" id="BlockEpisodesPerBlock" min="0" step="1" label="Episodes per block (0 = play each source in full)" />
-                        </div>
-
-                        <div class="paperList" id="BlockSourceList" style="margin-bottom: 1em;"></div>
-                        <div class="inputContainer">
-                            <input is="emby-input" type="text" id="BlockItemSearch" label="Add content to this block" />
-                        </div>
-                        <div class="paperList" id="BlockSearchResults" style="margin-bottom: 1em;"></div>
-                    </div>
-                    </div>
-                    <div class="litetvPane" data-pane="breaks">
-                    <h4>Adverts in the breaks</h4>
-                    <div class="fieldDescription" style="margin-bottom: 0.6em;">
-                        Addresses the client resolves and plays, exactly as it does a linked trailer —
-                        a YouTube link to an old advert is the intended use. They go at the front of a
-                        break and the trailer goes last, so a break ends on what the channel is about
-                        to show. A decade is preferred over the pool at large when it matches the year
-                        the trailed programme was made, which is the whole joke; leave it at 0 for one
-                        that fits anywhere. Nothing is reported to Jellyfin — an advert is not library
-                        content and has no item to record against.
-                    </div>
-                    <div class="paperList" id="AdvertList" style="margin-bottom: 0.8em;"></div>
-                    <div style="display: flex; gap: 0.6em; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5em;">
-                        <div class="inputContainer" style="flex: 2 1 22em; margin: 0;">
-                            <input is="emby-input" type="text" id="AdvertUrl" label="Address" />
-                        </div>
-                        <div class="inputContainer" style="flex: 1 1 12em; margin: 0;">
-                            <input is="emby-input" type="text" id="AdvertName" label="Name (optional)" />
-                        </div>
-                        <div id="AdvertLength" class="fieldDescription" style="flex: 0 1 17em; margin: 0 0 0.4em 0;">
-                            Length is worked out from the address.
-                        </div>
-                        <div class="inputContainer" style="flex: 0 1 8em; margin: 0;">
-                            <input is="emby-input" type="number" id="AdvertDecade" min="0" step="10" value="0" label="Decade" />
-                        </div>
-                        <button is="emby-button" type="button" id="AddAdvert" class="raised emby-button"><span>Add advert</span></button>
-                    </div>
-
-                    <h4>Trailers</h4>
-                    <div class="selectContainer">
-                        <select is="emby-select" id="TrailerMode" label="Work trailers into the schedule">
-                            <option value="Off">Off</option>
-                            <option value="Preview">Preview — advertise what this channel airs later</option>
-                            <option value="Manual">Only the titles named below</option>
-                            <option value="Both">Preview, falling back to the titles named below</option>
-                        </select>
-                        <div class="fieldDescription">
-                            A trailer becomes part of the schedule like any other program, so it shows in the guide and everything after it moves along by its length. This is separate from filling slot gaps above — a channel running back to back has no gaps, and would otherwise never show one.
-                        </div>
-                    </div>
-
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="TrailerEveryPrograms" min="1" step="1" label="Show a trailer after every N programs" />
-                    </div>
-
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="TrailerLookahead" min="1" step="1" label="Advertise the program this many places ahead" />
-                        <div class="fieldDescription">
-                            1 announces whatever is next; a few places ahead previews something still to come. The queue loops, so the last programs advertise what comes round at the start again.
-                        </div>
-                    </div>
-
-                    <div class="paperList" id="TrailerTitleList" style="margin-bottom: 1em;"></div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="text" id="TrailerSearch" label="Advertise these titles (search movies, series, collections)" />
-                    </div>
-                    <div class="paperList" id="TrailerSearchResults" style="margin-bottom: 1em;"></div>
-                    </div>
-                    <div class="litetvPane" data-pane="look">
-                    <h4>Channel artwork</h4>
-                    <div class="fieldDescription" style="margin-bottom: 0.8em;">
-                        What a client draws the channel with. Left empty, a channel wears whatever it is
-                        airing — which suits a channel built from one series and does not suit one built
-                        from a genre, where what is on changes every hour and half of it has no wide
-                        picture at all. Pick from the channel's own content, paste an address, or upload
-                        a file.
-                    </div>
-                    <div id="ArtworkRows"></div>
-
-                    <div class="inputContainer">
-                        <input is="emby-input" type="text" id="ArtworkItemSearch" label="Or borrow every picture from one title (search movies, series, collections)" />
-                        <div class="fieldDescription">
-                            Follows the title rather than copying it: re-scrape the series and the channel
-                            picks up the new artwork with it. Anything set above still wins.
-                        </div>
-                    </div>
-                    <div class="paperList" id="ArtworkItemResults" style="margin-bottom: 1em;"></div>
-
-                    <div style="display: flex; gap: 0.5em; flex-wrap: wrap;">
-                        <button is="emby-button" type="button" id="LoadArtworkGallery" class="raised emby-button">
-                            <span>Pictures from this channel's own content</span>
-                        </button>
-                        <button is="emby-button" type="button" id="LoadWebArtwork" class="raised emby-button">
-                            <span>Pictures from the web</span>
-                        </button>
-                    </div>
-
-                    <div class="inputContainer" style="margin-top: 0.8em;">
-                        <input is="emby-input" type="text" id="ArtworkLibrarySearch" label="…or take a picture from anything else in the library" />
-                        <div class="fieldDescription">
-                            Search any title, then pick one of its pictures. The channel need not air it —
-                            a poster is a poster.
-                        </div>
-                    </div>
-                    <div class="paperList" id="ArtworkLibraryResults" style="margin-bottom: 0.6em;"></div>
-
-                    <div id="ArtworkGallery" style="margin: 0.8em 0;"></div>
-
-                    <div id="CropPanel" style="display: none; margin: 0.8em 0; padding: 0.8em; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;">
-                        <div style="font-weight: bold; margin-bottom: 0.4em;" id="CropTitle">Crop</div>
-                        <div class="fieldDescription" style="margin-bottom: 0.6em;">
-                            Drag inside the picture to move the frame, and use the slider to zoom. The
-                            frame is the shape the slot wants, so what you see is what the television
-                            will show — nothing is cropped for you afterwards. Zoom out past the
-                            point where the picture fills the frame and the space around it is filled
-                            with a blurred copy of the picture, so a whole title still fits.
-                        </div>
-                        <canvas id="CropCanvas" width="640" height="360"
-                                style="max-width: 100%; border-radius: 4px; cursor: grab; background: #000;"></canvas>
-                        <div style="display: flex; align-items: center; gap: 0.8em; margin-top: 0.6em;">
-                            <span style="font-size: 0.85em; opacity: 0.7;">Zoom</span>
-                            <input type="range" id="CropZoom" min="30" max="400" value="100" style="flex-grow: 1;" />
-                            <button is="emby-button" type="button" id="CropFit" class="raised emby-button"
-                                    style="flex-shrink: 0;">
-                                <span>Fit whole picture</span>
+                    <!-- The rail: which channel, and the two things that are not a channel. -->
+                    <aside class="ltvRail">
+                        <div class="ltvRailHead">
+                            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--ltv-accent);"><rect x="2" y="7" width="20" height="14" rx="2.5"/><path d="m7 7 5-4 5 4"/></svg>
+                            <div class="ltvRailTitle">LiteTV</div>
+                            <div class="ltvGrow"></div>
+                            <button type="button" id="AddChannel" class="ltvGhost" title="New channel" style="padding: 0.25em 0.5em;">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
                             </button>
                         </div>
-                        <div style="display: flex; gap: 0.5em; margin-top: 0.6em;">
-                            <button is="emby-button" type="button" id="CropSave" class="raised emby-button">
-                                <span>Use this crop</span>
+
+                        <div class="ltvRailFilter">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" style="opacity: 0.45;"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input type="text" id="ChannelFilter" placeholder="Filter channels" autocomplete="off" />
+                        </div>
+
+                        <div class="ltvRailList" id="ChannelRail"></div>
+
+                        <div class="ltvRailFoot" id="ChannelCount"></div>
+
+                        <div class="ltvRailDests">
+                            <div class="ltvRailRow" data-dest="server">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="opacity: 0.6;"><circle cx="12" cy="12" r="2.8"/><path d="M9.7 3h4.6l.5 2.6 2.3 1.3 2.4-1 2.3 4-2 1.7v2.6l2 1.7-2.3 4-2.4-1-2.3 1.3-.5 2.8H9.7l-.5-2.8-2.3-1.3-2.4 1-2.3-4 2-1.7v-2.6l-2-1.7 2.3-4 2.4 1 2.3-1.3z"/></svg>
+                                <div class="ltvRailText"><div class="ltvRailName">Server settings</div></div>
+                            </div>
+                            <div class="ltvRailRow" data-dest="updates">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="opacity: 0.6;"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                                <div class="ltvRailText"><div class="ltvRailName">App updates</div></div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- The channel itself -->
+                    <main class="ltvMain">
+                        <div class="ltvHead">
+                            <div class="ltvHeadName" id="HeadName">LiteTV</div>
+                            <div class="ltvPill" id="HeadPill" style="display: none;">
+                                <span class="ltvPillDot"></span>
+                                <span id="HeadPillText"></span>
+                            </div>
+                            <div class="ltvGrow"></div>
+                            <div class="ltvSaved" id="SaveState"></div>
+                            <button is="emby-button" type="submit" class="raised button-submit ltvGhost"><span>Save</span></button>
+                        </div>
+
+                        <nav class="litetvTabs" id="ChannelTabs">
+                            <button type="button" class="litetvTab" data-pane="week">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>
+                                Week
                             </button>
-                            <button is="emby-button" type="button" id="CropCancel" class="raised emby-button">
-                                <span>Cancel</span>
+                            <button type="button" class="litetvTab" data-pane="content">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                                Content
                             </button>
+                            <button type="button" class="litetvTab" data-pane="breaks">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 1.8"/></svg>
+                                Breaks
+                            </button>
+                            <button type="button" class="litetvTab" data-pane="look">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17 5-4.5 4.5 4 3-2.5L21 18"/></svg>
+                                Look
+                            </button>
+                            <button type="button" class="litetvTab" data-pane="settings">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.8"/><path d="M9.7 3h4.6l.5 2.6 2.3 1.3 2.4-1 2.3 4-2 1.7v2.6l2 1.7-2.3 4-2.4-1-2.3 1.3-.5 2.8H9.7l-.5-2.8-2.3-1.3-2.4 1-2.3-4 2-1.7v-2.6l-2-1.7 2.3-4 2.4 1 2.3-1.3z"/></svg>
+                                Settings
+                            </button>
+                        </nav>
+
+                        <div class="ltvPanes">
+
+                            <!-- Nothing chosen yet, or nothing to choose. -->
+                            <div class="litetvPane" data-pane="none">
+                                <div class="ltvEmpty">
+                                    <div>No channel selected.</div>
+                                    <div>Pick one on the left, or make one from what your library already has.</div>
+                                    <button type="button" class="ltvGhost" id="EmptyNewChannel">New channel</button>
+                                </div>
+                            </div>
+
+                            <!-- ------------------------------------------------------- week -->
+                            <div class="litetvPane" data-pane="week">
+                                <div class="ltvRow" style="margin-bottom: 0.7em;">
+                                    <div class="ltvSeg" id="WeekViewToggle">
+                                        <button type="button" data-view="week" class="selected">Week</button>
+                                        <button type="button" data-view="day">Day</button>
+                                    </div>
+
+                                    <div class="ltvRow" style="gap: 0.4em; font-size: 0.8em; opacity: 0.6;">
+                                        Zoom
+                                        <input type="range" id="WeekZoom" min="20" max="160" step="5" value="46" style="width: 7em;" />
+                                    </div>
+
+                                    <div class="ltvSeg" id="WeekDayPicker" style="display: none;"></div>
+
+                                    <div class="ltvGrow"></div>
+
+                                    <div class="ltvLegend">
+                                        <span><span class="ltvSwatch" style="background: var(--ltv-programme);"></span>Programme</span>
+                                        <span><span class="ltvSwatch" style="background: var(--ltv-trailer);"></span>Trailer</span>
+                                        <span><span class="ltvSwatch" style="background: var(--ltv-advert);"></span>Advert</span>
+                                    </div>
+
+                                    <button type="button" id="WeekGenerate" class="ltvGhost">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 12a8 8 0 1 1 2.3 5.7"/><path d="M4 20v-5h5"/></svg>
+                                        Lay this week out
+                                    </button>
+                                    <button type="button" id="WeekDiscard" class="ltvGhost danger">Discard it</button>
+                                </div>
+
+                                <div id="WeekStatus" class="ltvSaved" style="margin-bottom: 0.5em;"></div>
+
+                                <div id="WeekTimeline"></div>
+
+                                <div id="WeekInspector" style="display: none;"></div>
+
+                                <div class="ltvShelf">
+                                    <div class="ltvRow">
+                                        <div style="font-size: 0.85em; font-weight: 700;">Shelf</div>
+                                        <div style="flex: 0 1 18em;">
+                                            <input is="emby-input" type="text" id="WeekShelfSearch" placeholder="Search films and episodes…" style="margin: 0;" />
+                                        </div>
+                                        <div id="WeekShelfChips" class="ltvRow" style="gap: 0.4em;"></div>
+                                        <div class="ltvGrow"></div>
+                                        <div style="font-size: 0.75em; opacity: 0.5;">drag onto the week · Alt for second-by-second</div>
+                                    </div>
+                                    <div id="WeekShelfResults" class="paperList" style="max-height: 8em; overflow-y: auto;"></div>
+                                    <div class="ltvRow" style="margin-top: 0.5em;">
+                                        <div style="flex: 0 1 22em;">
+                                            <input is="emby-input" type="text" id="WeekCustomUrl" placeholder="…or an address to drop in (a trailer, an ident)" style="margin: 0;" />
+                                        </div>
+                                        <div id="WeekCustomLength" style="font-size: 0.78em; opacity: 0.6;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ---------------------------------------------------- content -->
+                            <div class="litetvPane" data-pane="content">
+                                <div class="ltvCols">
+                                    <div class="ltvCol">
+                                        <div class="ltvCard" style="flex-grow: 1;">
+                                            <div class="ltvCardTitle">What this channel plays</div>
+                                            <div class="ltvCardNote">
+                                                A series is every episode of it, a collection is everything in it.
+                                                The order here is the order they are laid out in.
+                                            </div>
+                                            <div style="margin-bottom: 0.6em;">
+                                                <input is="emby-input" type="text" id="ItemSearch" placeholder="Add a film, series or collection…" style="margin: 0;" />
+                                            </div>
+                                            <div class="paperList" id="SearchResults" style="max-height: 11em; overflow-y: auto;"></div>
+                                            <div class="paperList ltvScroll" id="SourceList"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ltvCol">
+                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                            <div class="ltvCardTitle">Blocks</div>
+                                            <div class="ltvCardNote">
+                                                A block is a stretch of the day with content of its own — a children's
+                                                afternoon, a late film. Drawn on the week below; drag one to move it.
+                                                Blocks only shape a week that is laid out afresh.
+                                            </div>
+
+                                            <div id="Timeline" style="margin-bottom: 0.7em;"></div>
+
+                                            <div class="ltvRow" style="margin-bottom: 0.6em;">
+                                                <div style="flex: 0 1 14em;">
+                                                    <select is="emby-select" id="BlockSelect" label="Block"></select>
+                                                </div>
+                                                <button type="button" id="AddBlock" class="ltvGhost">New block</button>
+                                                <button type="button" id="DeleteBlock" class="ltvGhost danger">Delete</button>
+                                            </div>
+
+                                            <div id="BlockEditor" class="ltvScroll" style="display: none;">
+                                                <div class="ltvRow">
+                                                    <div style="flex: 1 1 12em;">
+                                                        <input is="emby-input" type="text" id="BlockName" label="Block name" />
+                                                    </div>
+                                                    <div style="flex: 0 1 9em;">
+                                                        <input is="emby-input" type="time" id="BlockStart" label="Starts at" />
+                                                    </div>
+                                                    <div style="flex: 0 1 9em;">
+                                                        <input is="emby-input" type="number" id="BlockDuration" min="1" step="15" label="Runs for (min)" />
+                                                    </div>
+                                                </div>
+                                                <div class="checkboxContainer">
+                                                    <label>
+                                                        <input is="emby-checkbox" type="checkbox" id="BlockEnabled" />
+                                                        <span>Block is on</span>
+                                                    </label>
+                                                </div>
+                                                <div id="BlockDays" class="ltvRow" style="margin-bottom: 0.6em;"></div>
+                                                <div class="ltvRow">
+                                                    <div style="flex: 0 1 12em;">
+                                                        <select is="emby-select" id="BlockOrder" label="Play order">
+                                                            <option value="Sequential">In order</option>
+                                                            <option value="Shuffled">Shuffled</option>
+                                                        </select>
+                                                    </div>
+                                                    <div style="flex: 0 1 14em;">
+                                                        <input is="emby-input" type="number" id="BlockEpisodesPerBlock" min="0" step="1" label="Episodes at a time (0 = all)" />
+                                                    </div>
+                                                </div>
+                                                <div style="margin-bottom: 0.5em;">
+                                                    <input is="emby-input" type="text" id="BlockItemSearch" placeholder="Add content to this block…" style="margin: 0;" />
+                                                </div>
+                                                <div class="paperList" id="BlockSearchResults" style="max-height: 8em; overflow-y: auto;"></div>
+                                                <div class="paperList" id="BlockSourceList"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ----------------------------------------------------- breaks -->
+                            <div class="litetvPane" data-pane="breaks">
+                                <div class="ltvCols">
+                                    <div class="ltvCol">
+                                        <div class="ltvCard" style="flex-grow: 1;">
+                                            <div class="ltvCardTitle">Adverts</div>
+                                            <div class="ltvCardNote">
+                                                Addresses the television resolves and plays. They go at the front of a
+                                                break with the trailer last, so a break ends on what the channel is
+                                                about to show. There is no length to type: the plugin asks how long the
+                                                video is and which parts get skipped, and sizes the break by what is left.
+                                            </div>
+
+                                            <div class="ltvRow" style="margin-bottom: 0.5em;">
+                                                <div style="flex: 1 1 15em;">
+                                                    <input is="emby-input" type="text" id="AdvertUrl" placeholder="Address" style="margin: 0;" />
+                                                </div>
+                                                <div style="flex: 0 1 10em;">
+                                                    <input is="emby-input" type="text" id="AdvertName" placeholder="Name (optional)" style="margin: 0;" />
+                                                </div>
+                                                <div style="flex: 0 1 7em;">
+                                                    <input is="emby-input" type="number" id="AdvertDecade" min="0" step="10" value="0" placeholder="Decade" style="margin: 0;" />
+                                                </div>
+                                                <button type="button" id="AddAdvert" class="ltvGhost">Add</button>
+                                            </div>
+                                            <div id="AdvertLength" style="font-size: 0.78em; opacity: 0.6; margin-bottom: 0.6em;"></div>
+
+                                            <div class="paperList ltvScroll" id="AdvertList"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ltvCol">
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">Trailers</div>
+                                            <div class="ltvCardNote">What a break advertises, and how often one happens.</div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <div style="flex: 1 1 14em;">
+                                                        <select is="emby-select" id="TrailerMode" label="Work trailers into the schedule">
+                                                            <option value="Off">Off</option>
+                                                            <option value="Upcoming">For what is coming up on this channel</option>
+                                                            <option value="Chosen">Only the titles chosen below</option>
+                                                            <option value="Both">Both</option>
+                                                        </select>
+                                                    </div>
+                                                    <button type="button" class="ltvWhy" data-help="TrailerModeHelp">?</button>
+                                                </div>
+                                                <div class="ltvHelp" id="TrailerModeHelp">
+                                                    A trailer is aired in a break for something the channel is about to
+                                                    show. Almost every trailer a library holds is a YouTube link rather
+                                                    than a file; the server resolves it to a stream the television can
+                                                    play, and skips the parts that are not the trailer.
+                                                </div>
+                                            </div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <div style="flex: 0 1 11em;">
+                                                        <input is="emby-input" type="number" id="TrailerEveryPrograms" min="1" step="1" label="A trailer every N programmes" />
+                                                    </div>
+                                                    <div style="flex: 0 1 11em;">
+                                                        <input is="emby-input" type="number" id="TrailerLookahead" min="1" step="1" label="Advertise this far ahead" />
+                                                    </div>
+                                                    <button type="button" class="ltvWhy" data-help="TrailerAheadHelp">?</button>
+                                                </div>
+                                                <div class="ltvHelp" id="TrailerAheadHelp">
+                                                    The programme a break advertises is not the next one — it is the one
+                                                    that many places ahead, the way a channel trails the film after this
+                                                    one. Set it to 1 and a break advertises whatever follows it.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                            <div class="ltvCardTitle">Advertise these titles</div>
+                                            <div class="ltvCardNote">Only used by the two modes that mention chosen titles.</div>
+                                            <div style="margin-bottom: 0.5em;">
+                                                <input is="emby-input" type="text" id="TrailerSearch" placeholder="Search movies, series, collections…" style="margin: 0;" />
+                                            </div>
+                                            <div class="paperList" id="TrailerSearchResults" style="max-height: 8em; overflow-y: auto;"></div>
+                                            <div class="paperList ltvScroll" id="TrailerTitleList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ------------------------------------------------------- look -->
+                            <div class="litetvPane" data-pane="look">
+                                <div class="ltvCols">
+                                    <div class="ltvCol" style="flex: 1 1 24em; max-width: 34em;">
+                                        <div class="ltvCard ltvScroll" style="flex-grow: 1;">
+                                            <div class="ltvCardTitle">The channel's three pictures</div>
+                                            <div class="ltvCardNote">
+                                                The wide one is the row card, the backdrop stands behind the channel,
+                                                and the tall one is for lists that show covers. They are the channel's
+                                                own, never borrowed from whatever happens to be on air.
+                                            </div>
+                                            <div id="ArtworkRows"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ltvCol">
+                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                            <div class="ltvCardTitle">Pictures your library already has</div>
+                                            <div class="ltvCardNote">
+                                                From the channel's own titles, from anything else in the library, or
+                                                from the providers. Pick one and it becomes whichever slot you were last in.
+                                            </div>
+
+                                            <div class="ltvRow" style="margin-bottom: 0.5em;">
+                                                <button type="button" id="LoadArtworkGallery" class="ltvGhost">From this channel's titles</button>
+                                                <button type="button" id="LoadWebArtwork" class="ltvGhost">From the providers</button>
+                                            </div>
+
+                                            <div class="ltvRow" style="margin-bottom: 0.5em;">
+                                                <div style="flex: 1 1 14em;">
+                                                    <input is="emby-input" type="text" id="ArtworkItemSearch" placeholder="Borrow every picture from one title…" style="margin: 0;" />
+                                                </div>
+                                                <div style="flex: 1 1 14em;">
+                                                    <input is="emby-input" type="text" id="ArtworkLibrarySearch" placeholder="…or take one picture from anything else" style="margin: 0;" />
+                                                </div>
+                                            </div>
+                                            <div class="paperList" id="ArtworkItemResults" style="max-height: 7em; overflow-y: auto;"></div>
+                                            <div class="paperList" id="ArtworkLibraryResults" style="max-height: 7em; overflow-y: auto;"></div>
+
+                                            <div id="ArtworkGallery" class="ltvScroll"></div>
+
+                                            <div id="CropPanel" style="display: none; margin-top: 0.6em; padding: 0.7em; border: 1px solid var(--ltv-line); border-radius: 6px;">
+                                                <div class="ltvCardTitle" id="CropTitle">Crop</div>
+                                                <div class="ltvCardNote">
+                                                    Drag to move, zoom to fill. Zoom out past the edges and what is left
+                                                    is filled with a blurred copy rather than black.
+                                                </div>
+                                                <canvas id="CropCanvas" width="640" height="360" style="max-width: 100%; border: 1px solid var(--ltv-line); border-radius: 4px; cursor: move;"></canvas>
+                                                <div class="ltvRow" style="margin-top: 0.5em;">
+                                                    <input type="range" id="CropZoom" min="30" max="400" value="100" style="flex-grow: 1;" />
+                                                    <button type="button" id="CropFit" class="ltvGhost">Fit</button>
+                                                    <button type="button" id="CropSave" class="ltvGhost">Use this</button>
+                                                    <button type="button" id="CropCancel" class="ltvGhost">Cancel</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- --------------------------------------------------- settings -->
+                            <div class="litetvPane" data-pane="settings">
+                                <div class="ltvCols">
+                                    <div class="ltvCol ltvScroll">
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">The channel</div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <div style="flex: 1 1 16em;">
+                                                        <input is="emby-input" type="text" id="ChannelName" label="Channel name" />
+                                                    </div>
+                                                </div>
+                                                <div class="ltvSettingOne">What the guide calls it on the television.</div>
+                                            </div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <label style="flex-grow: 1;">
+                                                        <input is="emby-checkbox" type="checkbox" id="ChannelEnabled" />
+                                                        <span>Channel is on</span>
+                                                    </label>
+                                                </div>
+                                                <div class="ltvSettingOne">
+                                                    A channel that is off stays in this list and shows on no client.
+                                                </div>
+                                            </div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <label style="flex-grow: 1;">
+                                                        <input is="emby-checkbox" type="checkbox" id="ResetAnchor" />
+                                                        <span>Start the schedule again from now</span>
+                                                    </label>
+                                                    <button type="button" class="ltvWhy" data-help="AnchorHelp">?</button>
+                                                </div>
+                                                <div class="ltvSettingOne">Only affects a channel with no week of its own.</div>
+                                                <div class="ltvHelp" id="AnchorHelp">
+                                                    A computed schedule is worked out from a fixed point in time, so the
+                                                    same channel shows the same thing at the same moment on every client.
+                                                    Moving that point to now restarts the rotation from its beginning.
+                                                    A channel with a stored week ignores this entirely — its week is
+                                                    the schedule.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">Remove this channel</div>
+                                            <div class="ltvCardNote">
+                                                Takes the channel and its stored week away. Nothing in your library is
+                                                touched — a channel is only ever a schedule over titles you already have.
+                                            </div>
+                                            <div>
+                                                <button type="button" id="DeleteChannel" class="ltvGhost danger">Delete channel</button>
+                                            </div>
+                                        </div>
+
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">These only shape a new week</div>
+                                            <div class="ltvCardNote">
+                                                Once a week is laid out it is the schedule, and nothing here rewrites
+                                                it. Change these, then lay the week out again if you want them applied.
+                                            </div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <div style="flex: 0 1 12em;">
+                                                        <select is="emby-select" id="PlayOrder" label="Play order">
+                                                            <option value="Sequential">In order</option>
+                                                            <option value="Shuffled">Shuffled</option>
+                                                        </select>
+                                                    </div>
+                                                    <div style="flex: 0 1 13em;">
+                                                        <input is="emby-input" type="number" id="EpisodesPerBlock" min="0" step="1" label="Episodes at a time" />
+                                                    </div>
+                                                    <button type="button" class="ltvWhy" data-help="OrderHelp">?</button>
+                                                </div>
+                                                <div class="ltvHelp" id="OrderHelp">
+                                                    Episodes at a time is how many of a series run before the channel
+                                                    moves to its next source — two of a sitcom, then a film. Zero plays
+                                                    each source through in full.
+                                                </div>
+                                            </div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <div style="flex: 0 1 14em;">
+                                                        <input is="emby-input" type="number" id="SlotMinutes" min="0" step="5" label="Start on a grid of (min)" />
+                                                    </div>
+                                                    <button type="button" class="ltvWhy" data-help="SlotHelp">?</button>
+                                                </div>
+                                                <div class="ltvSettingOne">Zero plays everything back to back.</div>
+                                                <div class="ltvHelp" id="SlotHelp">
+                                                    Real channels start things on the half hour. A grid rounds each
+                                                    programme up to the next slot, and the gap it leaves is the break —
+                                                    which is where adverts and trailers go. Without a grid there are no
+                                                    gaps, and so no breaks at all.
+                                                </div>
+                                            </div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <label style="flex-grow: 1;">
+                                                        <input is="emby-checkbox" type="checkbox" id="TrailersInGaps" />
+                                                        <span>Fill the gaps rather than leaving them dark</span>
+                                                    </label>
+                                                </div>
+                                                <div class="ltvSettingOne">Off means the channel sits silent until the next slot.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ltvCol">
+                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                            <div class="ltvCardTitle">What this adds up to</div>
+                                            <div class="ltvCardNote">A typical evening with the settings as they stand.</div>
+                                            <div id="SettingsPreview" class="ltvScroll" style="font-size: 0.85em;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- --------------------------------------- server (not a channel) -->
+                            <div class="litetvPane" data-pane="server">
+                                <div class="ltvCols">
+                                    <div class="ltvCol ltvScroll">
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">Where channels play</div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <div style="flex: 1 1 16em;">
+                                                        <input is="emby-input" type="text" id="ChannelUserName" label="Channel playback account" />
+                                                    </div>
+                                                    <button type="button" class="ltvWhy" data-help="AccountHelp">?</button>
+                                                </div>
+                                                <div class="ltvSettingOne">Channel viewing is recorded against this account, never yours.</div>
+                                                <div class="ltvHelp" id="AccountHelp">
+                                                    Which is what keeps channels out of Continue Watching, Next Up and
+                                                    the watched flags. The account is created on first use, hidden from
+                                                    the login screen, and can do nothing but play.
+                                                    <br /><br />
+                                                    Two things worth knowing. Anyone who can reach this server's API can
+                                                    ask for this account's token, so on a server with several people and
+                                                    libraries not everyone may see, restrict this account to match in
+                                                    Dashboard → Users. And the same title watched deliberately while a
+                                                    channel is on will not be recorded either — it is the account that
+                                                    decides, not what is playing.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">Trailers</div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <label style="flex-grow: 1;">
+                                                        <input is="emby-checkbox" type="checkbox" id="SkipTrailerSegments" />
+                                                        <span>Skip the parts of a trailer that are not the trailer</span>
+                                                    </label>
+                                                    <button type="button" class="ltvWhy" data-help="SponsorHelp">?</button>
+                                                </div>
+                                                <div class="ltvSettingOne">A branded card, a plea to subscribe, a read for something else.</div>
+                                                <div class="ltvHelp" id="SponsorHelp">
+                                                    Uses SponsorBlock's public database. The lookup asks about a
+                                                    four-character hash of the video id rather than the id itself, so
+                                                    the service is never told what is playing; switching this off stops
+                                                    the request being made at all. The break is sized by what is left
+                                                    after the skipping, which is why no length has to be typed anywhere.
+                                                </div>
+                                            </div>
+
+                                            <div class="ltvSetting">
+                                                <div class="ltvSettingHead">
+                                                    <div style="flex: 1 1 16em;">
+                                                        <select is="emby-select" id="YouTubeClient" label="Ask YouTube as">
+                                                            <option value="">Try them all, best first</option>
+                                                            <option value="ANDROID_VR">Android VR (Quest 3, both app versions)</option>
+                                                            <option value="ANDROID">Android (reel endpoint)</option>
+                                                            <option value="ANDROID_CREATOR">Android Creator</option>
+                                                            <option value="VISIONOS">visionOS</option>
+                                                            <option value="WEB">Web</option>
+                                                        </select>
+                                                    </div>
+                                                    <button type="button" class="ltvWhy" data-help="ClientHelp">?</button>
+                                                </div>
+                                                <div class="ltvSettingOne">Leave it on "try them all" unless you are testing.</div>
+                                                <div class="ltvHelp" id="ClientHelp">
+                                                    What YouTube hands over depends on who is asking, and it differs by
+                                                    client, by day, and by whether the asker looks like a real device.
+                                                    This is the one thing about trailers that cannot be settled from
+                                                    here, so it can be pinned and tried from the television.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">The plugins beside this one</div>
+                                            <div class="ltvCardNote">
+                                                LiteTV uses these when they are installed and does without them when
+                                                they are not. Asked by id, so a plugin that is present but switched off
+                                                reads differently from one that was never installed.
+                                            </div>
+                                            <div id="SiblingPlugins"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ltvCol">
+                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                            <div class="ltvCardTitle">Suggested channels</div>
+                                            <div class="ltvCardNote">
+                                                Built from what your library actually holds. Adding one makes a channel
+                                                you can then edit like any other.
+                                            </div>
+                                            <div class="paperList ltvScroll" id="SuggestionList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- -------------------------------------- app updates (not a channel) -->
+                            <div class="litetvPane" data-pane="updates">
+                                <div class="ltvCols">
+                                    <div class="ltvCol">
+                                        <div class="ltvCard">
+                                            <div class="ltvCardTitle">Put this in the app</div>
+                                            <div class="ltvCardNote">Settings › Updates › Update source, on the television.</div>
+                                            <input is="emby-input" type="text" id="UpdateUrl" readonly style="margin: 0;" />
+                                        </div>
+
+                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                            <div class="ltvCardTitle">Builds this server hands the television</div>
+                                            <div class="ltvCardNote">
+                                                The newest release build of each processor is the one offered; the rest
+                                                are kept so a bad build can be walked back.
+                                            </div>
+                                            <div class="ltvRow" style="margin-bottom: 0.5em;">
+                                                <button type="button" id="UploadBuild" class="ltvGhost">Upload a build</button>
+                                                <input type="file" id="UploadBuildFile" accept=".apk,application/vnd.android.package-archive" style="display: none;" />
+                                                <span id="UploadBuildProgress" style="font-size: 0.8em; opacity: 0.7;"></span>
+                                            </div>
+                                            <div style="margin-bottom: 0.6em;">
+                                                <input is="emby-input" type="text" id="UpdateNotes" placeholder="What changed in this build (shown on the TV before installing)" style="margin: 0;" />
+                                            </div>
+                                            <div class="paperList ltvScroll" id="UpdateBuildList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
-                    </div>
-                    </div>
-                    <div class="litetvPane" data-pane="settings">
-                    <div class="inputContainer">
-                        <input is="emby-input" type="text" id="ChannelName" label="Channel name" />
-                    </div>
-
-                    <div class="checkboxContainer">
-                        <label>
-                            <input is="emby-checkbox" type="checkbox" id="ChannelEnabled" />
-                            <span>On air</span>
-                        </label>
-                    </div>
-
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label>
-                            <input is="emby-checkbox" type="checkbox" id="ResetAnchor" />
-                            <span>Restart the schedule from the beginning on save</span>
-                        </label>
-                        <div class="fieldDescription checkboxFieldDescription">
-                            Sets the schedule zero point to now, so the loop starts over with the first entry.
-                        </div>
-                    </div>
-
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="EpisodesPerBlock" min="0" step="1" label="Episodes per block (0 = play each source in full)" />
-                        <div class="fieldDescription">
-                            With more than one source, rotate through them taking this many items from each before moving on. For example, 2 with two series airs S1E1, S1E2, S2E1, S2E2, S1E3, S1E4, … Leave at 0 to play each source fully before the next (a marathon).
-                        </div>
-                    </div>
-
-                    <div class="selectContainer">
-                        <select is="emby-select" id="PlayOrder" label="Play order">
-                            <option value="Sequential">In order (marathon)</option>
-                            <option value="Shuffle">Shuffled</option>
-                        </select>
-                        <div class="fieldDescription">
-                            The shuffle is drawn once from the channel itself, never from the clock, so the guide and the player always agree and the order survives a restart.
-                        </div>
-                    </div>
-
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="SlotMinutes" min="0" step="5" label="Start programs on a grid of this many minutes (0 = back to back)" />
-                        <div class="fieldDescription">
-                            With 30, a program starts only on the hour or the half hour and the rest of its slot is time to fill — which is what lets a block promise the film at 20:15. A program longer than one slot takes as many whole slots as it needs.
-                        </div>
-                    </div>
-
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label>
-                            <input is="emby-checkbox" type="checkbox" id="TrailersInGaps" />
-                            <span>Fill the leftover time with trailers for what is coming up</span>
-                        </label>
-                        <div class="fieldDescription checkboxFieldDescription">
-                            Trailers held in the library air as ordinary schedule entries. Trailers the library only links to (usually YouTube) are not played yet.
-                        </div>
-                    </div>
-                    </div>
-                </div>
-
-                <div>
-                    <button is="emby-button" type="submit" class="raised button-submit block emby-button">
-                        <span>Save</span>
-                    </button>
+                    </main>
                 </div>
             </form>
-
-            <h3 style="margin-top: 2em;">App updates</h3>
-            <div class="fieldDescription" style="margin-bottom: 0.8em;">
-                This server can hand the television its own app updates, so a new build is
-                uploaded here instead of being pushed over ADB — and ADB can then be switched
-                off on the box. Put the address below into the app's
-                <strong>Settings &rarr; Advanced &rarr; Update URL</strong> once; after that it
-                checks here by itself and offers whatever build is newer than the one installed.
-            </div>
-
-            <div class="inputContainer">
-                <input is="emby-input" type="text" id="UpdateUrl" readonly label="Update URL for the app" />
-            </div>
-
-            <div style="margin-bottom: 0.6em;">
-                <button is="emby-button" type="button" id="UploadBuild" class="raised"><span>Upload a build</span></button>
-                <input type="file" id="UploadBuildFile" accept=".apk,application/vnd.android.package-archive" style="display: none;" />
-                <span id="UploadBuildProgress" style="margin-left: 0.8em;"></span>
-            </div>
-            <div class="inputContainer">
-                <input is="emby-input" type="text" id="UpdateNotes" label="What changed in this build (optional, shown on the TV before installing)" />
-            </div>
-
-            <div class="paperList" id="UpdateBuildList" style="margin-bottom: 2em;"></div>
         </div>
     </div>
 
@@ -497,26 +1013,121 @@
                 return currentIndex >= 0 && config && config.Channels[currentIndex] ? config.Channels[currentIndex] : null;
             }
 
+            /**
+             * The rail, which is the whole of choosing a channel.
+             *
+             * Drawn for a lineup rather than a handful: one line each, a filter above, a count
+             * at the foot. The order is the owner's own - nothing is regrouped by whether a
+             * channel happens to be on air, because then a row would move underneath the
+             * pointer when a programme ends. The dot carries that instead, and a channel with
+             * no week of its own wears a tag so it is findable in a long list.
+             */
             function renderChannelSelect() {
-                var select = q('#ChannelSelect');
-                select.innerHTML = '';
-                (config.Channels || []).forEach(function (channel, i) {
-                    var option = document.createElement('option');
-                    option.value = i;
-                    option.textContent = channel.Name || '(unnamed)';
-                    select.appendChild(option);
+                var host = q('#ChannelRail');
+                if (!host) { return; }
+                host.innerHTML = '';
+
+                var filter = (q('#ChannelFilter').value || '').trim().toLowerCase();
+                var channels = config.Channels || [];
+                var shown = 0;
+
+                channels.forEach(function (channel, i) {
+                    var name = channel.Name || '(unnamed)';
+                    if (filter && name.toLowerCase().indexOf(filter) < 0) { return; }
+                    shown++;
+
+                    // Only one thing in the rail is lit at a time. A destination is showing means
+                    // the channel underneath is remembered, not selected - two lit rows would
+                    // say the screen belongs to both.
+                    var onDestination = currentPane === 'server' || currentPane === 'updates';
+                    var row = document.createElement('div');
+                    row.className = 'ltvRailRow' + (i === currentIndex && !onDestination ? ' selected' : '');
+
+                    var live = railNow[(channel.Id || '').replace(/-/g, '').toLowerCase()];
+                    var on = channel.Enabled !== false && live && live.on;
+
+                    var dot = document.createElement('div');
+                    dot.className = 'ltvRailDot';
+                    dot.style.background = channel.Enabled === false
+                        ? 'rgba(128,128,128,0.4)'
+                        : (on ? 'var(--ltv-accent)' : 'rgba(128,128,128,0.55)');
+                    row.appendChild(dot);
+
+                    var text = document.createElement('div');
+                    text.className = 'ltvRailText';
+                    var title = document.createElement('div');
+                    title.className = 'ltvRailName';
+                    title.textContent = name;
+                    text.appendChild(title);
+                    var now = document.createElement('div');
+                    now.className = 'ltvRailNow';
+                    now.textContent = channel.Enabled === false
+                        ? 'off'
+                        : (live ? live.text : '…');
+                    text.appendChild(now);
+                    row.appendChild(text);
+
+                    if (live && live.uncurated) {
+                        var tag = document.createElement('div');
+                        tag.className = 'ltvTag';
+                        tag.textContent = 'no week';
+                        row.appendChild(tag);
+                    }
+
+                    row.addEventListener('click', function () {
+                        applyEditorToChannel();
+                        currentIndex = i;
+                        renderChannelSelect();
+                        renderEditor();
+                        showPane(currentPane === 'server' || currentPane === 'updates' ? 'week' : currentPane);
+                    });
+
+                    host.appendChild(row);
                 });
-                if (currentIndex >= 0 && currentIndex < config.Channels.length) {
-                    select.value = currentIndex;
+
+                var count = q('#ChannelCount');
+                count.textContent = filter
+                    ? shown + ' of ' + channels.length + ' channels'
+                    : channels.length + (channels.length === 1 ? ' channel' : ' channels');
+
+                Array.prototype.forEach.call(document.querySelectorAll('.ltvRailDests .ltvRailRow'), function (dest) {
+                    dest.classList.toggle('selected', dest.dataset.dest === currentPane);
+                });
+
+                renderHead();
+            }
+
+            /** The channel's name, whether it is on, and when the page was last saved. */
+            function renderHead() {
+                var channel = currentChannel();
+                var onDest = currentPane === 'server' || currentPane === 'updates';
+                var pill = q('#HeadPill');
+
+                if (onDest) {
+                    q('#HeadName').textContent = currentPane === 'server' ? 'Server settings' : 'App updates';
+                    pill.style.display = 'none';
+                    return;
+                }
+
+                q('#HeadName').textContent = channel ? (channel.Name || '(unnamed)') : 'LiteTV';
+
+                var live = channel && railNow[(channel.Id || '').replace(/-/g, '').toLowerCase()];
+                if (channel && channel.Enabled !== false && live) {
+                    pill.style.display = '';
+                    q('#HeadPillText').textContent = live.text;
+                } else {
+                    pill.style.display = 'none';
                 }
             }
 
             function renderEditor() {
                 var channel = currentChannel();
-                q('#ChannelEditor').style.display = channel ? 'block' : 'none';
                 if (!channel) {
+                    if (currentPane !== 'server' && currentPane !== 'updates') { showPane('none'); }
+                    renderHead();
                     return;
                 }
+                if (currentPane === 'none') { showPane('week'); }
                 loadWeek();
                 renderAdverts();
                 q('#ChannelName').value = channel.Name || '';
@@ -589,17 +1200,45 @@
              */
             var effectiveArt = {};
 
+            // What each channel is doing right now, for the rail. Keyed dash-less, like the art.
+            var railNow = {};
+
             function loadEffectiveArt() {
                 return ApiClient.getJSON(ApiClient.getUrl('LiteTv/Channels'))
                     .then(function (guide) {
                         effectiveArt = {};
+                        railNow = {};
                         (guide.Channels || []).forEach(function (ch) {
                             // Keyed with the dashes stripped. Jellyfin writes GUIDs without
                             // them, the page generates them with, and the two have to meet.
-                            effectiveArt[String(ch.Id).replace(/-/g, '').toLowerCase()] = ch.Image || {};
+                            var key = String(ch.Id).replace(/-/g, '').toLowerCase();
+                            effectiveArt[key] = ch.Image || {};
+                            railNow[key] = railLine(ch);
                         });
+                        renderChannelSelect();
                     })
-                    .catch(function () { effectiveArt = {}; });
+                    .catch(function () { effectiveArt = {}; railNow = {}; });
+            }
+
+            /** One line of what a channel is doing, for the rail and the header pill. */
+            function railLine(ch) {
+                var name = ch.Now && (ch.Now.Name || ch.Now.SeriesName);
+                var at = ch.Now && ch.Now.StartUtc
+                    ? new Date(ch.Now.StartUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : '';
+
+                if (ch.Kind === 'Program' && name) {
+                    return { on: true, text: (at ? at + ' ' : '') + name };
+                }
+                if (ch.Kind === 'Advert' || ch.Kind === 'Trailer') {
+                    var trailed = ch.Next && (ch.Next.Name || ch.Next.SeriesName);
+                    return { on: true, text: 'break' + (trailed ? ' · next: ' + trailed : '') };
+                }
+
+                var next = ch.Next && ch.Next.StartUtc
+                    ? new Date(ch.Next.StartUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : '';
+                return { on: false, text: next ? 'off air until ' + next : 'off air' };
             }
 
             /** The picture the plugin currently falls back to for one slot, or ''. */
@@ -646,6 +1285,9 @@
                     row.style.alignItems = 'flex-start';
                     row.style.gap = '0.8em';
                     row.style.marginBottom = '0.8em';
+                    // The controls beside a picture wrap under it in a narrow column rather
+                    // than pushing the pane sideways: this screen has to fit its window.
+                    row.style.flexWrap = 'wrap';
 
                     var preview = document.createElement('div');
                     // Each slot is drawn in its own shape, and the whole picture is shown
@@ -1718,7 +2360,11 @@
             var week = {
                 data: null,
                 selectedId: null,
-                pxPerHour: 60,
+                pxPerHour: 46,
+                // 'week' is all seven at a glance; 'day' is one of them, where a break is
+                // big enough to grab. Same grid and the same drag either way.
+                view: 'week',
+                day: 0,
                 drag: null,
                 shelfTimer: null,
                 dropping: null
@@ -1862,12 +2508,17 @@
 
                 week.tracks = {};
 
+                // The frame fills what is left of the screen and scrolls inside itself. The
+                // page does not scroll: a week is a fixed composition, and the zoom is what
+                // decides how much of a day fits rather than the length of the document.
                 var frame = document.createElement('div');
                 frame.style.display = 'flex';
-                frame.style.border = '1px solid rgba(255,255,255,0.15)';
-                frame.style.borderRadius = '6px';
+                frame.style.border = '1px solid var(--ltv-line)';
+                frame.style.borderRadius = '8px';
+                frame.style.background = 'var(--ltv-s1)';
                 frame.style.overflow = 'auto';
-                frame.style.maxHeight = '70vh';
+                frame.style.flexGrow = '1';
+                frame.style.minHeight = '0';
                 frame.style.position = 'relative';
 
                 frame.appendChild(weekGutter());
@@ -1877,12 +2528,22 @@
                 columns.style.flexGrow = '1';
                 columns.style.minWidth = '0';
 
+                // A week cannot draw a thirty-second advert as anything but a hairline, so one
+                // day at a time is where a break gets edited. Same grid, same drag, one column.
                 DAYS.forEach(function (day, index) {
+                    if (week.view === 'day' && index !== week.day) { return; }
                     columns.appendChild(weekColumn(day, index));
                 });
 
                 frame.appendChild(columns);
                 host.appendChild(frame);
+
+                // Open on the evening. A grid that starts at midnight opens on eight empty hours
+                // and pushes the part of the day a channel is actually about below the fold.
+                // Deliberately a fixed hour rather than "the first airing": a channel whose week
+                // wraps past midnight has an airing at 00:40, and following it lands back at the
+                // top again - the same nothing, arrived at cleverly.
+                frame.scrollTop = (17 * week.pxPerHour) - 8;
             }
 
             function weekEmptyNote() {
@@ -2043,8 +2704,15 @@
                 bar.style.background = WEEK_COLOURS[airing.Kind] || WEEK_COLOURS.Programme;
                 bar.style.cursor = 'grab';
                 bar.style.outline = airing.Id === week.selectedId ? '2px solid #fff' : 'none';
-                bar.textContent = (piece.continued ? '↳ ' : weekClock(airing.StartSecond) + ' ')
-                    + weekTitle(airing);
+
+                // A ten-minute advert at a week's zoom is eight pixels tall, and a label in it
+                // is a line of text lying across whatever is underneath. Below the height of a
+                // line, the bar is its colour and nothing else - which is what the day view and
+                // the tooltip are for.
+                var tall = (piece.seconds / 3600) * week.pxPerHour;
+                bar.textContent = tall < 15
+                    ? ''
+                    : (piece.continued ? '↳ ' : weekClock(airing.StartSecond) + ' ') + weekTitle(airing);
                 bar.title = weekTooltip(airing);
 
                 // The lower eighth resizes, floored at four pixels and capped at ten: any more
@@ -3130,11 +3798,28 @@
             // later, so the dashboard gets first refusal on a page it is about to show anyway.
             setTimeout(loadPage, 0);
 
-            q('#ChannelSelect').addEventListener('change', function () {
-                applyEditorToChannel();
-                currentIndex = parseInt(this.value, 10);
-                renderEditor();
+            q('#ChannelFilter').addEventListener('input', renderChannelSelect);
+
+            // The two destinations that are not a channel. Choosing one leaves the channel
+            // selected underneath: coming back from Server settings should land where you were.
+            Array.prototype.forEach.call(document.querySelectorAll('.ltvRailDests .ltvRailRow'), function (dest) {
+                dest.addEventListener('click', function () {
+                    applyEditorToChannel();
+                    showPane(dest.dataset.dest);
+                    renderChannelSelect();
+                });
             });
+
+            // A setting says one line and keeps the rest behind (?), because the explanation
+            // is worth having and worth not reading forty times.
+            Array.prototype.forEach.call(document.querySelectorAll('.ltvWhy'), function (why) {
+                why.addEventListener('click', function () {
+                    var help = document.getElementById(why.dataset.help);
+                    if (help) { help.classList.toggle('open'); }
+                });
+            });
+
+            q('#EmptyNewChannel').addEventListener('click', function () { q('#AddChannel').click(); });
 
             q('#AddChannel').addEventListener('click', function () {
                 applyEditorToChannel();
@@ -3179,6 +3864,118 @@
 
             var currentPane = 'week';
 
+            /**
+             * Which of the plugins beside this one are installed.
+             *
+             * Asked by id through LiteTV's own endpoint rather than by firing a request at each
+             * of them: a 404 cannot tell "not installed" from "installed but broken", and those
+             * two want different things said about them. Green when it is there and working,
+             * amber when it is not, and the amber says plainly what is lost.
+             */
+            function renderSiblingPlugins() {
+                var host = q('#SiblingPlugins');
+                if (!host || host.dataset.loaded === 'yes') { return; }
+                host.dataset.loaded = 'yes';
+                host.textContent = 'Asking…';
+
+                ApiClient.getJSON(ApiClient.getUrl('LiteTv/Plugins')).then(function (rows) {
+                    host.innerHTML = '';
+                    (rows || []).forEach(function (row) {
+                        var line = document.createElement('div');
+                        line.style.display = 'flex';
+                        line.style.alignItems = 'baseline';
+                        line.style.gap = '0.6em';
+                        line.style.padding = '0.35em 0';
+
+                        var dot = document.createElement('span');
+                        dot.style.flex = '0 0 auto';
+                        dot.style.width = '7px';
+                        dot.style.height = '7px';
+                        dot.style.borderRadius = '50%';
+                        dot.style.background = row.Usable ? '#2f9e8f' : (row.Installed ? '#d99a3a' : 'rgba(128,128,128,0.45)');
+                        line.appendChild(dot);
+
+                        var name = document.createElement('div');
+                        name.style.fontSize = '0.87em';
+                        name.textContent = row.Name;
+                        line.appendChild(name);
+
+                        var state = document.createElement('div');
+                        state.style.fontSize = '0.78em';
+                        state.style.opacity = '0.55';
+                        state.style.flexGrow = '1';
+                        state.textContent = row.Installed
+                            ? (row.Usable ? row.Version : (row.Status || 'installed') + ' · ' + row.Version)
+                            : (row.WhyItMatters || 'not installed');
+                        line.appendChild(state);
+
+                        host.appendChild(line);
+                    });
+                }).catch(function () {
+                    host.textContent = 'Could not ask this server which plugins it has.';
+                    host.dataset.loaded = '';
+                });
+            }
+
+            /**
+             * What the settings add up to: a typical evening, from the server rather than from
+             * arithmetic repeated here. A number in a box says nothing about what a grid of
+             * thirty minutes does to a ninety-minute film; a list of times says it at a glance.
+             */
+            function renderSettingsPreview() {
+                var host = q('#SettingsPreview');
+                var channel = currentChannel();
+                if (!host || !channel || !channel.Id) { return; }
+
+                host.textContent = 'Working it out…';
+
+                ApiClient.getJSON(ApiClient.getUrl('LiteTv/Channels/' + channel.Id + '/Now', {
+                    upcoming: 12,
+                    breaks: true
+                })).then(function (answer) {
+                    var rows = [].concat(answer.Now ? [answer.Now] : [], answer.Upcoming || []);
+                    host.innerHTML = '';
+
+                    if (!rows.length) {
+                        host.textContent = 'Nothing to show yet — give the channel some content.';
+                        return;
+                    }
+
+                    rows.forEach(function (airing) {
+                        var line = document.createElement('div');
+                        line.style.display = 'flex';
+                        line.style.gap = '0.7em';
+                        line.style.padding = '0.25em 0';
+                        line.style.borderBottom = '1px solid var(--ltv-line)';
+
+                        var when = document.createElement('div');
+                        when.style.flex = '0 0 4em';
+                        when.style.opacity = '0.6';
+                        when.textContent = airing.StartUtc
+                            ? new Date(airing.StartUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : '';
+                        line.appendChild(when);
+
+                        var what = document.createElement('div');
+                        what.style.flexGrow = '1';
+                        what.style.minWidth = '0';
+                        what.style.overflow = 'hidden';
+                        what.style.textOverflow = 'ellipsis';
+                        what.style.whiteSpace = 'nowrap';
+                        what.textContent = [airing.SeriesName, airing.Name].filter(function (x) { return x; }).join(' — ')
+                            || (airing.Kind === 'OffAir' ? 'off air' : airing.Kind.toLowerCase());
+                        if (airing.Kind === 'Trailer') { what.style.color = 'var(--ltv-trailer)'; }
+                        if (airing.Kind === 'Advert') { what.style.color = 'var(--ltv-advert)'; }
+                        if (airing.Kind === 'OffAir') { what.style.opacity = '0.45'; }
+                        line.appendChild(what);
+
+                        host.appendChild(line);
+                    });
+                }).catch(function () {
+                    host.textContent = 'The server would not say.';
+                });
+            }
+
             function showPane(name) {
                 currentPane = name;
                 Array.prototype.forEach.call(document.querySelectorAll('.litetvPane'), function (pane) {
@@ -3188,16 +3985,29 @@
                     tab.classList.toggle('selected', tab.dataset.pane === name);
                 });
 
+                // The tabs belong to a channel; a destination is not one, so none of them is
+                // lit while Server settings or App updates is showing.
+                var channelPane = name !== 'server' && name !== 'updates' && name !== 'none';
+                q('#ChannelTabs').style.visibility = channelPane ? '' : 'hidden';
+
                 // The timeline measures itself as it draws, and a hidden pane has no width to
                 // measure - so a week drawn while another tab was showing comes out flat.
                 if (name === 'week') { renderWeek(); }
+                if (name === 'settings') { renderSettingsPreview(); }
+                if (name === 'server') { renderSiblingPlugins(); }
+
+                renderHead();
             }
 
             Array.prototype.forEach.call(document.querySelectorAll('.litetvTab'), function (tab) {
-                tab.addEventListener('click', function () { showPane(tab.dataset.pane); });
+                tab.addEventListener('click', function () {
+                    if (!currentChannel()) { return; }
+                    showPane(tab.dataset.pane);
+                    renderChannelSelect();
+                });
             });
 
-            showPane('week');
+            showPane('none');
 
             var advertLengthTimer = null;
             q('#AdvertUrl').addEventListener('input', function () {
@@ -3227,9 +4037,52 @@
             q('#WeekDiscard').addEventListener('click', weekDiscard);
 
             q('#WeekZoom').addEventListener('input', function () {
-                week.pxPerHour = Math.max(30, parseInt(this.value, 10) || 60);
+                week.pxPerHour = Math.max(20, parseInt(this.value, 10) || 46);
                 renderWeek();
             });
+
+            // Week or one day. Switching to a day opens on the day you were nearest, and the
+            // zoom comes up with it: a day is the view you go to in order to see small things.
+            Array.prototype.forEach.call(q('#WeekViewToggle').children, function (button) {
+                button.addEventListener('click', function () {
+                    week.view = button.dataset.view;
+                    Array.prototype.forEach.call(q('#WeekViewToggle').children, function (other) {
+                        other.classList.toggle('selected', other === button);
+                    });
+
+                    if (week.view === 'day' && week.pxPerHour < 90) {
+                        week.pxPerHour = 110;
+                        q('#WeekZoom').value = 110;
+                    }
+                    if (week.view === 'week' && week.pxPerHour > 70) {
+                        week.pxPerHour = 46;
+                        q('#WeekZoom').value = 46;
+                    }
+
+                    renderWeekDayPicker();
+                    renderWeek();
+                });
+            });
+
+            function renderWeekDayPicker() {
+                var host = q('#WeekDayPicker');
+                host.style.display = week.view === 'day' ? '' : 'none';
+                if (week.view !== 'day') { return; }
+
+                host.innerHTML = '';
+                DAYS.forEach(function (day, index) {
+                    var button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = day.slice(0, 3);
+                    if (index === week.day) { button.className = 'selected'; }
+                    button.addEventListener('click', function () {
+                        week.day = index;
+                        renderWeekDayPicker();
+                        renderWeek();
+                    });
+                    host.appendChild(button);
+                });
+            }
 
             q('#WeekShelfSearch').addEventListener('input', function () {
                 var term = this.value.trim();
