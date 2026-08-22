@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.57.0",
+        "changelog": "The proof-of-origin token now survives a restart, and a cached answer no longer outlives it. The token the television mints is what lifts YouTube's sixty-second wall on trailer streams; it was held only in memory, so every Jellyfin restart threw it away - and a restart happens on every plugin install, which meant trailers fell back to 360p until somebody next opened the app on a television. It is written to configuration now, masked on the page, and read back at start-up. Separately, a resolution cached before a token arrived is no longer served after one does: a token does not merely make the next resolution better, it makes the last one wrong, so the held token carries a generation and a cached answer from an older one is ignored.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.57.0/litetv-channels_1.0.57.0.zip",
+        "checksum": "2b94f854d8d480b177fd5aaaf87b8841",
+        "timestamp": "2026-08-22T00:00:00.000Z"
+      },
+      {
         "version": "1.0.56.0",
         "changelog": "The television mints a proof-of-origin token and this takes it. Without one, YouTube gives this server a 1080p ladder whose streams stop being served after about sixty seconds, or one muxed 360p that plays to the end - measured, on every client that answers at all. The wall is `pot=` enforcement, and the token that lifts it comes from Google's BotGuard, which is JavaScript wanting a browser that a server does not have and an Android box does. So POST /LiteTv/PoToken takes what the box mints, the visitor id it was minted against goes into the player request, and every googlevideo address goes out carrying it. With no token held, nothing changes at all. The YouTube account setting is gone in the same release: it was measured worthless on every client, it is not the mechanism anybody else uses, and a live credential in plain-text configuration that buys nothing is the worst of both.",
         "targetAbi": "10.11.0.0",
