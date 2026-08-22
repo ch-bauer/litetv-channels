@@ -149,6 +149,43 @@
             if (url.indexOf('Items') === 0) { return Promise.resolve({ Items: [] }); }
             return Promise.resolve({});
         },
+        // The page asks who is looking before it fetches anything per-user. Missing here, the
+        // exception took out whatever click was in flight - which is how a stub gap came to
+        // look like the channel rail being broken.
+        getCurrentUserId: function () { return 'ffffffffffffffffffffffffffffffff'; },
+        getCurrentUser: function () { return Promise.resolve({ Id: 'ffffffffffffffffffffffffffffffff' }); },
+
+        /** Members of a series or a collection, for the dealt-queue preview on Content. */
+        getItems: function (userId, query) {
+            query = query || {};
+            if (query.IncludeItemTypes === 'Episode') {
+                return Promise.resolve({
+                    Items: [1, 2, 3, 4, 5, 6].map(function (n) {
+                        return {
+                            Id: 'ep' + n,
+                            Name: 'Episode ' + n,
+                            ParentIndexNumber: 1,
+                            IndexNumber: n
+                        };
+                    })
+                });
+            }
+            if (query.ParentId) {
+                return Promise.resolve({
+                    Items: [
+                        { Id: 'm1', Name: 'Die Hard', ProductionYear: 1988 },
+                        { Id: 'm2', Name: 'Aliens', ProductionYear: 1986 }
+                    ]
+                });
+            }
+            if (query.SearchTerm) {
+                return Promise.resolve({
+                    Items: [{ Id: 's1', Name: query.SearchTerm + ' (a result)', Type: 'Movie', ProductionYear: 1999 }]
+                });
+            }
+            return Promise.resolve({ Items: [] });
+        },
+
         ajax: function (o) { return window.ApiClient.getJSON(typeof o === 'string' ? o : o.url); },
         fetch: function (o) { return window.ApiClient.getJSON(typeof o === 'string' ? o : o.url); }
     };

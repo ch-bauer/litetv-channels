@@ -40,13 +40,30 @@ function harness() {
 http.createServer((req, res) => {
     const file = req.url === '/' ? null : req.url.split('?')[0];
     try {
+        // The harness is not the dashboard, and the owner was right that it does not look like
+        // it either: no emby-* component upgrade, no theme, no fixed header, no form width cap.
+        // /page serves the page raw and cross-origin so it can be injected into a *real*
+        // dashboard and looked at there - see README, "Testing in the real dashboard".
+        if (file === '/page') {
+            res.writeHead(200, {
+                'Content-Type': 'text/html; charset=utf-8',
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'no-store',
+            });
+            return res.end(fs.readFileSync(pagePath, 'utf8'));
+        }
+
         if (!file) {
             const body = harness();
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             return res.end(body);
         }
         const served = fs.readFileSync(path.join(here, path.basename(file)));
-        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+        res.writeHead(200, {
+            'Content-Type': 'text/javascript; charset=utf-8',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-store',
+        });
         res.end(served);
     } catch (err) {
         res.writeHead(404);

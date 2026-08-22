@@ -44,6 +44,25 @@ its card**, **Content carries the order controls and the dealt queue** the desig
 applied to the pointer rather than to the bar, so every drag looked unsnapped because every drag
 was).
 
+## Testing in the real dashboard, which is the one that counts
+
+The owner's verdict on this harness, and it is right: *"your demo version does not match the
+actual server config page at all."* So there is now a way to put the page you are editing into a
+**real** dashboard, with real `emby-*` components, the real theme, the real fixed header and the
+real form width cap - without cutting a release for each attempt.
+
+With `serve.js` running and the LiteTV configuration page open in the dashboard, in the browser
+console:
+
+    await fetch('http://127.0.0.1:8123/inject.js').then(r => r.text()).then(eval);
+    await __ltvInject();
+
+It fetches `configPage.html` from your working copy, swaps its body into the page the dashboard
+has already opened, and re-runs its scripts. Reload to get the installed version back.
+
+**Use this to check anything about how the page looks or measures.** The suite below is for
+catching regressions in behaviour; it is not evidence that a screen looks right.
+
 ## What it cannot cover
 
 The harness is not the dashboard. It has no `emby-*` component upgrade (so inputs look unlabelled

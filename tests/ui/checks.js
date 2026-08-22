@@ -174,6 +174,8 @@
 
         // --- the week ---------------------------------------------------------------------
         check('the week draws seven days of bars', function () {
+            // Day is the view the page opens on now, so a week has to be asked for.
+            all('#WeekViewToggle button')[0].click();
             clickTab('week');
             var columns = all('#WeekTimeline [data-day-index]');
             assert(columns.length === 7, 'expected 7 day columns, found ' + columns.length);
@@ -183,10 +185,19 @@
         });
 
         check('the week grid opens on the evening, not on midnight', function () {
-            clickTab('week');
-            var frame = q('#WeekTimeline').firstElementChild;
-            assert(frame && frame.scrollTop > 0, 'the grid is scrolled to the top of the day');
-            return 'scrollTop ' + Math.round(frame.scrollTop);
+            all('#WeekViewToggle button')[0].click();
+            var frame = q('#WeekTimeline').firstChild;
+            var pxPerHour = parseFloat(q('#WeekZoom').value);
+            var topHour = frame.scrollTop / pxPerHour;
+            var bottomHour = (frame.scrollTop + frame.clientHeight) / pxPerHour;
+
+            // The evening has to be on the screen. Asserting that 17:00 sits exactly at the top
+            // is wrong: at a week's zoom a whole day is barely taller than the frame, so the
+            // scroll clamps long before it gets there and the evening is in view anyway.
+            assert(bottomHour > 17 && topHour < 21,
+                'the evening is not in view (showing ' + topHour.toFixed(1) + 'h to '
+                + bottomHour.toFixed(1) + 'h)');
+            return topHour.toFixed(1) + 'h to ' + bottomHour.toFixed(1) + 'h';
         });
 
         check('the day view shows one day', function () {

@@ -22,6 +22,15 @@
            of settings and wrong for a page that is an application. Scoped to this page only. */
         #LiteTvConfigPage .content-primary { padding: 0 !important; }
 
+        /* The dashboard leaves ~74px of padding under an interior page, which is right for a
+           column of settings that ends and wrong for a page that is meant to fill the window:
+           it left a band of empty screen under the grid that fitApp then had to subtract. */
+        #LiteTvConfigPage { padding-bottom: 0 !important; }
+
+        /* Jellyfin's .fieldDescription forces white-space, so an inline nowrap on one loses and
+           the text wraps. This is the same look without the fight. */
+        .ltv .ltvDim { font-size: 0.8em; opacity: 0.55; margin: 0; }
+
         #LiteTvConfigPage form { max-width: none !important; width: 100%; }
 
         .ltv {
@@ -37,6 +46,8 @@
             --ltv-advert: #2f9e8f;
 
             display: flex;
+            /* The box the (?) explanations are positioned against. */
+            position: relative;
             /* A fallback only: the real height is measured in fitApp(), because how much
                dashboard sits above this page is not something a stylesheet can know. */
             height: calc(100vh - 7.5em);
@@ -58,6 +69,11 @@
 
         .ltvRail {
             flex: 0 0 16.5em;
+            /* Without this the rail's automatic minimum size is its content's, so selecting a
+               channel with a long name made the rail six pixels wider - and the header, the
+               tabs, the grid and the shelf all moved with it. A rail is a fixed column. */
+            min-width: 0;
+            max-width: 16.5em;
             display: flex;
             flex-direction: column;
             min-height: 0;
@@ -176,7 +192,15 @@
             padding: 0.2em 1.2em 0 1.2em;
         }
 
-        .ltvHeadName { font-size: 1.35em; font-weight: 700; }
+        .ltvHeadName {
+            font-size: 1.35em;
+            font-weight: 700;
+            /* Capped so a long name ends in an ellipsis rather than pushing what is beside it. */
+            max-width: 22em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
         .ltvPill {
             display: inline-flex;
@@ -247,7 +271,7 @@
 
         /* A pane that is a form rather than a timeline scrolls inside itself: the page
            still does not scroll, and an unbounded list of sources cannot be helped. */
-        .ltvScroll { flex-grow: 1; min-height: 0; overflow-y: auto; padding-right: 0.4em; }
+        .ltvScroll { flex-grow: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; padding-right: 0.4em; }
 
         .ltvCols { display: flex; gap: 1.1em; min-height: 0; flex-grow: 1; }
         .ltvCol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
@@ -298,18 +322,46 @@
 
         .ltvWhy:hover { opacity: 1; }
 
-        .ltvHelp {
-            display: none;
-            margin: 0.5em 0 0.2em 0;
-            padding-left: 0.9em;
-            border-left: 2px solid color-mix(in srgb, var(--ltv-accent) 55%, transparent);
+        /* The explanation behind a (?).
+           It used to open inline, which pushed every setting under it down the card and moved
+           the whole screen about - the opposite of what a fixed composition is for. It is now
+           lifted out and floated over the page when it opens, so opening one changes nothing
+           but itself. The markup stays where it is, next to the setting it explains. */
+        .ltvHelp { display: none; }
+
+        .ltvHelp.open {
+            display: block;
+            position: absolute;
+            z-index: 40;
+            max-width: 26em;
+            padding: 0.7em 0.85em;
+            border-radius: 8px;
+            border: 1px solid var(--ltv-line);
+            border-left: 3px solid color-mix(in srgb, var(--ltv-accent) 70%, transparent);
+            /* Opaque: it is over the page, and a translucent one is unreadable. */
+            background: var(--ltv-help-bg, #23272e);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
             font-size: 0.82em;
-            opacity: 0.75;
+            opacity: 1;
         }
 
-        .ltvHelp.open { display: block; }
+        @media (prefers-color-scheme: light) {
+            .ltv { --ltv-help-bg: #f4f5f7; }
+        }
 
         .ltvRow { display: flex; align-items: center; gap: 0.7em; flex-wrap: wrap; }
+
+        /* A text box has an intrinsic width of about twenty characters and will not go below it
+           on its own, so a row of them overflows its column however small the flex basis says
+           they are. They fill whatever room their wrapper was given instead. */
+        .ltv input[type="text"],
+        .ltv input[type="number"],
+        .ltv input[type="time"],
+        .ltv select {
+            min-width: 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
         .ltvGrow { flex-grow: 1; }
         .ltvLegend { display: flex; align-items: center; gap: 0.9em; font-size: 0.75em; opacity: 0.55; }
         .ltvSwatch { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 0.35em; }
@@ -361,6 +413,100 @@
             margin-top: 0.7em; padding: 0.55em 0.8em;
             background: var(--ltv-s2); border: 1px solid var(--ltv-line);
             border-left: 3px solid var(--ltv-programme); border-radius: 8px;
+        }
+
+        /* A dialog over the page: for a job you are in the middle of, which must not be done by
+           making the page taller. */
+        .ltvModal {
+            position: absolute;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5em;
+            background: rgba(0, 0, 0, 0.55);
+        }
+
+        .ltvModalCard {
+            background: var(--ltv-help-bg, #23272e);
+            border: 1px solid var(--ltv-line);
+            border-radius: 10px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+            padding: 1em 1.1em;
+            max-width: 46em;
+            max-height: 100%;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .ltvPrimary {
+            background: var(--ltv-accent);
+            border-color: var(--ltv-accent);
+            color: #fff;
+        }
+
+        .ltvPrimary:hover { background: var(--ltv-accent); opacity: 0.9; }
+
+        /* One slot: its picture in its own shape, what it is, and what can be done to it. */
+        .ltvArtRow {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5em 0.9em;
+            padding: 0.6em;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .ltvArtRow:hover { background: var(--ltv-s2); }
+
+        .ltvArtRow.selected {
+            background: color-mix(in srgb, var(--ltv-accent) 10%, transparent);
+            border-color: color-mix(in srgb, var(--ltv-accent) 45%, transparent);
+        }
+
+        .ltvArtThumb {
+            /* One width for all three so the text beside them starts in the same place; the
+               shape inside it is the slot's own. */
+            flex: 0 0 5.6em;
+            width: 5.6em;
+            height: 3.6em;
+            border-radius: 4px;
+            background-color: var(--ltv-s3);
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .ltvArtText { flex: 1 1 0; min-width: 0; }
+        .ltvArtName { font-size: 0.88em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ltvArtWhere { font-style: italic; }
+
+        .ltvArtAddress {
+            flex: 1 1 100%;
+            width: 100%;
+            margin: 0 !important;
+            font-size: 0.78em;
+        }
+
+        .ltvArtActions { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 0.35em; justify-content: flex-end; max-width: 13em; }
+        .ltvArtAction { padding: 0.3em 0.6em; font-size: 0.78em; }
+
+        /* An empty list. It used to be a paperList filling its card, so "no adverts yet" was a
+           grey slab the height of the screen with one line of text adrift in it. */
+        .ltv .ltvListEmpty {
+            flex: 0 0 auto;
+            background: transparent !important;
+            border: 1px dashed var(--ltv-line);
+            border-radius: 8px;
+            padding: 1.1em 1em;
+            text-align: center;
+            font-size: 0.82em;
+            opacity: 0.6;
+            overflow: visible;
         }
 
         .ltvEmpty {
@@ -463,8 +609,8 @@
                             <div class="litetvPane" data-pane="week">
                                 <div class="ltvRow" style="margin-bottom: 0.7em;">
                                     <div class="ltvSeg" id="WeekViewToggle">
-                                        <button type="button" data-view="week" class="selected">Week</button>
-                                        <button type="button" data-view="day">Day</button>
+                                        <button type="button" data-view="week">Week</button>
+                                        <button type="button" data-view="day" class="selected">Day</button>
                                     </div>
 
                                     <div class="ltvRow" style="gap: 0.4em; font-size: 0.8em; opacity: 0.6;">
@@ -657,7 +803,7 @@
                                                 </div>
                                         </div>
 
-                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
                                             <div class="ltvCardTitle">The first few, as they would fall</div>
                                             <div class="ltvCardNote">
                                                 The sources above dealt out with the settings as they stand.
@@ -677,7 +823,7 @@
                             <div class="litetvPane" data-pane="breaks">
                                 <div class="ltvCols">
                                     <div class="ltvCol">
-                                        <div class="ltvCard" style="flex-grow: 1;">
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
                                             <div class="ltvCardTitle">Adverts</div>
                                             <div class="ltvCardNote">
                                                 Addresses the television resolves and plays. They go at the front of a
@@ -686,20 +832,23 @@
                                                 video is and which parts get skipped, and sizes the break by what is left.
                                             </div>
 
+                                            <!-- One line: an address, what to call it, which
+                                                 decade it is from, and Add. It used to wrap onto
+                                                 two, with a truncated placeholder on the second. -->
                                             <div class="ltvRow" style="margin-bottom: 0.5em;">
-                                                <div style="flex: 1 1 15em;">
+                                                <div style="flex: 1 1 9em; min-width: 5em;">
                                                     <input is="emby-input" type="text" id="AdvertUrl" placeholder="Address" style="margin: 0;" />
                                                 </div>
-                                                <div style="flex: 0 1 10em;">
+                                                <div style="flex: 1 1 7em; min-width: 4.5em;">
                                                     <input is="emby-input" type="text" id="AdvertName" placeholder="Name (optional)" style="margin: 0;" />
                                                 </div>
-                                                <div style="flex: 0 1 8em;">
+                                                <div style="flex: 0 1 5.5em; min-width: 4em;">
                                                     <!-- A value of 0 hid the placeholder, so this read as an
                                                          unexplained number box. Empty, labelled, and still 0 when
                                                          nothing is typed. -->
-                                                    <input is="emby-input" type="number" id="AdvertDecade" min="0" step="10" placeholder="Decade, e.g. 1990" title="The decade this advert is from, so a channel can be given adverts of its own era. Leave empty for any." style="margin: 0;" />
+                                                    <input is="emby-input" type="number" id="AdvertDecade" min="0" step="10" placeholder="Decade" title="The decade this advert is from, so a channel can be given adverts of its own era. Leave it empty for any." style="margin: 0;" />
                                                 </div>
-                                                <button type="button" id="AddAdvert" class="ltvGhost">Add</button>
+                                                <button type="button" id="AddAdvert" class="ltvGhost" style="flex: 0 0 auto;">Add</button>
                                             </div>
                                             <div id="AdvertLength" style="font-size: 0.78em; opacity: 0.6; margin-bottom: 0.6em;"></div>
 
@@ -776,7 +925,7 @@
                                             <div id="BreakWorkedExampleBody"></div>
                                         </div>
 
-                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
                                             <div class="ltvCardTitle">Advertise these titles</div>
                                             <div class="ltvCardNote">Only used by the two modes that mention chosen titles.</div>
                                             <div style="margin-bottom: 0.5em;">
@@ -793,7 +942,7 @@
                             <div class="litetvPane" data-pane="look">
                                 <div class="ltvCols">
                                     <div class="ltvCol" style="flex: 1 1 24em; max-width: 34em;">
-                                        <div class="ltvCard ltvScroll" style="flex-grow: 1;">
+                                        <div class="ltvCard" style="flex: 0 0 auto;">
                                             <div class="ltvCardTitle">The channel's three pictures</div>
                                             <div class="ltvCardNote">
                                                 The wide one is the row card, the backdrop stands behind the channel,
@@ -821,7 +970,7 @@
                                             </div>
                                         </div>
 
-                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
                                             <div class="ltvCardTitle">Pictures your library already has</div>
                                             <div class="ltvCardNote">
                                                 From the channel's own titles, from anything else in the library, or
@@ -846,18 +995,29 @@
 
                                             <div id="ArtworkGallery" class="ltvScroll"></div>
 
-                                            <div id="CropPanel" style="display: none; margin-top: 0.6em; padding: 0.7em; border: 1px solid var(--ltv-line); border-radius: 6px;">
-                                                <div class="ltvCardTitle" id="CropTitle">Crop</div>
-                                                <div class="ltvCardNote">
-                                                    Drag to move, zoom to fill. Zoom out past the edges and what is left
-                                                    is filled with a blurred copy rather than black.
-                                                </div>
-                                                <canvas id="CropCanvas" width="640" height="360" style="max-width: 100%; border: 1px solid var(--ltv-line); border-radius: 4px; cursor: move;"></canvas>
-                                                <div class="ltvRow" style="margin-top: 0.5em;">
-                                                    <input type="range" id="CropZoom" min="30" max="400" value="100" style="flex-grow: 1;" />
-                                                    <button type="button" id="CropFit" class="ltvGhost">Fit</button>
-                                                    <button type="button" id="CropSave" class="ltvGhost">Use this</button>
-                                                    <button type="button" id="CropCancel" class="ltvGhost">Cancel</button>
+                                            <!--
+                                                Cropping is a job you are in the middle of, not a
+                                                panel at the bottom of a list. It used to be
+                                                appended inside the gallery card, so opening it
+                                                pushed the whole column down - past the gallery,
+                                                which scrolls - and there was no way back up to
+                                                the picture being cropped. It is a dialog now.
+                                            -->
+                                            <div id="CropPanel" class="ltvModal" style="display: none;">
+                                                <div class="ltvModalCard">
+                                                    <div class="ltvCardTitle" id="CropTitle">Crop</div>
+                                                    <div class="ltvCardNote">
+                                                        Drag to move, zoom to fill. Zoom out past the edges and what is
+                                                        left is filled with a blurred copy rather than black.
+                                                    </div>
+                                                    <canvas id="CropCanvas" width="640" height="360" style="max-width: 100%; border: 1px solid var(--ltv-line); border-radius: 4px; cursor: move;"></canvas>
+                                                    <div class="ltvRow" style="margin-top: 0.6em;">
+                                                        <input type="range" id="CropZoom" min="30" max="400" value="100" style="flex-grow: 1;" />
+                                                        <button type="button" id="CropFit" class="ltvGhost">Fit</button>
+                                                        <div class="ltvGrow"></div>
+                                                        <button type="button" id="CropCancel" class="ltvGhost">Cancel</button>
+                                                        <button type="button" id="CropSave" class="ltvGhost ltvPrimary">Use this</button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -946,7 +1106,7 @@
                                     </div>
 
                                     <div class="ltvCol">
-                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
                                             <div class="ltvCardTitle">What this adds up to</div>
                                             <div class="ltvCardNote">A typical evening with the settings as they stand.</div>
                                             <div id="SettingsPreview" class="ltvScroll" style="font-size: 0.85em;"></div>
@@ -1057,7 +1217,7 @@
                                             </div>
                                         </div>
 
-                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
                                             <div class="ltvCardTitle">Suggested channels</div>
                                             <div class="ltvCardNote">
                                                 Built from what your library actually holds. Adding one makes a channel
@@ -1079,7 +1239,7 @@
                                             <input is="emby-input" type="text" id="UpdateUrl" readonly style="margin: 0;" />
                                         </div>
 
-                                        <div class="ltvCard" style="flex-grow: 1; min-height: 0;">
+                                        <div class="ltvCard" style="flex: 1 1 0; min-height: 0;">
                                             <div class="ltvCardTitle">Builds this server hands the television</div>
                                             <div class="ltvCardNote">
                                                 The newest release build of each processor is the one offered; the rest
@@ -1290,7 +1450,16 @@
             function renderSources() {
                 renderSourceList(q('#SourceList'), currentChannel());
                 renderTrailerTitles();
-                renderDealPreview();
+
+                // An illustration must never be able to break the page it illustrates. This one
+                // asks the server for episode names, and a failure there once took out the
+                // click that was switching channel at the time.
+                try {
+                    renderDealPreview();
+                } catch (err) {
+                    var host = q('#DealPreview');
+                    if (host) { showListEmpty(host, 'The queue could not be worked out.'); }
+                }
             }
 
             /**
@@ -1303,6 +1472,57 @@
              * it deals are sources: episodes inside a series run in their own order, so a series
              * appearing twice in a row is two of that series.
              */
+            /**
+             * What each source actually deals out, in the order it would be played.
+             *
+             * A series deals its episodes and a collection its films: naming the series over and
+             * over said nothing at all, which is the complaint this answers. Fetched once per
+             * source and cached, because the queue is redrawn on every keystroke in the boxes
+             * beside it.
+             */
+            var dealMembers = {};
+
+            function membersOf(source) {
+                if (!source.ItemId) { return Promise.resolve([]); }
+                if (dealMembers[source.ItemId]) { return Promise.resolve(dealMembers[source.ItemId]); }
+
+                if (source.Type === 'Movie') {
+                    dealMembers[source.ItemId] = [{ Name: source.Name, Detail: '' }];
+                    return Promise.resolve(dealMembers[source.ItemId]);
+                }
+
+                var query = source.Type === 'Series'
+                    ? {
+                        ParentId: source.ItemId, IncludeItemTypes: 'Episode', Recursive: true,
+                        SortBy: 'ParentIndexNumber,IndexNumber', SortOrder: 'Ascending',
+                        Limit: 60, Fields: 'ParentIndexNumber'
+                    }
+                    : { ParentId: source.ItemId, Recursive: false, Limit: 60, Fields: 'ProductionYear' };
+
+                return ApiClient.getItems(ApiClient.getCurrentUserId(), query)
+                    .then(function (result) {
+                        var items = (result.Items || []).map(function (item) {
+                            var season = item.ParentIndexNumber;
+                            var number = item.IndexNumber;
+                            var code = (season || number)
+                                ? 'S' + ('0' + (season || 0)).slice(-2) + 'E' + ('0' + (number || 0)).slice(-2)
+                                : '';
+                            return {
+                                Name: item.Name || '(untitled)',
+                                Detail: code || (item.ProductionYear ? String(item.ProductionYear) : '')
+                            };
+                        });
+                        dealMembers[source.ItemId] = items;
+                        return items;
+                    })
+                    .catch(function () {
+                        dealMembers[source.ItemId] = [];
+                        return [];
+                    });
+            }
+
+            var dealToken = 0;
+
             function renderDealPreview() {
                 var host = q('#DealPreview');
                 if (!host) { return; }
@@ -1319,42 +1539,86 @@
                     return;
                 }
 
+                var waiting = document.createElement('div');
+                waiting.className = 'listItem ltvDim';
+                waiting.textContent = 'Working out what plays first...';
+                host.appendChild(waiting);
+
+                // Every redraw takes a number; a slower answer for an older one is thrown away
+                // rather than drawn over a newer one.
+                dealToken += 1;
+                var mine = dealToken;
+
+                Promise.all(sources.map(membersOf)).then(function (lists) {
+                    if (mine !== dealToken) { return; }
+                    drawDealPreview(host, sources, lists);
+                });
+            }
+
+            function drawDealPreview(host, sources, lists) {
                 var shuffled = q('#PlayOrder').value === 'Shuffled';
                 var atATime = Math.max(0, parseInt(q('#EpisodesPerBlock').value, 10) || 0);
 
-                // Zero means "play each source through in full", which as a queue of sources is
-                // one of each in turn - there is no honest way to draw "all of them" as a list.
-                var run = atATime || 1;
-                var order = sources.slice();
+                // Zero means "play each source through in full". A queue drawn twelve deep
+                // cannot show all of a forty-episode series, so it deals what it can show and
+                // says what the setting was underneath.
+                var run = atATime || 0;
+                var order = sources.map(function (source, i) {
+                    return { source: source, members: lists[i] || [], next: 0 };
+                });
 
                 if (shuffled) {
-                    // Seeded off the source names so the illustration does not reshuffle itself
-                    // every time the pane is redrawn, which would read as the setting flapping.
-                    var seed = order.map(function (x) { return (x.Name || '').length; })
-                        .reduce(function (a, b) { return a + b; }, order.length);
+                    // Seeded off the names, so the illustration does not reshuffle itself on
+                    // every keystroke - which would read as the setting flapping about.
+                    var seed = order.reduce(function (a, x) {
+                        return a + (x.source.Name || '').length;
+                    }, order.length);
                     order.sort(function (a, b) {
-                        return ((a.Name || '').charCodeAt(0) * seed % 97)
-                            - ((b.Name || '').charCodeAt(0) * seed % 97);
+                        return ((a.source.Name || '').charCodeAt(0) * seed % 97)
+                            - ((b.source.Name || '').charCodeAt(0) * seed % 97);
                     });
                 }
 
+                var LIMIT = 12;
                 var dealt = [];
-                for (var round = 0; dealt.length < 10 && round < 40; round++) {
-                    var source = order[round % order.length];
-                    for (var n = 0; n < run && dealt.length < 10; n++) {
-                        dealt.push(source);
+                var barren = 0;
+
+                for (var round = 0; dealt.length < LIMIT && barren < order.length; round++) {
+                    var deck = order[round % order.length];
+                    var take = run || deck.members.length || 1;
+                    var took = 0;
+
+                    for (var n = 0; n < take && dealt.length < LIMIT; n++) {
+                        var member = deck.members[deck.next];
+                        if (!member) { break; }
+                        deck.next += 1;
+                        took += 1;
+                        dealt.push({ source: deck.source, member: member });
                     }
+
+                    barren = took ? 0 : barren + 1;
                 }
 
-                dealt.forEach(function (source, index) {
+                host.innerHTML = '';
+
+                if (!dealt.length) {
+                    var none = document.createElement('div');
+                    none.className = 'listItem ltvDim';
+                    none.textContent = 'Nothing playable was found in these sources.';
+                    host.appendChild(none);
+                    return;
+                }
+
+                dealt.forEach(function (entry, index) {
                     var row = document.createElement('div');
                     row.className = 'listItem';
                     row.style.display = 'flex';
                     row.style.gap = '0.7em';
                     row.style.alignItems = 'baseline';
+                    row.style.minWidth = '0';
 
                     var number = document.createElement('div');
-                    number.className = 'fieldDescription';
+                    number.className = 'ltvDim';
                     number.style.margin = '0';
                     number.style.flex = '0 0 1.4em';
                     number.textContent = String(index + 1);
@@ -1365,25 +1629,32 @@
                     name.style.overflow = 'hidden';
                     name.style.textOverflow = 'ellipsis';
                     name.style.whiteSpace = 'nowrap';
-                    name.textContent = source.Name || source.ItemId;
+                    name.textContent = entry.member.Name;
 
-                    var kind = document.createElement('div');
-                    kind.className = 'fieldDescription';
-                    kind.style.margin = '0';
-                    kind.style.whiteSpace = 'nowrap';
-                    kind.textContent = source.Type;
+                    // Which source it came out of, so an interleave can be watched happening.
+                    var from = document.createElement('div');
+                    from.className = 'ltvDim';
+                    from.style.margin = '0';
+                    from.style.whiteSpace = 'nowrap';
+                    from.style.maxWidth = '10em';
+                    from.style.overflow = 'hidden';
+                    from.style.textOverflow = 'ellipsis';
+                    from.textContent = entry.member.Detail
+                        ? entry.member.Detail + '  ' + String.fromCharCode(183) + '  ' + (entry.source.Name || '')
+                        : (entry.source.Name || '');
 
                     row.appendChild(number);
                     row.appendChild(name);
-                    row.appendChild(kind);
+                    row.appendChild(from);
                     host.appendChild(row);
                 });
 
                 var note = document.createElement('div');
-                note.className = 'listItem fieldDescription';
+                note.className = 'listItem ltvDim';
                 note.textContent = (shuffled ? 'Shuffled' : 'In order')
                     + (atATime ? ', ' + atATime + ' at a time' : ', each source played through in full')
-                    + '  ·  ' + sources.length + ' source' + (sources.length === 1 ? '' : 's');
+                    + '  ' + String.fromCharCode(183) + '  '
+                    + sources.length + ' source' + (sources.length === 1 ? '' : 's');
                 host.appendChild(note);
             }
 
@@ -1404,10 +1675,13 @@
             // backdrop looks broken in exactly the way a channel with neither does not.
             // -------------------------------------------------------------------------
 
+            // The name is what the slot is called; the note is what it is for. They were one
+            // string, and the parenthetical half of it wrapped a row's title onto three lines
+            // and squeezed everything beside it.
             var ARTWORK = [
-                { key: 'BannerUrl', label: 'Card picture (wide, seen in the channel list)', ratio: '16 / 6' },
-                { key: 'BackdropUrl', label: 'Background (fills the screen behind the channel)', ratio: '16 / 9' },
-                { key: 'PosterUrl', label: 'Cover (upright, shown beside the channel name)', ratio: '2 / 3' }
+                { key: 'BannerUrl', label: 'Card picture', note: 'wide — the row card in the channel list', ratio: '16 / 6' },
+                { key: 'BackdropUrl', label: 'Background', note: 'fills the screen behind the channel', ratio: '16 / 9' },
+                { key: 'PosterUrl', label: 'Cover', note: 'upright, beside the channel name', ratio: '2 / 3' }
             ];
 
             var artworkTarget = 'BannerUrl';
@@ -1604,6 +1878,16 @@
                 host.appendChild(strip);
             }
 
+            /**
+             * The channel's three pictures, as the design draws them: one compact row each - the
+             * picture in its own shape, what the slot is, where the picture came from, and the
+             * things you can do to it.
+             *
+             * It used to be three of everything stacked down a column: a large preview, a full
+             * address in a text box, and four wide buttons, which came to more than a screenful
+             * and had to be scrolled. The address is still editable, behind "Address" - it is
+             * for pasting one in, and reading a 60-character /Items/... path was never the point.
+             */
             function renderArtwork() {
                 var host = q('#ArtworkRows');
                 host.innerHTML = '';
@@ -1613,90 +1897,66 @@
                 var art = artworkOf(channel);
 
                 ARTWORK.forEach(function (kind) {
+                    var chosen = art[kind.key];
+                    var found = chosen ? '' : fallbackSrc(channel, kind.key);
+                    var src = chosen ? artworkSrc(chosen) : found;
+
                     var row = document.createElement('div');
-                    row.style.display = 'flex';
-                    row.style.alignItems = 'flex-start';
-                    row.style.gap = '0.8em';
-                    row.style.marginBottom = '0.8em';
-                    // The controls beside a picture wrap under it in a narrow column rather
-                    // than pushing the pane sideways: this screen has to fit its window.
-                    row.style.flexWrap = 'wrap';
+                    row.className = 'ltvArtRow';
+                    if (artworkTarget === kind.key) { row.classList.add('selected'); }
 
-                    var preview = document.createElement('div');
-                    // Each slot is drawn in its own shape, and the whole picture is shown
-                    // rather than a crop of it. A cover squeezed into a 16:9 box looks like a
-                    // still of one scene, which is precisely the mistake this preview is meant
-                    // to let somebody catch.
-                    preview.style.width = kind.key === 'PosterUrl' ? '6.4em' : '11em';
-                    preview.style.aspectRatio = kind.ratio;
-                    preview.style.borderRadius = '4px';
-                    preview.style.background = 'rgba(255,255,255,0.08)';
-                    preview.style.backgroundSize = 'contain';
-                    preview.style.backgroundRepeat = 'no-repeat';
-                    preview.style.backgroundPosition = 'center';
-                    preview.style.cursor = 'pointer';
-                    preview.title = 'Pick this one to receive the next picture you choose';
-
-                    var note = document.createElement('div');
-                    note.style.fontSize = '0.75em';
-                    note.style.textAlign = 'center';
-                    note.style.marginTop = '0.2em';
-                    note.style.opacity = '0.75';
-
-                    if (art[kind.key]) {
-                        preview.style.backgroundImage = 'url("' + artworkSrc(art[kind.key]) + '")';
-                        preview.style.opacity = '1';
-                        note.textContent = 'set';
-                    } else {
-                        // Faded, because this is what the plugin found rather than what anyone
-                        // chose, and picking a new picture replaces it without warning.
-                        var found = fallbackSrc(channel, kind.key);
-                        preview.style.backgroundImage = found ? 'url("' + found + '")' : '';
-                        preview.style.opacity = found ? '0.55' : '1';
-                        note.textContent = found ? 'automatic' : 'nothing';
-                    }
-                    preview.addEventListener('click', function () {
+                    // Choosing the row is how the gallery knows which slot to fill.
+                    row.addEventListener('click', function (ev) {
+                        if (ev.target.closest('button, input')) { return; }
                         artworkTarget = kind.key;
                         renderArtwork();
                     });
-                    if (artworkTarget === kind.key) {
-                        preview.style.outline = '2px solid #00a4dc';
-                    }
-                    var previewCell = document.createElement('div');
-                    previewCell.style.flex = '0 0 11em';
-                    previewCell.appendChild(preview);
-                    previewCell.appendChild(note);
-                    row.appendChild(previewCell);
 
-                    var right = document.createElement('div');
-                    right.style.flexGrow = '1';
+                    var thumb = document.createElement('div');
+                    thumb.className = 'ltvArtThumb';
+                    // The whole picture, not a crop of it: a cover squeezed into a 16:9 box looks
+                    // like a still from one scene, which is the mistake this is here to catch.
+                    thumb.style.backgroundImage = src ? 'url("' + src + '")' : '';
+                    thumb.style.opacity = chosen ? '1' : '0.6';
+                    row.appendChild(thumb);
 
-                    var field = document.createElement('div');
-                    field.className = 'inputContainer';
-                    // A plain input with the dashboard's class rather than <input is="emby-input">:
-                    // a custom built-in element only upgrades when the parser sees the attribute,
-                    // and one created here never would, leaving a control with no label at all.
-                    var caption = document.createElement('label');
-                    caption.className = 'inputLabel';
-                    caption.textContent = kind.label;
-                    field.appendChild(caption);
-                    var input = document.createElement('input');
-                    input.className = 'emby-input';
-                    input.type = 'text';
-                    input.value = art[kind.key] || '';
-                    input.addEventListener('input', function () {
+                    var middle = document.createElement('div');
+                    middle.className = 'ltvArtText';
+
+                    var name = document.createElement('div');
+                    name.className = 'ltvArtName';
+                    name.textContent = kind.label;
+                    middle.appendChild(name);
+
+                    var what = document.createElement('div');
+                    what.className = 'ltvDim';
+                    what.textContent = kind.note;
+                    middle.appendChild(what);
+
+                    var where = document.createElement('div');
+                    where.className = 'ltvDim ltvArtWhere';
+                    where.textContent = chosen
+                        ? 'set for this channel'
+                        : (found ? 'borrowed from what is on air' : 'empty');
+                    middle.appendChild(where);
+
+                    var address = document.createElement('input');
+                    address.className = 'emby-input ltvArtAddress';
+                    address.type = 'text';
+                    address.placeholder = 'Address of a picture…';
+                    address.value = chosen || '';
+                    address.addEventListener('input', function () {
                         art[kind.key] = this.value.trim();
-                        preview.style.backgroundImage = art[kind.key]
+                        thumb.style.backgroundImage = art[kind.key]
                             ? 'url("' + artworkSrc(art[kind.key]) + '")'
                             : '';
                     });
-                    input.addEventListener('focus', function () { artworkTarget = kind.key; });
-                    field.appendChild(input);
-                    right.appendChild(field);
+                    address.addEventListener('focus', function () { artworkTarget = kind.key; });
+
+                    row.appendChild(middle);
 
                     var buttons = document.createElement('div');
-                    buttons.style.display = 'flex';
-                    buttons.style.gap = '0.5em';
+                    buttons.className = 'ltvArtActions';
 
                     var upload = document.createElement('input');
                     upload.type = 'file';
@@ -1704,69 +1964,59 @@
                     upload.style.display = 'none';
                     upload.addEventListener('change', function () {
                         if (this.files && this.files[0]) {
-                            uploadArtwork(channel, kind, this.files[0], input, preview);
+                            uploadArtwork(channel, kind, this.files[0], address, thumb);
                         }
                         this.value = '';
                     });
 
-                    var pick = document.createElement('button');
-                    pick.setAttribute('is', 'emby-button');
-                    pick.type = 'button';
-                    pick.className = 'raised emby-button';
-                    pick.textContent = 'Upload a file…';
-                    pick.addEventListener('click', function () { upload.click(); });
+                    function action(label, title, onClick) {
+                        var button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'ltvGhost ltvArtAction';
+                        button.textContent = label;
+                        button.title = title;
+                        button.addEventListener('click', onClick);
+                        buttons.appendChild(button);
+                        return button;
+                    }
 
-                    var crop = document.createElement('button');
-                    crop.setAttribute('is', 'emby-button');
-                    crop.type = 'button';
-                    crop.className = 'raised emby-button';
-                    crop.textContent = 'Crop…';
-                    crop.title = 'Choose what part of this picture the slot shows — works on the '
-                        + 'automatic picture as well as one you chose';
-                    crop.addEventListener('click', function () {
-                        // The automatic picture can be cropped too. It is the one most in need
-                        // of it - nobody chose it for this shape, the plugin found it in the
-                        // channel's lineup - and refusing to crop it meant uploading a copy of
-                        // a picture the server already had just to move the frame on it.
-                        // Cropping one turns it into a chosen picture, which is what saving a
-                        // crop means anyway.
+                    action('Upload', 'Use a picture from this computer', function () { upload.click(); });
+
+                    action('Crop', 'Choose what part of this picture the slot shows - works on a '
+                        + 'borrowed picture as well as one you chose', function () {
+                        // The borrowed picture is the one most in need of cropping: nobody chose
+                        // it for this shape, the plugin found it in the channel's lineup. Saving
+                        // a crop of one turns it into a chosen picture, which is what it means.
                         var current = art[kind.key];
-                        var src = current ? artworkSrc(current) : fallbackSrc(channel, kind.key, 1920);
-                        if (!src) {
+                        var from = current ? artworkSrc(current) : fallbackSrc(channel, kind.key, 1920);
+                        if (!from) {
                             Dashboard.alert('There is no picture in this slot yet, and none was '
-                                + 'found in the channel’s content. Choose one first, then crop it.');
+                                + 'found in the channel\u2019s content. Choose one first, then crop it.');
                             return;
                         }
-                        beginCrop(src, kind);
+                        beginCrop(from, kind);
                     });
 
-                    var keep = document.createElement('button');
-                    keep.setAttribute('is', 'emby-button');
-                    keep.type = 'button';
-                    keep.className = 'raised emby-button';
-                    keep.textContent = 'Keep a copy';
-                    keep.title = 'Download this picture and serve it from here, so it cannot go away';
-                    keep.addEventListener('click', function () {
+                    action('Keep a copy', 'Download this picture and serve it from here, so it '
+                        + 'cannot go away', function () {
                         fetchArtwork(channel, kind, art[kind.key]);
                     });
 
-                    var clear = document.createElement('button');
-                    clear.setAttribute('is', 'emby-button');
-                    clear.type = 'button';
-                    clear.className = 'raised emby-button';
-                    clear.textContent = 'Clear';
-                    clear.addEventListener('click', function () {
+                    var clear = action('Clear', 'Leave this slot to whatever is on air', function () {
                         art[kind.key] = '';
                         renderArtwork();
                     });
+                    clear.disabled = !chosen;
+                    clear.style.opacity = chosen ? '' : '0.4';
 
-                    buttons.appendChild(pick);
-                    buttons.appendChild(crop);
-                    buttons.appendChild(keep);
-                    buttons.appendChild(clear);
                     buttons.appendChild(upload);
-                    right.appendChild(buttons);
-                    row.appendChild(right);
+                    row.appendChild(buttons);
+
+                    // Across the whole row on a line of its own. It is for pasting an address
+                    // into, and a sliver of the middle column was too narrow to paste into and
+                    // far too narrow to read.
+                    row.appendChild(address);
+
                     host.appendChild(row);
                 });
             }
@@ -1860,9 +2110,11 @@
                     q('#CropZoom').min = Math.max(5, Math.floor((contain / cover) * 100 * 0.85));
                     q('#CropZoom').value = 100;
                     q('#CropTitle').textContent = 'Crop for: ' + kind.label;
-                    q('#CropPanel').style.display = 'block';
+                    // A dialog centres itself; scrolling the column to find it is what the old
+                    // inline panel needed, and scrolling the page is exactly what this design
+                    // does not do.
+                    q('#CropPanel').style.display = 'flex';
                     drawCrop();
-                    q('#CropPanel').scrollIntoView({ block: 'nearest' });
                 };
                 image.onerror = function () {
                     Dashboard.alert('That picture could not be loaded for cropping. '
@@ -2556,6 +2808,21 @@
                 return channel.Adverts;
             }
 
+            /**
+             * Puts an empty list into its empty state: a quiet dashed box saying what would be
+             * here, sized to the sentence. Called with the list itself, so the same list can
+             * come back out of it when something is added.
+             */
+            function showListEmpty(host, text) {
+                host.classList.add('ltvListEmpty');
+                host.innerHTML = '';
+                host.textContent = text;
+            }
+
+            function clearListEmpty(host) {
+                host.classList.remove('ltvListEmpty');
+            }
+
             function renderAdverts() {
                 var host = q('#AdvertList');
                 if (!host) { return; }
@@ -2563,9 +2830,12 @@
                 host.innerHTML = '';
 
                 if (!list.length) {
-                    host.innerHTML = '<div class="fieldDescription">No adverts. Breaks are trailers only.</div>';
+                    showListEmpty(host, 'No adverts yet. Breaks will be trailers only.');
+                    renderBreakWorkedExample(list);
                     return;
                 }
+
+                clearListEmpty(host);
 
                 list.forEach(function (advert, index) {
                     var row = document.createElement('div');
@@ -2757,7 +3027,13 @@
                 pxPerHour: 46,
                 // 'week' is all seven at a glance; 'day' is one of them, where a break is
                 // big enough to grab. Same grid and the same drag either way.
-                view: 'week',
+                view: 'day',
+
+                // A zoom each, because they are two different jobs: a week is read at a glance
+                // and a day is read in detail, and one slider position cannot be right for
+                // both. Switching views used to overwrite whichever you had set. Remembered
+                // across visits, per view.
+                zoomFor: { week: 46, day: 170 },
                 day: 0,
                 drag: null,
                 shelfTimer: null,
@@ -3797,12 +4073,11 @@
                 key = key || 'Sources';
                 list.innerHTML = '';
                 if (!owner || !owner[key] || !owner[key].length) {
-                    var empty = document.createElement('div');
-                    empty.className = 'listItem';
-                    empty.textContent = emptyText || 'No content yet. Search below to add movies, series or collections.';
-                    list.appendChild(empty);
+                    showListEmpty(list, emptyText
+                        || 'No content yet. Search above to add films, series or collections.');
                     return;
                 }
+                clearListEmpty(list);
                 owner[key].forEach(function (source, i) {
                     var row = document.createElement('div');
                     row.className = 'listItem';
@@ -4287,8 +4562,9 @@
                 ApiClient.fetch({ url: ApiClient.getUrl('LiteTv/Suggestions'), type: 'GET', dataType: 'json' })
                     .then(function (suggestions) {
                         list.innerHTML = '';
+                        clearListEmpty(list);
                         if (!suggestions.length) {
-                            list.innerHTML = '<div class="listItem">No suggestions right now — all ideas already exist as channels.</div>';
+                            showListEmpty(list, 'No suggestions right now — every idea already exists as a channel.');
                             return;
                         }
                         suggestions.forEach(function (s) {
@@ -4442,6 +4718,14 @@
                     q('#SkipTrailerSegments').checked = config.SkipTrailerSegments !== false;
                     q('#YouTubeClient').value = config.YouTubeClient || '';
                     currentIndex = config.Channels.length ? 0 : -1;
+
+                    // Which view, and how far zoomed in, are remembered per person. Restore them
+                    // before anything is drawn, so the grid is built once at the right zoom
+                    // rather than built at a default and then rebuilt.
+                    loadWeekZooms();
+                    syncWeekViewToggle();
+                    applyWeekZoom();
+
                     renderChannelSelect();
                     loadEffectiveArt().then(function () { renderEditor(); loadWeek(); fitApp(); });
 
@@ -4663,11 +4947,93 @@
 
             // A setting says one line and keeps the rest behind (?), because the explanation
             // is worth having and worth not reading forty times.
-            Array.prototype.forEach.call(document.querySelectorAll('.ltvWhy'), function (why) {
-                why.addEventListener('click', function () {
-                    var help = document.getElementById(why.dataset.help);
-                    if (help) { help.classList.toggle('open'); }
+            /**
+             * The (?) explanations. Only one is ever open, it is placed under the button that
+             * opened it, and it floats over the page rather than pushing the page around: an
+             * explanation should cost nothing to open.
+             */
+            function closeHelp() {
+                Array.prototype.forEach.call(document.querySelectorAll('.ltvHelp.open'), function (open) {
+                    open.classList.remove('open');
+                    open.style.left = '';
+                    open.style.top = '';
                 });
+            }
+
+            function openHelp(why, help) {
+                closeHelp();
+                help.classList.add('open');
+
+                // Positioned against .ltv, which is the page's own box - the card it lives in
+                // clips its overflow, so anchoring inside one would cut the explanation off.
+                var page = document.querySelector('.ltv');
+                var frame = page.getBoundingClientRect();
+                var button = why.getBoundingClientRect();
+                var box = help.getBoundingClientRect();
+
+                var left = button.left - frame.left;
+                var top = button.bottom - frame.top + 6;
+
+                // Keep it on the page in both directions.
+                left = Math.max(8, Math.min(left, frame.width - box.width - 8));
+                if (top + box.height > frame.height - 8) {
+                    top = Math.max(8, (button.top - frame.top) - box.height - 6);
+                }
+
+                help.style.left = left + 'px';
+                help.style.top = top + 'px';
+            }
+
+            /**
+             * A results list belongs to the box that is being typed in. It used to stay on the
+             * screen after the search was over, so half of every form was yesterday's results
+             * sitting under a search box nobody was using. Leaving the box clears them - after a
+             * beat, so that clicking a result still counts as a click.
+             */
+            (function bindSearchResults() {
+                [
+                    ['#ItemSearch', '#SearchResults'],
+                    ['#WeekShelfSearch', '#WeekShelfResults'],
+                    ['#TrailerSearch', '#TrailerSearchResults'],
+                    ['#BlockItemSearch', '#BlockSearchResults'],
+                    ['#ArtworkItemSearch', '#ArtworkItemResults'],
+                    ['#ArtworkLibrarySearch', '#ArtworkLibraryResults']
+                ].forEach(function (pair) {
+                    var box = q(pair[0]);
+                    var results = q(pair[1]);
+                    if (!box || !results) { return; }
+
+                    box.addEventListener('blur', function () {
+                        setTimeout(function () {
+                            if (document.activeElement === box) { return; }
+                            if (results.contains(document.activeElement)) { return; }
+                            results.innerHTML = '';
+                        }, 180);
+                    });
+
+                    // Emptying the box empties the list with it, rather than leaving the last
+                    // search standing under an empty search box.
+                    box.addEventListener('input', function () {
+                        if (!box.value.trim()) { results.innerHTML = ''; }
+                    });
+                });
+            })();
+
+            Array.prototype.forEach.call(document.querySelectorAll('.ltvWhy'), function (why) {
+                why.addEventListener('click', function (ev) {
+                    ev.stopPropagation();
+                    var help = document.getElementById(why.dataset.help);
+                    if (!help) { return; }
+                    if (help.classList.contains('open')) { closeHelp(); } else { openHelp(why, help); }
+                });
+            });
+
+            document.addEventListener('click', function (ev) {
+                if (!ev.target.closest || !ev.target.closest('.ltvHelp')) { closeHelp(); }
+            });
+
+            document.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Escape') { closeHelp(); }
             });
 
             q('#EmptyNewChannel').addEventListener('click', function () { q('#AddChannel').click(); });
@@ -4887,12 +5253,62 @@
             q('#WeekGenerate').addEventListener('click', weekGenerate);
             q('#WeekDiscard').addEventListener('click', weekDiscard);
 
+            /**
+             * The two zooms, kept between visits. localStorage rather than the configuration:
+             * how far somebody has zoomed in is a property of the person looking, not of the
+             * server, and it must never be something that has to be saved to survive.
+             */
+            var WEEK_ZOOM_KEY = 'litetv.week.zoom';
+
+            function loadWeekZooms() {
+                try {
+                    var stored = JSON.parse(localStorage.getItem(WEEK_ZOOM_KEY) || 'null');
+                    if (!stored) { return; }
+                    ['week', 'day'].forEach(function (view) {
+                        var value = parseInt(stored[view], 10);
+                        if (value >= 20 && value <= 420) { week.zoomFor[view] = value; }
+                    });
+                    if (stored.view === 'week' || stored.view === 'day') { week.view = stored.view; }
+                } catch (err) {
+                    // A browser that will not store is not a reason to fail to draw a schedule.
+                }
+            }
+
+            function saveWeekZooms() {
+                try {
+                    localStorage.setItem(WEEK_ZOOM_KEY, JSON.stringify({
+                        week: week.zoomFor.week,
+                        day: week.zoomFor.day,
+                        view: week.view
+                    }));
+                } catch (err) {
+                    // Same.
+                }
+            }
+
+            /** Lights the view button that matches the remembered view. */
+            function syncWeekViewToggle() {
+                Array.prototype.forEach.call(q('#WeekViewToggle').children, function (button) {
+                    button.classList.toggle('selected', button.dataset.view === week.view);
+                });
+                renderWeekDayPicker();
+            }
+
+            /** Puts the slider and the grid on the zoom this view is remembered at. */
+            function applyWeekZoom() {
+                week.pxPerHour = week.zoomFor[week.view] || (week.view === 'day' ? 170 : 46);
+                q('#WeekZoom').value = String(week.pxPerHour);
+                renderWeekZoomRead();
+            }
+
             q('#WeekZoom').addEventListener('input', function () {
                 // Zoom about the top of the frame. Rebuilding the grid used to put the scroll
                 // back to 17:00, so every nudge of the slider threw away whatever you had
                 // scrolled to - which is why zooming in never appeared to show you anything.
                 week.scrollToHour = weekAnchorHour();
                 week.pxPerHour = Math.max(20, parseInt(this.value, 10) || 46);
+                week.zoomFor[week.view] = week.pxPerHour;
+                saveWeekZooms();
                 renderWeek();
                 renderWeekZoomRead();
             });
@@ -4913,20 +5329,15 @@
                         other.classList.toggle('selected', other === button);
                     });
 
-                    // One column has all the width in the world and none of the height, so a
-                    // day opens far enough in that a fifteen-minute episode carries its name.
-                    if (week.view === 'day' && week.pxPerHour < 130) {
-                        week.pxPerHour = 170;
-                        q('#WeekZoom').value = 170;
-                    }
-                    if (week.view === 'week' && week.pxPerHour > 90) {
-                        week.pxPerHour = 46;
-                        q('#WeekZoom').value = 46;
-                    }
+                    // Each view keeps its own zoom, and switching restores it rather than
+                    // rounding it off to a default. A week read at a glance and a day read in
+                    // detail want different things, and the old code overwrote whichever you
+                    // had just set on the way past.
+                    applyWeekZoom();
+                    saveWeekZooms();
 
                     renderWeekDayPicker();
                     renderWeek();
-                    renderWeekZoomRead();
                 });
             });
 
