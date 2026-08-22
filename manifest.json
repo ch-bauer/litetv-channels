@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.63.0",
+        "changelog": "The configuration page now uses the whole width it has and clears the dashboard header. Jellyfin caps a settings form at about 800px and floats a fixed header over the page, so the rebuilt page arrived in a narrow column with its top row hidden; it now lifts that cap for itself, measures the header rather than assuming a height, and corrects its own height against the document so no scrollbar is left. The channel rail can also finally tell which channels have no week of their own - the guide reports it now - and shows the tag it was always meant to.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.63.0/litetv-channels_1.0.63.0.zip",
+        "checksum": "bc72b0b07bd3aefc06372ae601d84165",
+        "timestamp": "2026-08-22T21:30:00Z"
+      },
+      {
         "version": "1.0.62.0",
         "changelog": "Fixes the rebuilt configuration page, which arrived unstyled: Jellyfin keeps only the body of a plugin page, so the stylesheet in the head never reached the browser and the layout fell back to one plain column. The stylesheet now lives in the body, where the other plugins that ship one keep theirs, and the page measures the room it has left rather than guessing at it.",
         "targetAbi": "10.11.0.0",
