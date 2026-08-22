@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
     <title>LiteTV Channels</title>
+</head>
+<body>
+<div id="LiteTvConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
     <style>
         /*
          * LiteTV's configuration page, second design.
@@ -30,7 +33,8 @@
             --ltv-advert: #2f9e8f;
 
             display: flex;
-            /* The dashboard's own header and padding sit above us; the rest is ours. */
+            /* A fallback only: the real height is measured in fitApp(), because how much
+               dashboard sits above this page is not something a stylesheet can know. */
             height: calc(100vh - 7.5em);
             min-height: 34em;
             overflow: hidden;
@@ -350,9 +354,6 @@
             font-size: 0.9em;
         }
     </style>
-</head>
-<body>
-<div id="LiteTvConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
     <div data-role="content">
         <div class="content-primary">
             <form id="LiteTvConfigForm">
@@ -3654,7 +3655,12 @@
                     q('#YouTubeClient').value = config.YouTubeClient || '';
                     currentIndex = config.Channels.length ? 0 : -1;
                     renderChannelSelect();
-                    loadEffectiveArt().then(function () { renderEditor(); loadWeek(); });
+                    loadEffectiveArt().then(function () { renderEditor(); loadWeek(); fitApp(); });
+
+                    // The dashboard is still settling when the page first appears - the header
+                    // and its padding land after this runs - so measure once more a tick later.
+                    setTimeout(fitApp, 60);
+                    setTimeout(fitApp, 400);
                     loadSuggestions();
                     loadBuilds();
                     Dashboard.hideLoadingMsg();
@@ -3797,6 +3803,28 @@
             // Opened outside the dashboard, there is no `pageshow` and never will be. A tick
             // later, so the dashboard gets first refusal on a page it is about to show anyway.
             setTimeout(loadPage, 0);
+
+            /**
+             * Make the page exactly as tall as what is left of the window.
+             *
+             * The stylesheet cannot work this out: how much dashboard sits above depends on the
+             * theme, the header, and whatever padding the interior page has that day, and a
+             * guessed `calc(100vh - 7.5em)` is either a scrollbar or a gap. Measuring where the
+             * page actually starts settles it, and it is re-measured whenever the window changes.
+             */
+            function fitApp() {
+                var app = document.querySelector('.ltv');
+                if (!app) { return; }
+
+                var top = app.getBoundingClientRect().top;
+                var room = window.innerHeight - top - 16;
+                app.style.height = Math.max(420, room) + 'px';
+
+                // The week grid measures itself against that height as it draws.
+                if (currentPane === 'week') { renderWeek(); }
+            }
+
+            window.addEventListener('resize', fitApp);
 
             q('#ChannelFilter').addEventListener('input', renderChannelSelect);
 
