@@ -95,6 +95,7 @@ public class LiteTvController : ControllerBase
             {
                 Id = channel.Id,
                 Name = channel.Name,
+                Curated = _weeks.Has(channel.Id),
                 Kind = now?.Kind.ToString() ?? nameof(AiringKind.OffAir),
                 BlockName = string.IsNullOrEmpty(now?.BlockName) ? null : now!.BlockName,
                 // A break is something the channel is doing, not nothing. Dropping it left the
@@ -1628,6 +1629,13 @@ public class ChannelSummaryDto
 
     /// <summary>Gets or sets the program block on air, when one is.</summary>
     public string? BlockName { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this channel has a week of its own. A channel
+    /// without one airs whatever its content and settings work out to, which is a different
+    /// thing to say about it on a page than what is on right now.
+    /// </summary>
+    public bool Curated { get; set; }
 
     /// <summary>Gets or sets the artwork standing for the channel itself, which a client falls
     /// back to when what is on air has no picture worth drawing - or when nothing is on air at
