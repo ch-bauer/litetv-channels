@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.67.0",
+        "changelog": "The two screens of the design that had never been built: making a channel out of what the library already holds. The + button opens them instead of dropping an empty channel on you. Name a few things you like and the library is scored against all of them - by the Smart Similar plugin where it is installed, by a rougher genre match where it is not, and which one answered is said at the top rather than hidden. What the results have in common is drawn as signals with how much of the pool carries each. Or switch to the other half and tick libraries and genres; ticking two genres asks for titles in both, which is how Sci-Fi plus Horror gets you creature features rather than two piles. Either way it proposes one channel, says what it is made of, lays out a typical evening from the real runtimes, and Create makes it - Tweak makes it and opens it, Not that moves on. Nothing reaches a television until you save.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.67.0/litetv-channels_1.0.67.0.zip",
+        "checksum": "6b1ee4b97a5f2a487554c23fa5205977",
+        "timestamp": "2026-08-23T04:30:00.000Z"
+      },
+      {
         "version": "1.0.66.0",
         "changelog": "Found by comparing the installed page against the design, screen by screen. The schedule now draws a now line across the day it falls on, which the design has and the page did not - without it a stored week is seven identical columns with nothing saying which part of it matters. The day view also opens on today rather than on Monday. Play order is the design's pair of buttons rather than a dropdown: there are two answers and both should be readable without opening anything. The picture gallery gets the room it needs instead of a 323-pixel slot under two cards that were holding height they were not using. And the proof-of-origin line read \"Heldminted 37 min ago\" - two words with no space between them.",
         "targetAbi": "10.11.0.0",
