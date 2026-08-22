@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.61.0",
+        "changelog": "The configuration page is rebuilt: a channel rail down the side with a filter and what each channel is showing, the editor beside it as tabs, and every screen fitting the window - only the channel list scrolls. The week grid fills the height it is given and opens on the evening rather than on eight empty hours after midnight. New: a Day view for editing breaks too small to grab on a week, a strip showing which sibling plugins are installed and usable, and a Settings screen that shows a real evening from the server instead of describing what the numbers do. Every setting says one line and keeps its explanation behind a (?).",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.61.0/litetv-channels_1.0.61.0.zip",
+        "checksum": "b8e6e191dc8675fb4d65aa5cafa23450",
+        "timestamp": "2026-08-22T20:15:00Z"
+      },
+      {
         "version": "1.0.60.0",
         "changelog": "Break lengths are worked out rather than typed: a linked trailer or advert is given the time it actually plays for - its length minus the stretches SponsorBlock skips - and the seconds boxes are gone from the configuration page, replaced by a readout that says what was found and admits when it found nothing. And LiteTV now uses the plugins beside it: /LiteTv/Plugins reports which are installed, and suggestions are scored by the Smart Similar plugin over /LiteTv/Suggestions/Scored, falling back to a rough genre match - and saying so - when it is absent.",
         "targetAbi": "10.11.0.0",
