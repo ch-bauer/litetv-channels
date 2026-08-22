@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.64.0",
+        "changelog": "The schedule can finally be read. Zooming in now enlarges the labels rather than only the bars, holds the place you were looking at instead of jumping back to the evening, goes far enough in that a four-minute advert carries its name, and adds half-hour lines and a readout of the shortest airing still labelled. Bars are drawn exactly as long as they run - the old eleven-pixel minimum made every short programme overlap the next, which is where the overlapping text came from - and the day header now stays put however far in you go. Several screens were missing pieces of their design and have them back: Content carries the play order and the interleave beside the sources they act on, with the dealt queue underneath; Look shows what the channel looks like on the television; Breaks explains why there is no length to type and works an example; Server settings reports whether a proof of origin is held, which is the difference between 1080p trailers and 360p ones. The update address the app needs is no longer clipped out of sight inside its own card, the shelf's address field no longer cuts off its own placeholder, the selected airing is drawn as a card that takes its room from the grid rather than over it, and the advert decade box says what it is instead of showing a bare 0. Enhanced Poster Tags is no longer reported among the neighbouring plugins. Dragging an airing is no longer guesswork: the bar moves with the pointer instead of staying put until the mouse comes up, carries the time it will land on, follows the grid when dragged to the edge of it, and actually snaps - the five-minute snap was being applied to the pointer rather than to the bar, so a bar could come to rest on any second at all and every drag looked unsnapped. Hold Alt for second-by-second, as before.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.64.0/litetv-channels_1.0.64.0.zip",
+        "checksum": "373e587b1e43d66d134555910de52ffa",
+        "timestamp": "2026-08-23T00:15:00.000Z"
+      },
+      {
         "version": "1.0.63.0",
         "changelog": "The configuration page now uses the whole width it has and clears the dashboard header. Jellyfin caps a settings form at about 800px and floats a fixed header over the page, so the rebuilt page arrived in a narrow column with its top row hidden; it now lifts that cap for itself, measures the header rather than assuming a height, and corrects its own height against the document so no scrollbar is left. The channel rail can also finally tell which channels have no week of their own - the guide reports it now - and shows the tag it was always meant to.",
         "targetAbi": "10.11.0.0",
