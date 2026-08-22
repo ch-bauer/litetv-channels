@@ -70,10 +70,17 @@ public class PluginConfiguration : BasePluginConfiguration
     /// back to 360p until somebody next opened the app on a television.
     /// </para>
     /// <para>
+    /// <b>Stored here, and deliberately not shown on the configuration page.</b> Configuration
+    /// is the only persistence a plugin gets without inventing files, so this is where it
+    /// lives - but nobody types it, so there is nothing to show. Rendering it was worse than
+    /// useless: the page posts back the whole configuration as it was when it loaded, so saving
+    /// a page opened before a television minted would wipe the stored token.
+    /// </para>
+    /// <para>
     /// <b>It is a credential of a sort.</b> Not an account - it proves a request came from
     /// something browser-shaped, not from anybody in particular, and it expires in hours - but
-    /// it is worth something to whoever holds it, so it is written masked on the configuration
-    /// page and belongs nowhere public.
+    /// it is worth something to whoever holds it, and it belongs nowhere public. Ask
+    /// <c>GET /LiteTv/PoToken</c> whether one is held; that answers without disclosing it.
     /// </para>
     /// </summary>
     public string ProofOfOriginToken { get; set; } = string.Empty;

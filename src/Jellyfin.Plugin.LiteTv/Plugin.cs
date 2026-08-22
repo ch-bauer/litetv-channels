@@ -44,6 +44,36 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// </summary>
     public static Plugin? Instance { get; private set; }
 
+    /// <summary>
+    /// Keeps the proof-of-origin token when something saves a configuration that has forgotten
+    /// it.
+    /// <para>
+    /// The configuration page posts back the whole configuration as it was when the page
+    /// loaded. Open it before a television has minted, save it afterwards for some unrelated
+    /// reason, and the stored token is gone - not because anybody edited it, but because the
+    /// page never knew about it. The token is not on the page at all for that reason; this is
+    /// the other half, for every other writer of the configuration.
+    /// </para>
+    /// <para>
+    /// Only ever fills a gap. A save that carries a token is taken as it is, which is what lets
+    /// <see cref="Trailers.ProofOfOrigin"/> store a new one and clear an old one.
+    /// </para>
+    /// </summary>
+    /// <param name="configuration">The configuration being saved.</param>
+    public override void UpdateConfiguration(MediaBrowser.Model.Plugins.BasePluginConfiguration configuration)
+    {
+        if (configuration is PluginConfiguration incoming
+            && string.IsNullOrEmpty(incoming.ProofOfOriginToken)
+            && Trailers.ProofOfOrigin.Held is { } held)
+        {
+            incoming.ProofOfOriginToken = held.StreamToken;
+            incoming.ProofOfOriginVisitorData = held.VisitorData;
+            incoming.ProofOfOriginMintedUtc = held.MintedUtc;
+        }
+
+        base.UpdateConfiguration(configuration);
+    }
+
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
     {
