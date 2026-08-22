@@ -30,6 +30,7 @@ public class LiteTvController : ControllerBase
     private static readonly string[] ArtworkKinds = { "banner", "backdrop", "poster" };
 
     private readonly ChannelGuide _guide;
+    private readonly WeekStore _weeks;
     private readonly ILibraryManager _libraryManager;
     private readonly ChannelPlaybackUser _playbackUser;
     private readonly YouTubeStreamResolver _trailers;
@@ -40,6 +41,7 @@ public class LiteTvController : ControllerBase
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
     /// </summary>
     /// <param name="guide">The channel guide.</param>
+    /// <param name="weeks">The stored weeks.</param>
     /// <param name="libraryManager">The library manager.</param>
     /// <param name="playbackUser">The account channel playback runs under.</param>
     /// <param name="trailers">Resolves linked trailers into playable streams.</param>
@@ -47,6 +49,7 @@ public class LiteTvController : ControllerBase
     /// <param name="httpClientFactory">Fetches artwork chosen from somewhere else.</param>
     public LiteTvController(
         ChannelGuide guide,
+        WeekStore weeks,
         ILibraryManager libraryManager,
         ChannelPlaybackUser playbackUser,
         YouTubeStreamResolver trailers,
@@ -54,6 +57,7 @@ public class LiteTvController : ControllerBase
         IHttpClientFactory httpClientFactory)
     {
         _guide = guide;
+        _weeks = weeks;
         _libraryManager = libraryManager;
         _playbackUser = playbackUser;
         _trailers = trailers;
@@ -198,6 +202,219 @@ public class LiteTvController : ControllerBase
             Image = ChannelImage(channel, artwork),
             Upcoming = listed.Take(Math.Clamp(upcoming, 0, 64)).Select(a => ToProgram(a, artwork)).ToList()
         };
+    }
+
+    /// <summary>
+    /// Gets a channel's stored week: every row of it, with the holes between them filled in
+    /// so the timeline and the guide are drawn from the same list.
+    /// <para>
+    /// A channel that has never been laid out has no week, and says so rather than inventing
+    /// one - the configuration page offers to lay one out, which is a thing the owner asks for
+    /// rather than something that happens to them.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <returns>The week.</returns>
+    [HttpGet("Channels/{channelId}/Week")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<WeekDto> GetWeek([FromRoute] Guid channelId)
+    {
+        var channel = ConfiguredChannel(channelId);
+        if (channel is null)
+        {
+            return NotFound();
+        }
+
+        return ToWeekDto(channel, _weeks.Get(channelId));
+    }
+
+    /// <summary>
+    /// Lays a channel's week out afresh from its sources and settings, and stores it.
+    /// <para>
+    /// <b>This discards whatever curation the week held.</b> It is the wholesale route the
+    /// owner takes on purpose; the surgical one is dragging a row. Nothing else in the plugin
+    /// calls it - not adding a source, not changing a setting, not saving the configuration
+    /// page - because a stored week is the channel's schedule and nothing may quietly rewrite
+    /// it.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <returns>The week as it now stands.</returns>
+    [HttpPost("Channels/{channelId}/Week/Generate")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<WeekDto> GenerateWeek([FromRoute] Guid channelId)
+    {
+        var channel = ConfiguredChannel(channelId);
+        if (channel is null)
+        {
+            return NotFound();
+        }
+
+        var week = _guide.GenerateWeek(channel);
+        _weeks.Save(week);
+        return ToWeekDto(channel, week);
+    }
+
+    /// <summary>
+    /// Puts something on the timeline, or moves something already on it.
+    /// <para>
+    /// What is placed is an appointment: it holds its stretch of the week and everything
+    /// already there bends around it. A row sent with an id the week already holds is moved
+    /// rather than copied.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <param name="airing">The row.</param>
+    /// <returns>The week as it now stands.</returns>
+    [HttpPut("Channels/{channelId}/Week/Airings")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<WeekDto> PutWeekAiring([FromRoute] Guid channelId, [FromBody] WeekAiringDto airing)
+    {
+        var channel = ConfiguredChannel(channelId);
+        if (channel is null)
+        {
+            return NotFound();
+        }
+
+        var week = _weeks.Get(channelId) ?? new StoredWeek { ChannelId = channelId };
+        week.ChannelId = channelId;
+        week.Airings = WeekEditing.Place(week.Airings, FromDto(airing));
+        _weeks.Save(week);
+        return ToWeekDto(channel, week);
+    }
+
+    /// <summary>
+    /// Takes a row off the timeline. What it occupied becomes a hole; nothing slides up to
+    /// fill it, because the programme at nine is still at nine.
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <param name="airingId">The row.</param>
+    /// <returns>The week as it now stands.</returns>
+    [HttpDelete("Channels/{channelId}/Week/Airings/{airingId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<WeekDto> DeleteWeekAiring([FromRoute] Guid channelId, [FromRoute] Guid airingId)
+    {
+        var channel = ConfiguredChannel(channelId);
+        if (channel is null)
+        {
+            return NotFound();
+        }
+
+        var week = _weeks.Get(channelId);
+        if (week is null)
+        {
+            return NotFound();
+        }
+
+        week.Airings = WeekEditing.Remove(week.Airings, airingId);
+        _weeks.Save(week);
+        return ToWeekDto(channel, week);
+    }
+
+    /// <summary>
+    /// Throws a channel's stored week away entirely, putting the channel back to the schedule
+    /// its sources and settings describe. Loses the curation, and is only ever reached by the
+    /// owner asking for it.
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <returns>The channel with no week.</returns>
+    [HttpDelete("Channels/{channelId}/Week")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<WeekDto> DeleteWeek([FromRoute] Guid channelId)
+    {
+        var channel = ConfiguredChannel(channelId);
+        if (channel is null)
+        {
+            return NotFound();
+        }
+
+        _weeks.Delete(channelId);
+        return ToWeekDto(channel, null);
+    }
+
+    /// <summary>
+    /// A channel as the configuration page means it: by id, whether or not it is on air. The
+    /// guide only ever answers for enabled channels, and a channel being edited is often one
+    /// that has been switched off precisely because it is being worked on.
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <returns>The channel, or null.</returns>
+    private static TvChannel? ConfiguredChannel(Guid channelId)
+        => Plugin.Instance?.Configuration.Channels.FirstOrDefault(c => c.Id == channelId);
+
+    /// <summary>The stored row a page's payload describes.</summary>
+    /// <param name="dto">The payload.</param>
+    /// <returns>The row.</returns>
+    private static StoredAiring FromDto(WeekAiringDto dto)
+    {
+        return new StoredAiring
+        {
+            Id = dto.Id ?? Guid.NewGuid(),
+            StartSecond = dto.StartSecond,
+            DurationSeconds = dto.DurationSeconds,
+            Kind = Enum.TryParse<StoredAiringKind>(dto.Kind, ignoreCase: true, out var kind) && kind != StoredAiringKind.Gap
+                ? kind
+                : StoredAiringKind.Programme,
+            ItemId = dto.ItemId ?? Guid.Empty,
+            Name = dto.Name ?? string.Empty,
+            Url = dto.Url ?? string.Empty,
+            OffsetTicks = dto.OffsetTicks,
+            SeriesName = dto.SeriesName,
+            BlockName = dto.BlockName,
+            TrailedItemId = dto.TrailedItemId ?? Guid.Empty,
+            TrailedName = dto.TrailedName
+        };
+    }
+
+    /// <summary>
+    /// The week as the page draws it: the stored rows and the holes between them, in order,
+    /// each with the stretch of the week it occupies.
+    /// </summary>
+    /// <param name="channel">The channel.</param>
+    /// <param name="week">The stored week, or null when there is none.</param>
+    /// <returns>The payload.</returns>
+    private WeekDto ToWeekDto(TvChannel channel, StoredWeek? week)
+    {
+        var result = new WeekDto
+        {
+            ChannelId = channel.Id,
+            ChannelName = channel.Name,
+            Curated = week is not null,
+            GeneratedUtc = week?.GeneratedUtc,
+            ModifiedUtc = week?.ModifiedUtc
+        };
+
+        if (week is null)
+        {
+            return result;
+        }
+
+        foreach (var (row, kind, _) in WeekReader.BuildRows(week))
+        {
+            result.Airings.Add(new WeekAiringDto
+            {
+                Id = row.Kind == StoredAiringKind.Gap ? null : row.Id,
+                StartSecond = row.StartSecond,
+                DurationSeconds = row.DurationSeconds,
+                Kind = row.Kind.ToString(),
+                ItemId = row.ItemId == Guid.Empty ? null : row.ItemId,
+                Name = row.Name,
+                Url = row.Url,
+                OffsetTicks = row.OffsetTicks,
+                SeriesName = row.SeriesName,
+                BlockName = row.BlockName,
+                TrailedItemId = row.TrailedItemId == Guid.Empty ? null : row.TrailedItemId,
+                TrailedName = row.TrailedName,
+                OffAir = kind == AiringKind.OffAir
+            });
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -1418,4 +1635,85 @@ public class PoTokenStatusDto
 
     /// <summary>Gets or sets a value indicating whether a separate player token came with it.</summary>
     public bool HasPlayerToken { get; set; }
+}
+
+/// <summary>
+/// A channel's stored week, as the configuration page draws it.
+/// </summary>
+public class WeekDto
+{
+    /// <summary>Gets or sets the channel.</summary>
+    public Guid ChannelId { get; set; }
+
+    /// <summary>Gets or sets the channel name.</summary>
+    public string ChannelName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this channel has a stored week at all. False
+    /// means nobody has laid one out, and the channel is still airing whatever its sources and
+    /// settings say - which the page has to be able to tell the owner, because laying one out
+    /// is a thing they choose.
+    /// </summary>
+    public bool Curated { get; set; }
+
+    /// <summary>Gets or sets when the week was last laid out by the generator.</summary>
+    public DateTime? GeneratedUtc { get; set; }
+
+    /// <summary>Gets or sets when it last changed at all.</summary>
+    public DateTime? ModifiedUtc { get; set; }
+
+    /// <summary>Gets the rows, in order, holes included.</summary>
+    public List<WeekAiringDto> Airings { get; } = new();
+}
+
+/// <summary>
+/// One row of a stored week, over the wire.
+/// </summary>
+public class WeekAiringDto
+{
+    /// <summary>
+    /// Gets or sets the row's id. Null for a hole in the week, which is not stored and so has
+    /// nothing to address - that is also how the page knows not to let one be dragged.
+    /// </summary>
+    public Guid? Id { get; set; }
+
+    /// <summary>Gets or sets when it starts, in seconds after Monday 00:00 local.</summary>
+    public int StartSecond { get; set; }
+
+    /// <summary>Gets or sets how long it runs, in seconds.</summary>
+    public int DurationSeconds { get; set; }
+
+    /// <summary>Gets or sets what it is: Programme, Trailer, Advert or Gap.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the library item, when there is one.</summary>
+    public Guid? ItemId { get; set; }
+
+    /// <summary>Gets or sets what the guide calls it.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the address to play, for something the library only links to.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets how far into the item the row starts.</summary>
+    public long OffsetTicks { get; set; }
+
+    /// <summary>Gets or sets the series name, when the item is an episode.</summary>
+    public string? SeriesName { get; set; }
+
+    /// <summary>Gets or sets the block the row came from when the week was laid out.</summary>
+    public string? BlockName { get; set; }
+
+    /// <summary>Gets or sets the programme a break is announcing.</summary>
+    public Guid? TrailedItemId { get; set; }
+
+    /// <summary>Gets or sets that programme's name.</summary>
+    public string? TrailedName { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a hole this long counts as the channel being
+    /// off air rather than between programmes. Worked out on the server so the page and the
+    /// guide cannot disagree about it.
+    /// </summary>
+    public bool OffAir { get; set; }
 }
