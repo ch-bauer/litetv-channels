@@ -401,6 +401,32 @@
         /* The week grid fills what is left of the screen and scrolls inside its own frame. */
         #WeekTimeline { flex-grow: 1; min-height: 0; display: flex; flex-direction: column; }
 
+        /* Now, drawn across the day it falls on. Above the bars so it is never buried, and
+           pointer-events: none so it can never be in the way of dragging one. */
+        .ltvNowLine {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 0;
+            border-top: 2px solid #e5484d;
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        .ltvNowFlag {
+            position: absolute;
+            left: 0;
+            top: -0.85em;
+            padding: 0 0.35em;
+            border-radius: 3px;
+            background: #e5484d;
+            color: #fff;
+            font-size: 9px;
+            font-weight: 700;
+            line-height: 1.5;
+            letter-spacing: 0.02em;
+        }
+
         .ltvShelf { border-top: 1px solid var(--ltv-line); padding-top: 0.7em; margin-top: 0.7em; }
         /* A card that is a caution rather than a control. */
         .ltvWarn { border-color: rgba(226, 168, 60, 0.45); }
@@ -758,12 +784,21 @@
 
 <div class="ltvSetting">
                                                     <div class="ltvSettingHead">
-                                                        <div style="flex: 0 1 12em;">
-                                                            <select is="emby-select" id="PlayOrder" label="Play order">
-                                                                <option value="Sequential">In order</option>
-                                                                <option value="Shuffled">Shuffled</option>
-                                                            </select>
-                                                        </div>
+                        <!-- The design draws the order as two buttons rather than a dropdown:
+                             there are exactly two answers and both should be readable without
+                             opening anything. The select stays, hidden, because it is what the
+                             rest of the page reads and writes. -->
+                        <div style="flex: 0 0 auto;">
+                            <div class="inputLabel" style="margin-bottom: 0.3em;">Play order</div>
+                            <div class="ltvSeg" id="PlayOrderToggle">
+                                <button type="button" data-order="Sequential">In order</button>
+                                <button type="button" data-order="Shuffled">Shuffled</button>
+                            </div>
+                            <select is="emby-select" id="PlayOrder" style="display: none;">
+                                <option value="Sequential">In order</option>
+                                <option value="Shuffled">Shuffled</option>
+                            </select>
+                        </div>
                                                         <div style="flex: 0 1 13em;">
                                                             <input is="emby-input" type="number" id="EpisodesPerBlock" min="0" step="1" label="Episodes at a time" />
                                                         </div>
@@ -961,7 +996,7 @@
                                             page had every control for setting artwork and nothing
                                             that showed what setting it did.
                                         -->
-                                        <div class="ltvCard">
+                                        <div class="ltvCard" style="flex: 0 0 auto;">
                                             <div class="ltvCardTitle">On the television</div>
                                             <div id="ArtworkPreview"></div>
                                             <div class="ltvCardNote" style="margin-bottom: 0;">
@@ -990,10 +1025,10 @@
                                                     <input is="emby-input" type="text" id="ArtworkLibrarySearch" placeholder="…or take one picture from anything else" style="margin: 0;" />
                                                 </div>
                                             </div>
-                                            <div class="paperList" id="ArtworkItemResults" style="max-height: 7em; overflow-y: auto;"></div>
-                                            <div class="paperList" id="ArtworkLibraryResults" style="max-height: 7em; overflow-y: auto;"></div>
+                                            <div class="paperList" id="ArtworkItemResults" style="max-height: 7em; overflow-y: auto; flex: 0 0 auto;"></div>
+                                            <div class="paperList" id="ArtworkLibraryResults" style="max-height: 7em; overflow-y: auto; flex: 0 0 auto;"></div>
 
-                                            <div id="ArtworkGallery" class="ltvScroll"></div>
+                                            <div id="ArtworkGallery" class="ltvScroll" style="flex: 1 1 0; min-height: 8em;"></div>
 
                                             <!--
                                                 Cropping is a job you are in the middle of, not a
@@ -1423,6 +1458,7 @@
                 q('#ChannelEnabled').checked = channel.Enabled !== false;
                 q('#EpisodesPerBlock').value = channel.EpisodesPerBlock || 0;
                 q('#PlayOrder').value = channel.Order || 'Sequential';
+                syncPlayOrderToggle();
                 q('#SlotMinutes').value = channel.SlotMinutes || 0;
                 q('#TrailersInGaps').checked = channel.TrailersInGaps !== false;
                 q('#TrailerMode').value = channel.Trailers || 'Off';
@@ -3034,7 +3070,11 @@
                 // both. Switching views used to overwrite whichever you had set. Remembered
                 // across visits, per view.
                 zoomFor: { week: 46, day: 170 },
-                day: 0,
+
+                // Today. The day view opened on Monday whatever day it was, which is the one
+                // day you are least likely to want when the point of the view is to see what
+                // the television is about to do.
+                day: (new Date().getDay() + 6) % 7,
                 drag: null,
                 shelfTimer: null,
                 dropping: null,
@@ -3385,6 +3425,27 @@
                     track.appendChild(weekBar(piece, track));
                 });
 
+                // Where "now" falls, on the day it actually is. The design draws it and it is
+                // the one line on a schedule that says which part of it matters: without it a
+                // stored week is seven identical columns and there is no telling from the grid
+                // what the television is doing at this moment.
+                var now = new Date();
+                if (weekDayIndexOfDate(now) === dayIndex) {
+                    var seconds = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
+
+                    var line = document.createElement('div');
+                    line.className = 'ltvNowLine';
+                    line.style.top = ((seconds / 3600) * week.pxPerHour) + 'px';
+                    line.title = 'Now — ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    var flag = document.createElement('div');
+                    flag.className = 'ltvNowFlag';
+                    flag.textContent = 'now';
+                    line.appendChild(flag);
+
+                    track.appendChild(line);
+                }
+
                 column.appendChild(track);
                 return column;
             }
@@ -3579,6 +3640,15 @@
                 var h = Math.floor(inDay / 3600);
                 var m = Math.floor((inDay % 3600) / 60);
                 return ('0' + h).slice(-2) + ':' + ('0' + m).slice(-2);
+            }
+
+            /**
+             * Which column a real date belongs in. The grid runs Monday first, JavaScript runs
+             * Sunday first, and getting that wrong puts "now" on the wrong day - which is worse
+             * than not drawing it.
+             */
+            function weekDayIndexOfDate(date) {
+                return (date.getDay() + 6) % 7;
             }
 
             function weekDayName(second) {
@@ -4528,6 +4598,7 @@
 
                         var label = document.createElement('div');
                         label.style.flexGrow = '1';
+                        label.style.marginRight = '0.6em';
                         label.textContent = state.Held ? 'Held' : 'None held';
 
                         var detail = document.createElement('div');
@@ -5560,6 +5631,21 @@
             ['#PlayOrder', '#EpisodesPerBlock'].forEach(function (id) {
                 q(id).addEventListener('change', renderDealPreview);
                 q(id).addEventListener('input', renderDealPreview);
+            });
+
+            /** Lights whichever of the two order buttons matches the select behind them. */
+            function syncPlayOrderToggle() {
+                Array.prototype.forEach.call(q('#PlayOrderToggle').children, function (button) {
+                    button.classList.toggle('selected', button.dataset.order === q('#PlayOrder').value);
+                });
+            }
+
+            Array.prototype.forEach.call(q('#PlayOrderToggle').children, function (button) {
+                button.addEventListener('click', function () {
+                    q('#PlayOrder').value = button.dataset.order;
+                    syncPlayOrderToggle();
+                    renderDealPreview();
+                });
             });
             q('#BlockDays').addEventListener('change', applyBlockAndRedraw);
 
