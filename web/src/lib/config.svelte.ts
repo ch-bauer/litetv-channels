@@ -15,11 +15,15 @@ import { newId } from './ids';
 import type { ChannelSource, PluginConfig, TvChannel } from './types';
 
 /**
- * A configuration as one string. `$state.snapshot` walks the whole thing, which is what makes
- * every field - however deep, however new - a dependency of `dirty`.
+ * A configuration as one string.
+ *
+ * `JSON.stringify` reads every field straight through the state proxy, and a read inside a
+ * derived is a dependency - so `dirty` depends on the whole configuration, however deep and
+ * however new the field. Done directly rather than through `$state.snapshot` because the
+ * tracking then depends on nothing but the property reads themselves.
  */
 function stamp(config: PluginConfig): string {
-    return JSON.stringify($state.snapshot(config));
+    return JSON.stringify(config);
 }
 
 class ConfigStore {
