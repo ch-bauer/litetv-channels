@@ -13,7 +13,7 @@
     */
     import { search, type SearchHit } from '../search';
     import { api } from '../jellyfin';
-    import { fetchPlaylist, looksLikePlaylist } from '../api/playlist';
+    import { fetchPlaylist, looksLikeAddress, looksLikePlaylist, type PlaylistItem } from '../api/playlist';
     import { absolute } from '../jellyfin';
 
     export interface ShelfEntry {
@@ -22,8 +22,18 @@
         detail: string;
         itemId: string | null;
         url: string | null;
-        /** A series can be opened to pick episodes out of; nothing else can. */
+        /** A series can be opened to pick episodes out of. */
         seriesId?: string;
+        /*
+            A playlist can be opened too, and for the same reason.
+
+            It used to be emptied onto the shelf: paste a playlist address and forty rows
+            appeared. The owner asked for it to behave like a series instead - one row you can
+            drag whole, or open and take one video out of - and they are right that those are
+            the same thing. The videos are held here rather than re-fetched, because they were
+            already read to find out how many there are.
+        */
+        playlist?: { url: string; items: PlaylistItem[] };
     }
 
     let { open = $bindable(true) }: { open?: boolean } = $props();
@@ -44,7 +54,7 @@
     */
     interface Season { Id: string; Name: string; IndexNumber?: number; }
 
-    let opened = $state<{ id: string; name: string } | null>(null);
+    let opened = $state<{ id: string; name: string; playlist: boolean } | null>(null);
     let seasons = $state<Season[]>([]);
     let seasonId = $state<string | null>(null);
     let episodes = $state<ShelfEntry[]>([]);
@@ -62,9 +72,26 @@
         })),
     ]);
 
+    /** Opens a playlist the way a series opens: its own contents, and a way back. */
+    function openPlaylist(entry: ShelfEntry): void {
+        if (!entry.playlist) { return; }
+        opened = { id: entry.playlist.url, name: entry.label, playlist: true };
+        seasons = [];
+        seasonId = null;
+        openingError = null;
+        episodes = entry.playlist.items.map((item) => ({
+            key: 'yt:' + item.VideoId,
+            label: item.Title,
+            detail: item.Seconds > 0 ? Math.round(item.Seconds / 60) + ' min' : 'video',
+            itemId: null,
+            url: item.Url,
+        }));
+    }
+
     async function openSeries(entry: ShelfEntry): Promise<void> {
+        if (entry.playlist) { openPlaylist(entry); return; }
         if (!entry.seriesId) { return; }
-        opened = { id: entry.seriesId, name: entry.label };
+        opened = { id: entry.seriesId, name: entry.label, playlist: false };
         seasons = [];
         seasonId = null;
         episodes = [];
@@ -137,10 +164,24 @@
         }
     }
 
+    /*
+        A link typed into the search box is a link, not a title. Detected rather than refused:
+        the owner asked for exactly this, and searching the library for "https://youtube.com/..."
+        can only ever answer "nothing matches", which reads as the search being broken.
+    */
+    const termIsAddress = $derived(looksLikeAddress(term));
+
     function onInput(): void {
         clearTimeout(timer);
-        if (term.trim().length === 0) { hits = []; return; }
+        if (term.trim().length === 0 || termIsAddress) { hits = []; return; }
         timer = setTimeout(run, 250);
+    }
+
+    /** Takes what is in the search box as an address and puts it on the shelf. */
+    async function addTypedAddress(): Promise<void> {
+        address = term.trim();
+        await addAddress();
+        if (address.length === 0) { term = ''; }
     }
 
     let addressBusy = $state(false);
@@ -165,18 +206,14 @@
                     addressNote = 'YouTube gave nothing back for that playlist.';
                     return;
                 }
-                extra = [
-                    ...found.Items.map((item) => ({
-                        key: 'yt:' + item.VideoId,
-                        label: item.Title,
-                        detail: item.Seconds > 0
-                            ? Math.round(item.Seconds / 60) + ' min - from a playlist'
-                            : 'from a playlist',
-                        itemId: null,
-                        url: item.Url,
-                    })),
-                    ...extra,
-                ];
+                extra = [{
+                    key: 'pl:' + url,
+                    label: found.Items[0].Title + ' + ' + (found.Items.length - 1) + ' more',
+                    detail: found.Items.length + ' videos - a playlist',
+                    itemId: null,
+                    url,
+                    playlist: { url, items: found.Items },
+                }, ...extra];
                 address = '';
             } catch (err) {
                 addressNote = 'That playlist could not be read: '
@@ -198,12 +235,21 @@
     }
 
     function onDragStart(event: DragEvent, entry: ShelfEntry): void {
-        // What the grid receives. An id or an address, and the name to draw before the server
-        // has answered.
+        /*
+            What the grid receives. An id or an address, and the name to draw before the server
+            has answered - and, for a playlist dragged whole, the videos in it, so the screen
+            can lay them out one after another instead of dropping a single row that stands for
+            forty.
+        */
         event.dataTransfer?.setData('text/plain', JSON.stringify({
             itemId: entry.itemId,
-            url: entry.url,
+            url: entry.playlist ? null : entry.url,
             name: entry.label,
+            playlist: entry.playlist?.items.map((item) => ({
+                url: item.Url,
+                name: item.Title,
+                seconds: item.Seconds,
+            })),
         }));
         if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'copy'; }
     }
@@ -225,9 +271,15 @@
             type="search"
             bind:value={term}
             oninput={onInput}
-            placeholder="Search films, series and episodes…"
-            aria-label="Search the library for something to drag onto the week"
+            onkeydown={(e) => { if (e.key === 'Enter' && termIsAddress) { e.preventDefault(); addTypedAddress(); } }}
+            placeholder="Search films, series and episodes…  (or paste a link)"
+            aria-label="Search the library, or paste an address"
         />
+        {#if termIsAddress}
+            <button type="button" class="ghost" onclick={addTypedAddress} disabled={addressBusy}>
+                {addressBusy ? 'Reading…' : 'That is a link — put it on the shelf'}
+            </button>
+        {/if}
         <input
             class="address"
             type="url"
@@ -244,7 +296,7 @@
         >
             {addressBusy ? 'Reading the playlist...' : 'Put on the shelf'}
         </button>
-        <span class="hint">drag onto the week · hold Alt to drop on the second</span>
+        <span class="hint">drag onto the week · it snaps flush · hold Alt to drop on the second</span>
         {#if addressNote}<span class="hint bad">{addressNote}</span>{/if}
     </header>
 
@@ -252,7 +304,9 @@
         <div class="opened">
             <button type="button" class="ghost" onclick={closeSeries}>&lsaquo; Back to the search</button>
             <span class="opened-name" title={opened.name}>{opened.name}</span>
-            {#if seasons.length > 0}
+            {#if opened.playlist}
+                <span class="hint">{episodes.length} videos - drag any of them onto the week</span>
+            {:else if seasons.length > 0}
                 <select
                     aria-label="Season"
                     value={seasonId}
@@ -294,13 +348,15 @@
                         {/if}
                         <span class="label" title={entry.label}>{entry.label}</span>
                         <span class="detail">{entry.detail}</span>
-                        {#if entry.seriesId}
+                        {#if entry.seriesId || entry.playlist}
                             <button
                                 type="button"
                                 class="episodes"
                                 onclick={() => openSeries(entry)}
-                                title="Pick an episode out of this series"
-                            >Episodes &rsaquo;</button>
+                                title={entry.playlist
+                                    ? 'Pick one video out of this playlist'
+                                    : 'Pick an episode out of this series'}
+                            >{entry.playlist ? 'Videos' : 'Episodes'} &rsaquo;</button>
                         {/if}
                     </div>
                 {/each}
@@ -320,29 +376,32 @@
 
     .opened-name { font-weight: 600; color: var(--lt-text-title); }
 
+    /* Colours come from the app-wide select rule in theme.css; only the size is local. */
     .opened select {
-        background: var(--lt-field);
-        border: 1px solid var(--lt-line-strong);
-        border-radius: var(--lt-radius-small);
-        color: var(--lt-text);
-        font-family: inherit;
         font-size: 12.5px;
         padding: 4px 7px;
     }
 
+    /*
+        The way into a series' episodes, which is the whole reason a series is on the shelf at
+        all - dropping "Miami Vice" on a Tuesday is not what anyone means. It was drawn in the
+        dimmest text on the page inside the faintest border, and the owner's report was simply
+        that it is too invisible. It is now the colour of a thing you are meant to press.
+    */
     .episodes {
         flex: 0 0 auto;
-        background: none;
-        border: 1px solid var(--lt-line-strong);
+        background: rgba(119, 91, 244, .16);
+        border: 1px solid rgba(119, 91, 244, .45);
         border-radius: var(--lt-radius-small);
-        color: var(--lt-text-dim);
+        color: #b6a9fa;
         font-family: inherit;
-        font-size: 11px;
-        padding: 3px 7px;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 4px 9px;
         cursor: pointer;
     }
 
-    .episodes:hover { color: var(--lt-text-title); border-color: var(--lt-accent); }
+    .episodes:hover { background: var(--lt-accent); border-color: var(--lt-accent); color: #fff; }
 
     .shelf {
         border-top: 1px solid var(--lt-line);

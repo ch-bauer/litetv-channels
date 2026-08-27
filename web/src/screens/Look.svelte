@@ -39,7 +39,24 @@
     type Shape = 'all' | 'wide' | 'tall' | 'square';
 
     let shape = $state<Shape>('wide');
-    let tiles = $state<{ url: string; height: number }[]>([]);
+
+    /*
+        Where the pictures come from. The owner asked whether the picture search uses the online
+        one, and asked for offline first with online kept separate. It did not use it at all -
+        every tile was a library picture, and there was nothing anywhere that asked a provider.
+
+        So: `library` is what opens, and it is the whole gallery until somebody presses Online.
+        Nothing reaches out on its own.
+    */
+    type Source = 'library' | 'online';
+
+    let source = $state<Source>('library');
+
+    /** The titles the gallery is showing pictures OF - this channel's, or a search's. */
+    let ids = $state<string[]>([]);
+    let onlineTiles = $state<{ url: string; height: number }[]>([]);
+    let onlineBusy = $state(false);
+    let onlineNote = $state<string | null>(null);
     let loadingTiles = $state(false);
     let picking = $state<Slot | null>(null);
     let borrowTerm = $state('');
@@ -82,31 +99,58 @@
         return shape === 'tall' ? 'Primary' : shape === 'wide' ? 'Backdrop' : 'Thumb';
     }
 
-    function tileHeight(): number {
-        return shape === 'tall' ? 128 : shape === 'square' ? 84 : 62;
+    /*
+        How tall a tile is drawn.
+
+        It grows when there are few. A gallery of two pictures at the size a gallery of forty
+        needs is two stamps in a field of nothing, and a picture is being JUDGED here - it has
+        to be big enough to judge. The width follows in the grid's own minimum, so the two stay
+        in proportion.
+    */
+    function tileScale(count: number): number {
+        if (count <= 0) { return 1; }
+        if (count <= 2) { return 2.4; }
+        if (count <= 4) { return 1.9; }
+        if (count <= 8) { return 1.45; }
+        if (count <= 14) { return 1.15; }
+        return 1;
     }
 
-    function tilesFor(ids: string[]): { url: string; height: number }[] {
+    function tileHeight(count: number): number {
+        const base = shape === 'tall' ? 128 : shape === 'square' ? 84 : 62;
+        return Math.round(base * tileScale(count));
+    }
+
+    function tilesFor(list: string[]): { url: string; height: number }[] {
         const kind = kindOfShape();
-        return ids.map((id) => ({
-            url: absolute('/Items/' + id + '/Images/' + kind + '?maxHeight=240&quality=85'),
-            height: tileHeight(),
+        return list.map((id) => ({
+            url: absolute('/Items/' + id + '/Images/' + kind + '?maxHeight=480&quality=85'),
+            height: tileHeight(list.length),
         }));
     }
 
-    /** The library's own pictures, from the titles this channel plays. */
+    /*
+        The gallery, derived rather than assembled: changing the shape or the source redraws it
+        without re-running a search, which is what the shape filter used to do.
+    */
+    const tiles = $derived(source === 'library' ? tilesFor(ids) : onlineTiles);
+
+    /** The narrowest a tile column may be, which is what makes the grid put fewer on a row. */
+    const tileMin = $derived(Math.round(110 * tileScale(tiles.length)));
+
+    /** The titles this channel plays. */
     async function loadTiles(): Promise<void> {
         loadingTiles = true;
         try {
-            const ids = channel.Sources.map((s) => s.ItemId).slice(0, 24);
             searchedFrom = null;
-            tiles = ids.length === 0 ? [] : tilesFor(ids);
+            // A YouTube source has no library item, so there is no picture to ask for.
+            ids = channel.Sources.filter((s) => s.Type !== 'YouTube').map((s) => s.ItemId).slice(0, 24);
         } finally {
             loadingTiles = false;
         }
     }
 
-    /** Pictures from anything in the library, not only what this channel plays. */
+    /** Titles from anywhere in the library, not only what this channel plays. */
     async function searchTiles(): Promise<void> {
         const asked = tileTerm.trim();
         if (asked.length === 0) { void loadTiles(); return; }
@@ -115,11 +159,62 @@
             const hits = await search(asked, 24);
             if (asked !== tileTerm.trim()) { return; }
             searchedFrom = asked;
-            tiles = tilesFor(hits.map((h) => h.id));
+            ids = hits.map((h) => h.id);
         } catch {
-            tiles = [];
+            ids = [];
         } finally {
             tileSearching = false;
+        }
+    }
+
+    /*
+        The online half, and it only ever runs because somebody pressed Online.
+
+        Jellyfin's own providers answer per ITEM, so this asks about the titles the gallery is
+        already showing - the channel's lineup, or whatever was searched for. Six of them, eight
+        pictures each: enough to choose from, few enough that pressing Online is not a minute of
+        waiting on somebody else's servers.
+    */
+    interface RemoteImage { Url?: string; Width?: number; Height?: number; }
+
+    async function loadOnline(): Promise<void> {
+        const asking = ids.slice(0, 6);
+        const wanted = kindOfShape();
+        onlineBusy = true;
+        onlineNote = null;
+        onlineTiles = [];
+        try {
+            const answers = await Promise.all(asking.map((id) =>
+                api().getJSON<{ Images?: RemoteImage[] }>(
+                    api().getUrl('Items/' + id + '/RemoteImages', {
+                        type: wanted,
+                        limit: 8,
+                        includeAllLanguages: true,
+                    }),
+                ).catch(() => ({ Images: [] as RemoteImage[] }))));
+
+            // Still the shape and the titles that were asked about? A slow provider must not
+            // repaint a gallery somebody has moved on from.
+            if (wanted !== kindOfShape()) { return; }
+
+            const urls: string[] = [];
+            for (const answer of answers) {
+                for (const image of answer.Images ?? []) {
+                    if (image.Url && !urls.includes(image.Url)) { urls.push(image.Url); }
+                }
+            }
+
+            onlineTiles = urls.map((url) => ({ url, height: tileHeight(urls.length) }));
+            if (urls.length === 0) {
+                onlineNote = asking.length === 0
+                    ? 'Nothing to look up - search for a title first.'
+                    : 'No provider had a ' + wanted.toLowerCase() + ' picture for these titles.';
+            }
+        } catch (err) {
+            onlineNote = 'The providers could not be asked: '
+                + (err instanceof Error ? err.message : String(err));
+        } finally {
+            onlineBusy = false;
         }
     }
 
@@ -128,12 +223,18 @@
         tileTimer = setTimeout(searchTiles, 250);
     }
 
+    // The channel's own lineup, whenever the channel changes. A shape change no longer re-runs
+    // anything: the tiles are derived, so they simply redraw.
+    $effect(() => {
+        void channel.Id;
+        if (tileTerm.trim().length > 0) { void searchTiles(); } else { void loadTiles(); }
+    });
+
+    // Online is asked again when the shape or the titles change, and never otherwise.
     $effect(() => {
         void shape;
-        void channel.Id;
-        // A shape change re-asks whichever question is on screen - the channel's own lineup, or
-        // the search. Dropping back to the lineup silently would look like the search failing.
-        if (tileTerm.trim().length > 0) { void searchTiles(); } else { void loadTiles(); }
+        void ids;
+        if (source === 'online') { void loadOnline(); }
     });
 
     async function useTile(url: string): Promise<void> {
@@ -299,7 +400,7 @@
 
         <div class="gallery">
             <div class="gallery-head">
-                <h3>Pictures your library already has</h3>
+                <h3>{source === 'library' ? 'Pictures your library already has' : 'Pictures from the providers'}</h3>
                 <div class="filters">
                     {#each ['wide', 'tall', 'square'] as option (option)}
                         <button
@@ -310,6 +411,22 @@
                         >{option}</button>
                     {/each}
                 </div>
+                <div class="filters" role="group" aria-label="Where the pictures come from">
+                    <button
+                        type="button"
+                        class="filter"
+                        class:on={source === 'library'}
+                        onclick={() => (source = 'library')}
+                    >in your library</button>
+                    <button
+                        type="button"
+                        class="filter"
+                        class:on={source === 'online'}
+                        onclick={() => { source = 'online'; void loadOnline(); }}
+                        title="Asks Jellyfin's own picture providers about these titles"
+                    >online</button>
+                </div>
+
                 <span class="tile-note">
                     {picking ? 'Pick one for the ' + picking.toLowerCase() : 'Press Change on a picture first'}
                 </span>
@@ -334,7 +451,7 @@
                 {/if}
             </div>
 
-            <div class="tiles">
+            <div class="tiles" style="--lt-tile-min: {tileMin}px">
                 {#each tiles.filter((t) => !dead[t.url]) as tile (tile.url)}
                     <button
                         type="button"
@@ -352,11 +469,15 @@
                     </button>
                 {:else}
                     <p class="none">
-                        {loadingTiles || tileSearching
-                            ? 'Looking...'
-                            : searchedFrom
-                                ? 'Nothing matching that has a ' + kindOfShape().toLowerCase() + ' picture.'
-                                : 'This channel has no content to take pictures from yet - search above for any title.'}
+                        {#if loadingTiles || tileSearching || onlineBusy}
+                            {onlineBusy ? 'Asking the providers...' : 'Looking...'}
+                        {:else if source === 'online'}
+                            {onlineNote ?? 'Nothing came back.'}
+                        {:else if searchedFrom}
+                            Nothing matching that has a {kindOfShape().toLowerCase()} picture.
+                        {:else}
+                            This channel has no content to take pictures from yet - search above for any title.
+                        {/if}
                     </p>
                 {/each}
             </div>
@@ -581,9 +702,14 @@
 
     .tile-note { margin-left: auto; font-size: 12px; color: var(--lt-text-dim); }
 
+    /*
+        The column width is set from how many pictures there are - see `tileScale`. `auto-fill`
+        rather than `auto-fit` so two large pictures stay large instead of being stretched the
+        width of the gallery between them.
+    */
     .tiles {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(var(--lt-tile-min, 110px), 1fr));
         gap: 10px;
     }
 

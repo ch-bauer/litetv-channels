@@ -39,6 +39,27 @@ function fit(node: HTMLElement): void {
         const top = Math.max(0, node.getBoundingClientRect().top);
         const height = Math.max(460, window.innerHeight - top - 16);
         node.style.setProperty('--lt-app-height', height + 'px');
+
+        /*
+            And then the page is asked whether that was too tall.
+
+            Sixteen pixels was a guess about the room the dashboard keeps BELOW a plugin page,
+            and a guess is what it stayed: the owner's report is a scroll bar on a page with
+            nothing under it to scroll to. Whatever padding, margin or footer sits down there
+            is now measured rather than assumed - if the document is taller than the window,
+            the difference is exactly the amount this app is too tall by, so it is taken off.
+
+            Read after a layout, and only once: taking the overflow off can leave the page
+            shorter than the window, which is right, and re-running would then find no overflow
+            and give the height back, which is a page that shivers.
+        */
+        requestAnimationFrame(() => {
+            const doc = document.documentElement;
+            const over = doc.scrollHeight - window.innerHeight;
+            if (over > 0) {
+                node.style.setProperty('--lt-app-height', Math.max(460, height - over) + 'px');
+            }
+        });
     };
 
     measure();

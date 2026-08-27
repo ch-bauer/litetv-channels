@@ -104,7 +104,21 @@
     is why the owner asked what selecting an item even does. The bar under the list answers it,
     and the same actions are there as buttons for anyone who would rather not learn a shortcut.
 -->
-<div class="list" role="listbox" aria-label="What this channel plays" tabindex="-1">
+<!--
+    A click on the list's own ground - below the last row - lets the selection go. Clicking the
+    selected row again does too, and has since this list was built, but a row is a small target
+    and a click that begins on it and drifts a pixel becomes a DRAG rather than a click, which
+    is a selection that will not clear however many times it is pressed.
+-->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<div
+    class="list"
+    role="listbox"
+    aria-label="What this channel plays"
+    tabindex="-1"
+    onclick={() => (selected = null)}
+>
     {#each sources as source, index (source.ItemId + ':' + index)}
         <div
             role="option"
@@ -116,10 +130,10 @@
             tabindex="0"
             draggable="true"
             onmousedown={() => (selectedAtPress = selected)}
-            onclick={() => press(index)}
+            onclick={(e) => { e.stopPropagation(); press(index); }}
             onfocus={() => (selected = index)}
             onkeydown={(e) => onKey(e, index)}
-            ondragstart={() => (dragging = index)}
+            ondragstart={() => { dragging = index; selectedAtPress = null; }}
             ondragend={() => { dragging = null; over = null; }}
             ondragover={(e) => { e.preventDefault(); over = index; }}
             ondrop={(e) => { e.preventDefault(); onDrop(index); }}
@@ -293,4 +307,7 @@
     .bin:hover { color: #e08585; }
 
     .none { padding: 14px 13px; margin: 0; font-size: 12.5px; color: var(--lt-text-dim); }
+
+    /* Room to click below the last row, so "let go" has somewhere to be done. */
+    .list { padding-bottom: 10px; }
 </style>

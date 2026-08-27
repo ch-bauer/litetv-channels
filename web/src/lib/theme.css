@@ -30,6 +30,13 @@
     --lt-card-inset: rgba(255, 255, 255, 0.02);
     --lt-hover: rgba(255, 255, 255, 0.06);
     --lt-field: rgba(255, 255, 255, 0.05);
+    /*
+     * The same field, but opaque. A translucent white is fine over this page's own dark
+     * ground and useless anywhere the browser composites the colour itself: a <select>'s
+     * open list is drawn by the browser on ITS ground, so `rgba(255,255,255,.05)` arrived
+     * as near-white with this page's pale text on it - the "unreadable white drop down".
+     */
+    --lt-field-solid: #1b2431;
 
     --lt-series: #8fa2f0;
     --lt-series-bg: rgba(91, 110, 225, 0.2);
@@ -46,6 +53,12 @@
  * and a plugin page has no business restyling the page that hosts it.
  */
 #litetv-app {
+    /*
+     * Tells the browser to draw ITS OWN widgets dark - the list a <select> pops open, the
+     * scrollbars, a date picker. Without it those are drawn light whatever this page's
+     * colours say, which is the other half of the unreadable drop down.
+     */
+    color-scheme: dark;
     background: linear-gradient(180deg, var(--lt-ground-top) 0%, var(--lt-ground-bottom) 55%);
     color: var(--lt-text);
     font-family: Inter, 'Noto Sans', system-ui, sans-serif;
@@ -71,3 +84,49 @@
     outline: 2px solid var(--lt-accent);
     outline-offset: -2px;
 }
+
+/*
+ * Drop-downs, everywhere. Stated once here rather than per screen: there were two of them and
+ * both were wrong in the same way, and the next one would have been too.
+ *
+ * `option` is styled as well as `select`, because a browser does not inherit the select's
+ * colours into its list on every platform.
+ */
+#litetv-app select {
+    background-color: var(--lt-field-solid);
+    color: var(--lt-text);
+    border: 1px solid var(--lt-line-strong);
+    border-radius: var(--lt-radius-small);
+    font-family: inherit;
+}
+
+#litetv-app option {
+    background-color: var(--lt-field-solid);
+    color: var(--lt-text);
+}
+
+/*
+ * Every box you can type in, the same.
+ *
+ * There were nine of them and no two were alike - `.text`, `.find`, `.address`, `.url-field`,
+ * `.name-field`, `.borrow`, the block editor's bare `input`, the two search boxes - each with
+ * its own ground, border, radius and padding, because each was written where it was needed.
+ * The owner asked for them to be unified, and the honest way to do that is one rule that every
+ * box starts from rather than nine rules that happen to agree.
+ *
+ * Written with `:where()`, which has NO specificity: this is the floor, and any component that
+ * genuinely needs a different size or a borderless box - the rail's filter, the shelf's - still
+ * says so and still wins. A rule stated here with normal specificity would beat every one of
+ * them and flatten differences that are deliberate.
+ */
+:where(#litetv-app) :where(input:not([type='range']):not([type='checkbox']):not([type='file']), textarea) {
+    background: var(--lt-field);
+    border: 1px solid var(--lt-line-strong);
+    border-radius: var(--lt-radius-small);
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--lt-text);
+}
+
+:where(#litetv-app) :where(input, textarea)::placeholder { color: var(--lt-text-faint); }

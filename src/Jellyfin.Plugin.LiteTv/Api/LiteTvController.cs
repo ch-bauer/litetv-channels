@@ -409,7 +409,9 @@ public class LiteTvController : ControllerBase
             return NotFound();
         }
 
-        var week = _guide.GenerateWeek(channel);
+        // The length of the schedule survives a re-lay-out: asking for the week again must
+        // not quietly turn somebody's fortnight back into a week.
+        var week = _guide.GenerateWeek(channel, _weeks.Get(channelId)?.Weeks ?? 1);
         _weeks.Save(week);
         return ToWeekDto(channel, week);
     }
@@ -440,7 +442,7 @@ public class LiteTvController : ControllerBase
         week.ChannelId = channelId;
         var placed = FromDto(airing);
         placed.DurationSeconds = LengthOf(airing);
-        week.Airings = WeekEditing.Place(week.Airings, placed);
+        week.Airings = WeekEditing.Place(week.Airings, placed, week.CycleSeconds);
         _weeks.Save(week);
         return ToWeekDto(channel, week);
     }
@@ -475,6 +477,69 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
+    /// Applies a run of edits to a channel's week, either as a rehearsal or for good.
+    /// <para>
+    /// The configuration page used to write every schedule edit down the instant it was made,
+    /// which is the one thing on that page the Save button did not cover. The owner's verdict
+    /// was that the schedule should wait for Save like everything else and be undoable up to
+    /// it. That needs the page to hold a list of edits it has not committed - and it cannot
+    /// draw them itself, because <b>what an edit does to the rest of the week is the server's
+    /// arithmetic</b>: an appointment trims, splits and drops its neighbours, and a page that
+    /// guessed at that would draw a week nobody is going to get.
+    /// </para>
+    /// <para>
+    /// So the page sends the whole run and asks what it would come to. With
+    /// <paramref name="commit"/> false nothing is written: the answer is a rehearsal, redrawn
+    /// after every edit and after every undo. With it true the same run is applied and saved,
+    /// which is what Save does.
+    /// </para>
+    /// <para>
+    /// Sending the run rather than a diff is deliberate. It makes undo the removal of the last
+    /// element and nothing else, and it means a rehearsal and the commit that follows it are
+    /// computed from the same input - so what was on screen is what gets stored.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <param name="commit">True to store the result; false to answer without writing.</param>
+    /// <param name="edits">The run of edits, oldest first.</param>
+    /// <returns>The week as the run leaves it.</returns>
+    [HttpPost("Channels/{channelId}/Week/Edits")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<WeekDto> ApplyWeekEdits(
+        [FromRoute] Guid channelId,
+        [FromQuery] bool commit,
+        [FromBody] WeekEditsDto edits)
+    {
+        var channel = ConfiguredChannel(channelId);
+        if (channel is null)
+        {
+            return NotFound();
+        }
+
+        var week = RunEdits(
+            _weeks.Get(channelId),
+            channelId,
+            edits.Edits,
+            weeks => _guide.GenerateWeek(channel, weeks),
+            LengthOf);
+
+        if (commit)
+        {
+            if (week is null)
+            {
+                _weeks.Delete(channelId);
+            }
+            else
+            {
+                _weeks.Save(week);
+            }
+        }
+
+        return ToWeekDto(channel, week);
+    }
+
+    /// <summary>
     /// Throws a channel's stored week away entirely, putting the channel back to the schedule
     /// its sources and settings describe. Loses the curation, and is only ever reached by the
     /// owner asking for it.
@@ -494,6 +559,122 @@ public class LiteTvController : ControllerBase
 
         _weeks.Delete(channelId);
         return ToWeekDto(channel, null);
+    }
+
+    /// <summary>
+    /// The longest a schedule may run before it repeats.
+    /// <para>
+    /// Thirteen weeks - a quarter. Long enough for anything anybody has asked for and short
+    /// enough that a stored file and the timeline that draws it stay a reasonable size; a
+    /// schedule of a year would be four hundred thousand seconds of arithmetic per read and a
+    /// grid nobody could find Thursday in.
+    /// </para>
+    /// </summary>
+    public const int MaximumWeeks = 13;
+
+    /// <summary>
+    /// Folds a run of edits over a stored week.
+    /// <para>
+    /// Pure but for the two things it is handed: how to lay a week out, and how long a placed
+    /// row runs. Both need a library or a clock; the arithmetic does not, and it is the
+    /// arithmetic that has to be right - a run applied in the wrong order, or a Place after a
+    /// Clear that quietly does nothing, would give the owner a week that is not the one they
+    /// were shown.
+    /// </para>
+    /// </summary>
+    /// <param name="stored">The week as it stands, or null when the channel has none.</param>
+    /// <param name="channelId">The channel, for a week the run has to create.</param>
+    /// <param name="edits">The run, oldest first.</param>
+    /// <param name="generate">Lays a schedule out afresh, over the number of weeks it is
+    /// handed - so laying out again does not undo a channel's fortnightly schedule.</param>
+    /// <param name="lengthOf">How long a placed row runs.</param>
+    /// <returns>The week the run leaves, or null when it leaves none.</returns>
+    public static StoredWeek? RunEdits(
+        StoredWeek? stored,
+        Guid channelId,
+        IEnumerable<WeekEditDto> edits,
+        Func<int, StoredWeek> generate,
+        Func<WeekAiringDto, int> lengthOf)
+    {
+        // Null all the way through means "this channel has no stored week", which is a real
+        // state and not the same as a week with nothing in it: a channel with no week airs from
+        // its sources. Clear returns to it, and a Place after a Clear starts a fresh one.
+        var week = stored;
+
+        foreach (var edit in edits)
+        {
+            switch (edit.Kind?.ToUpperInvariant())
+            {
+                case "GENERATE":
+                    week = generate(week?.Weeks ?? 1);
+                    break;
+
+                case "CLEAR":
+                    week = null;
+                    break;
+
+                case "LENGTH":
+                    /*
+                        How many weeks the schedule runs for before it repeats.
+
+                        Growing it keeps everything: what was the whole schedule becomes its
+                        first week, and the new weeks are empty until something is put in them.
+
+                        Shrinking DROPS what falls outside rather than wrapping it round, which
+                        is what anyone means by making a fortnight a week again - they mean
+                        keep the first one. Wrapping would silently lay week two on top of week
+                        one and the schedule would come back a mess nobody asked for.
+                    */
+                    if (week is not null && edit.Weeks is { } asked)
+                    {
+                        var wanted = Math.Clamp(asked, 1, MaximumWeeks);
+                        if (wanted < week.Weeks)
+                        {
+                            var keep = wanted * StoredWeek.SecondsPerWeek;
+                            week.Airings = week.Airings
+                                .Where(a => a.StartSecond < keep)
+                                .Select(a =>
+                                {
+                                    a.DurationSeconds = Math.Min(a.DurationSeconds, keep - a.StartSecond);
+                                    return a;
+                                })
+                                .Where(a => a.DurationSeconds >= WeekEditing.MinimumRemainderSeconds)
+                                .ToList();
+                        }
+
+                        week.Weeks = wanted;
+                    }
+
+                    break;
+
+                case "REMOVE":
+                    if (week is not null && edit.AiringId is { } removing)
+                    {
+                        week.Airings = WeekEditing.Remove(week.Airings, removing);
+                    }
+
+                    break;
+
+                case "PLACE":
+                    if (edit.Airing is { } airing)
+                    {
+                        week ??= new StoredWeek { ChannelId = channelId };
+                        week.ChannelId = channelId;
+                        var placed = FromDto(airing);
+                        placed.DurationSeconds = lengthOf(airing);
+                        week.Airings = WeekEditing.Place(week.Airings, placed, week.CycleSeconds);
+                    }
+
+                    break;
+
+                default:
+                    // An edit this build does not know is skipped rather than refused: a page
+                    // one release ahead must not be able to make the whole run fail.
+                    break;
+            }
+        }
+
+        return week;
     }
 
     /// <summary>
@@ -565,6 +746,25 @@ public class LiteTvController : ControllerBase
         return LengthOf(airing.DurationSeconds, ticks);
     }
 
+    /// <summary>
+    /// Which week of a channel's cycle is airing at this moment, counting from zero.
+    /// </summary>
+    /// <param name="weeks">How many weeks the cycle runs for.</param>
+    /// <returns>The index of the current week.</returns>
+    private static int CurrentWeekOf(int weeks)
+    {
+        if (weeks <= 1)
+        {
+            return 0;
+        }
+
+        var nowLocal = DateTime.SpecifyKind(
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.Local),
+            DateTimeKind.Unspecified);
+        var into = WeekReader.WeekStart(nowLocal) - WeekReader.CycleStart(nowLocal, weeks);
+        return (int)Math.Round(into.TotalDays / 7);
+    }
+
     private static StoredAiring FromDto(WeekAiringDto dto)
     {
         return new StoredAiring
@@ -600,6 +800,8 @@ public class LiteTvController : ControllerBase
             ChannelId = channel.Id,
             ChannelName = channel.Name,
             Curated = week is not null,
+            Weeks = week is null ? 1 : Math.Max(1, week.Weeks),
+            CurrentWeek = CurrentWeekOf(week is null ? 1 : Math.Max(1, week.Weeks)),
             GeneratedUtc = week?.GeneratedUtc,
             ModifiedUtc = week?.ModifiedUtc
         };
@@ -2139,6 +2341,23 @@ public class WeekDto
     /// </summary>
     public bool Curated { get; set; }
 
+    /// <summary>
+    /// Gets or sets how many weeks the schedule runs for before it repeats. One for every
+    /// channel that has never been told otherwise, and the page draws one week at a time
+    /// whatever this says.
+    /// </summary>
+    public int Weeks { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets which week of the cycle is on now, counting from zero.
+    /// <para>
+    /// Answered by the server because only the server knows: which week of a fortnight is
+    /// running is counted from a fixed Monday, and a page working it out for itself would be
+    /// a second implementation of the one piece of arithmetic that must not disagree.
+    /// </para>
+    /// </summary>
+    public int CurrentWeek { get; set; }
+
     /// <summary>Gets or sets when the week was last laid out by the generator.</summary>
     public DateTime? GeneratedUtc { get; set; }
 
@@ -2180,6 +2399,42 @@ public class PlaylistItemDto
 
     /// <summary>Gets or sets how long it runs, or zero when the page did not say.</summary>
     public int Seconds { get; set; }
+}
+
+/// <summary>
+/// A run of schedule edits the page has made and not yet committed.
+/// </summary>
+public class WeekEditsDto
+{
+    /// <summary>
+    /// Gets the edits, oldest first. Applied in order to the stored week; the last one is the
+    /// one an undo takes off.
+    /// </summary>
+    public List<WeekEditDto> Edits { get; } = new();
+}
+
+/// <summary>
+/// One schedule edit.
+/// </summary>
+public class WeekEditDto
+{
+    /// <summary>
+    /// Gets or sets what the edit is: <c>Place</c>, <c>Remove</c>, <c>Generate</c> or
+    /// <c>Clear</c>. Read case-insensitively, and an unknown kind is skipped rather than
+    /// refused.
+    /// </summary>
+    public string? Kind { get; set; }
+
+    /// <summary>Gets or sets the row being placed or moved. Only read by <c>Place</c>.</summary>
+    public WeekAiringDto? Airing { get; set; }
+
+    /// <summary>Gets or sets the row being taken off. Only read by <c>Remove</c>.</summary>
+    public Guid? AiringId { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many weeks the schedule should run for. Only read by <c>Length</c>.
+    /// </summary>
+    public int? Weeks { get; set; }
 }
 
 public class WeekAiringDto

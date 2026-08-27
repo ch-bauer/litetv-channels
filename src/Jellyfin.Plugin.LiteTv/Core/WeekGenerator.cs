@@ -1,4 +1,4 @@
-namespace Jellyfin.Plugin.LiteTv.Core;
+﻿namespace Jellyfin.Plugin.LiteTv.Core;
 
 /// <summary>
 /// Lays out a week for a channel nobody has curated yet.
@@ -30,14 +30,19 @@ public static class WeekGenerator
     /// trailer are the same thing to the schedule - an address in a break - and the only way to
     /// tell them apart afterwards is that one of them came from this list. Which they are
     /// matters on the timeline, where they are drawn and filtered separately.</param>
+    /// <param name="weeks">How many weeks the schedule runs for before it repeats. One for
+    /// every channel that has never been told otherwise.</param>
     /// <returns>The week, ready to store.</returns>
     public static StoredWeek Build(
         Guid channelId,
         IEnumerable<Airing> airings,
         DateTime weekStartLocal,
         TimeZoneInfo timeZone,
-        IReadOnlySet<string>? advertUrls = null)
+        IReadOnlySet<string>? advertUrls = null,
+        int weeks = 1)
     {
+        var cycleWeeks = Math.Max(1, weeks);
+        var cycleSeconds = cycleWeeks * StoredWeek.SecondsPerWeek;
         var rows = new List<StoredAiring>();
 
         foreach (var airing in airings)
@@ -58,22 +63,22 @@ public static class WeekGenerator
                 continue;
             }
 
-            // The week is a loop and this is the only cut it takes: whatever is still on air
-            // when Sunday ends is trimmed there, and Monday starts with what the schedule
-            // says starts on Monday. A film cut by that boundary is the one place a generated
-            // week reads oddly, and it is exactly what the timeline is for.
+            // The schedule is a loop and this is the only cut it takes: whatever is still on
+            // air when the last Sunday ends is trimmed there, and the cycle starts again with
+            // what the schedule says starts on Monday. A film cut by that boundary is the one
+            // place a generated week reads oddly, and it is exactly what the timeline is for.
             if (start < 0)
             {
                 duration += start;
                 start = 0;
             }
 
-            if (start >= StoredWeek.SecondsPerWeek)
+            if (start >= cycleSeconds)
             {
                 continue;
             }
 
-            duration = Math.Min(duration, StoredWeek.SecondsPerWeek - start);
+            duration = Math.Min(duration, cycleSeconds - start);
             if (duration < WeekEditing.MinimumRemainderSeconds)
             {
                 continue;
@@ -117,9 +122,10 @@ public static class WeekGenerator
         return new StoredWeek
         {
             ChannelId = channelId,
+            Weeks = cycleWeeks,
             GeneratedUtc = now,
             ModifiedUtc = now,
-            Airings = WeekEditing.Normalise(rows)
+            Airings = WeekEditing.Normalise(rows, cycleSeconds)
         };
     }
 

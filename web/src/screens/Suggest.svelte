@@ -41,6 +41,27 @@
     let scoreError = $state<string | null>(null);
     let chosen = $state<Record<string, boolean>>({});
 
+    /*
+        What the cut-off took away.
+
+        Raising it unticks whatever falls below, which is right - a channel must never be made
+        from titles the screen is not showing. But the page then had no memory of it, so
+        lowering the slider again brought the titles back UNTICKED, and the owner's report is
+        exactly that: sliding around does not re-select what comes back into range. So a tick
+        the cut-off removed is remembered here and given back when the title returns; a tick
+        the owner removed by hand is not in here at all and stays off.
+    */
+    let hiddenTicks = $state<Record<string, boolean>>({});
+
+    /*
+        Which lineup this is. "Not that" asks for another one rather than clearing the screen -
+        see `notThat` below.
+    */
+    let round = $state(0);
+
+    /** How many titles a proposal takes, and so how far each "not that" moves along. */
+    const WINDOW = 12;
+
     async function find(): Promise<void> {
         if (term.trim().length === 0) { hits = []; return; }
         try { hits = await search(term, 10); } catch { hits = []; }
@@ -74,7 +95,15 @@
         cutoff = value;
         if (!answer) { return; }
         for (const result of answer.Results) {
-            if (result.Score < cutoff) { chosen[result.Id] = false; }
+            if (result.Score < cutoff) {
+                // Going out of range: remember whether it was ticked, then untick it.
+                if (chosen[result.Id]) { hiddenTicks[result.Id] = true; }
+                chosen[result.Id] = false;
+            } else if (hiddenTicks[result.Id]) {
+                // Coming back into range: it is ticked again, because that is how it was left.
+                chosen[result.Id] = true;
+                delete hiddenTicks[result.Id];
+            }
         }
     }
 
@@ -84,8 +113,10 @@
         scoreError = null;
         try {
             answer = await scored(seeds.map((s) => s.id));
+            round = 0;
             chosen = {};
-            for (const result of answer.Results.slice(0, 12)) { chosen[result.Id] = true; }
+            hiddenTicks = {};
+            for (const result of answer.Results.slice(0, WINDOW)) { chosen[result.Id] = true; }
         } catch (err) {
             scoreError = err instanceof Error ? err.message : String(err);
         } finally {
@@ -186,7 +217,15 @@
                     Name: r.Name,
                 } satisfies ChannelSource));
         }
-        return matching.slice(0, 60).map((item) => ({
+        /*
+            A window into what matches, so "not that" can offer the next sixty rather than
+            nothing at all. It wraps, so there is always another lineup to look at even when
+            the genre holds fewer than a window's worth.
+        */
+        const size = 60;
+        const start = matching.length === 0 ? 0 : (round * size) % matching.length;
+        const window = [...matching.slice(start), ...matching.slice(0, start)].slice(0, size);
+        return window.map((item) => ({
             Type: item.Type === 'Series' ? 'Series' : 'Movie',
             ItemId: item.Id,
             Name: item.Name,
@@ -221,20 +260,44 @@
     }
 
     /*
-        "Not that" is an answer about the proposal, not about the screen: it stands beside
-        Create, so it means "not this lineup". It used to leave for whichever channel happened
-        to be selected, which read as the button dropping you somewhere at random.
+        "Not that" means NOT THIS LINEUP - so it offers the next one.
 
-        It now throws the proposal away and leaves you here to ask for another. Leaving is what
-        the rail is for, and the hint under the buttons says so.
+        It used to leave the screen, which read as the button dropping you somewhere at random;
+        the port then made it clear every selection, and the owner's report is that it used to
+        cycle round different options and no longer does. They are right, and cycling is the
+        useful behaviour: the seeds and the genres were work, and throwing them away to be told
+        "pick some titles" is not an answer to "not that one".
+
+        So the seeds stay, the genres stay, and each press moves the window along: the next
+        twelve scored titles, or the next sixty that match. Both wrap, so there is always
+        another to look at. Starting over is its own button.
     */
     function notThat(): void {
+        round += 1;
+
+        if (half === 'titles' && answer) {
+            const pool = answer.Results.filter((r) => r.Score >= cutoff);
+            if (pool.length === 0) { return; }
+            const start = (round * WINDOW) % pool.length;
+            const window = [...pool.slice(start), ...pool.slice(0, start)].slice(0, WINDOW);
+            chosen = {};
+            hiddenTicks = {};
+            for (const result of window) { chosen[result.Id] = true; }
+        }
+        // The library half needs nothing else: `proposed` reads `round` and takes the next
+        // window of what matches.
+    }
+
+    /** Back to an empty screen, which is what "not that" used to do to everything. */
+    function startOver(): void {
+        round = 0;
         if (half === 'titles') {
             seeds = [];
             hits = [];
             term = '';
             answer = null;
             chosen = {};
+            hiddenTicks = {};
             scoreError = null;
             cutoff = 0;
         } else {
@@ -419,9 +482,18 @@
                         class="quiet"
                         onclick={notThat}
                         disabled={proposed.length === 0}
-                        title="Throws this lineup away so you can ask for another"
-                    >Not that</button>
+                        title="Keeps what you told it and offers the next lineup"
+                    >Not that &mdash; show me another</button>
+                    <button
+                        type="button"
+                        class="quiet"
+                        onclick={startOver}
+                        title="Clears the seeds and the genres and starts again"
+                    >Start over</button>
                 </div>
+                {#if round > 0}
+                    <p class="hint">Lineup {round + 1}. The titles you started from are kept.</p>
+                {/if}
                 <p class="hint warn">Nothing is written to the server until you press Save.</p>
                 <p class="hint">Pick a channel in the rail to leave without making one.</p>
             </Card>

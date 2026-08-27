@@ -8,7 +8,9 @@
     import { week } from '../lib/week/weekStore.svelte';
     import { store } from '../lib/config.svelte';
     import { resolveDuration } from '../lib/api/duration';
-    import { DAY_NAMES, KIND_FILL, clock, dayOf, secondOfDay } from '../lib/api/week';
+    import {
+        DAY_NAMES, KIND_FILL, MAX_WEEKS, SECONDS_PER_DAY, clock, dayOf, secondOfDay,
+    } from '../lib/api/week';
     import type { TvChannel } from '../lib/types';
 
     let { channel }: { channel: TvChannel } = $props();
@@ -28,13 +30,20 @@
             return 'No week laid out — this channel airs from its content and settings.';
         }
         const placed = week.airings.filter((a) => a.Kind !== 'Gap').length;
-        const day = week.view === 'day' ? DAY_NAMES[dayOf(new Date().getDay())] : null;
-        return placed + ' scheduled' + (day ? ' · ' + day : '');
+        const over = week.weeks === 1 ? '' : ' over ' + week.weeks + ' weeks';
+        return placed + ' scheduled' + over;
     });
+
+    /** "Thursday", or "week 2 · Thursday" when the schedule runs longer than a week. */
+    function dayWords(second: number): string {
+        const day = dayOf(second);
+        const name = DAY_NAMES[day % 7];
+        return week.weeks === 1 ? name : 'week ' + (Math.floor(day / 7) + 1) + ' · ' + name;
+    }
 
     function describe(): string {
         if (!selected) { return ''; }
-        const day = DAY_NAMES[dayOf(selected.StartSecond)];
+        const day = dayWords(selected.StartSecond);
         const from = clock(secondOfDay(selected.StartSecond));
         const to = clock(secondOfDay(selected.StartSecond + selected.DurationSeconds));
         const minutes = Math.round(selected.DurationSeconds / 60);
@@ -66,15 +75,73 @@
             // week out now would quietly use the old content.
             if (store.dirty) { return; }
         }
+        // Pending, like every other schedule edit: it is drawn at once, Undo takes it back, and
+        // nothing is written down until Save. Laying a week out used to be irreversible the
+        // instant it was pressed, over a week somebody had curated by hand.
         await week.generate();
     }
 
+    /*
+        Typing a start time, which the owner asked for beside snapping: dragging is for putting
+        something roughly where it goes, and this is for saying exactly.
+    */
+    function setStartTime(value: string): void {
+        if (!selected) { return; }
+        const [h, m] = value.split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) { return; }
+        const day = dayOf(selected.StartSecond);
+        void week.place({ ...selected, StartSecond: day * SECONDS_PER_DAY + h * 3600 + m * 60 });
+    }
+
+    function setDay(value: string): void {
+        if (!selected) { return; }
+        const day = Number(value);
+        if (!Number.isFinite(day)) { return; }
+        void week.place({ ...selected, StartSecond: day * SECONDS_PER_DAY + secondOfDay(selected.StartSecond) });
+    }
+
+    interface Dropped {
+        itemId: string | null;
+        url: string | null;
+        name: string;
+        /** Set when a whole playlist was dragged: its videos, in order. */
+        playlist?: { url: string; name: string; seconds: number }[];
+    }
+
     async function onDropItem(payload: string, second: number): Promise<void> {
-        let dropped: { itemId: string | null; url: string | null; name: string };
+        let dropped: Dropped;
         try {
-            dropped = JSON.parse(payload) as typeof dropped;
+            dropped = JSON.parse(payload) as Dropped;
         } catch {
             // Something else was dragged onto the grid. Nothing to do.
+            return;
+        }
+
+        /*
+            A whole playlist. It goes on as its videos, one after another from where it was
+            dropped - which is what dragging a playlist onto a Tuesday evening means. Sent as
+            one run, so the week is laid out once rather than once per video, and each length is
+            the one YouTube gave; a video it did not measure is left at zero for the server to
+            work out from the address, exactly as a single dropped link is.
+        */
+        if (dropped.playlist && dropped.playlist.length > 0) {
+            let at = second;
+            const run = dropped.playlist.map((video) => {
+                const seconds = Math.round(video.seconds);
+                const airing = {
+                    ItemId: null,
+                    Url: video.url,
+                    Name: video.name,
+                    Kind: 'Programme' as const,
+                    StartSecond: at,
+                    DurationSeconds: seconds > 0 ? seconds : 0,
+                };
+                // An unmeasured video still has to leave room for the next one, or every
+                // remaining video in the playlist lands on the same second.
+                at += seconds > 0 ? seconds : 30 * 60;
+                return airing;
+            });
+            await week.placeMany(run);
             return;
         }
 
@@ -105,12 +172,46 @@
     }
 </script>
 
-<div class="screen">
-    <div class="toolbar">
+<!--
+    Clicking anywhere that is not a programme lets the selection go. It used to work only on
+    the grid itself, which the owner reported as it working "only in the right side of the
+    view" - everywhere else, a selected bar stayed selected with no way to say otherwise
+    except finding the small button that says so.
+-->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<div class="screen" onclick={() => (week.selectedId = null)}>
+    <div class="toolbar" onclick={(e) => e.stopPropagation()}>
         <div class="segmented" role="group" aria-label="Week or day">
             <button type="button" class:on={week.view === 'week'} onclick={() => (week.view = 'week')}>Week</button>
             <button type="button" class:on={week.view === 'day'} onclick={() => (week.view = 'day')}>Day</button>
         </div>
+
+        {#if week.weeks > 1}
+            <!--
+                Which week of the cycle. A four-week schedule is twenty-eight day columns and
+                nobody can find Thursday in that, so the grid draws one week at a time and this
+                says which - the way a calendar shows one month of a year.
+            -->
+            <div class="weeks" role="group" aria-label="Which week of the schedule">
+                <button
+                    type="button"
+                    onclick={() => (week.weekIndex = Math.max(0, week.weekIndex - 1))}
+                    disabled={week.weekIndex === 0}
+                    aria-label="The week before"
+                >&lsaquo;</button>
+                <span class="which">
+                    Week {week.weekIndex + 1} of {week.weeks}
+                    {#if week.weekIndex === week.currentWeek}<i class="onair">on air</i>{/if}
+                </span>
+                <button
+                    type="button"
+                    onclick={() => (week.weekIndex = Math.min(week.weeks - 1, week.weekIndex + 1))}
+                    disabled={week.weekIndex >= week.weeks - 1}
+                    aria-label="The week after"
+                >&rsaquo;</button>
+            </div>
+        {/if}
 
         <label class="zoom">
             Zoom
@@ -128,11 +229,59 @@
 
         <div class="spacer"></div>
 
+        <!--
+            How long the schedule is before it repeats.
+
+            The owner asked for a channel whose whole schedule is two weeks or more, because a
+            fortnightly film cannot be said in seven days however the seven days are arranged.
+            The number runs the whole range the server will take rather than offering a
+            shortlist of "weekly / fortnightly / monthly", which would be an answer disguised
+            as a question.
+
+            Shrinking it throws away the weeks past the new end, so it says so, and it is a
+            pending edit like everything else here - Undo takes it back.
+        -->
+        <label class="length" title="Shortening this throws away the weeks past the new end.">
+            Repeats every
+            <input
+                type="number"
+                min="1"
+                max={MAX_WEEKS}
+                step="1"
+                value={week.weeks}
+                disabled={week.busy || !week.week?.Curated}
+                onchange={(e) => week.setLength(Number(e.currentTarget.value))}
+                aria-label="How many weeks the schedule runs for before it repeats"
+            />
+            {week.weeks === 1 ? 'week' : 'weeks'}
+        </label>
+
         <div class="legend">
             <span><i style="background: {KIND_FILL.Programme}"></i>Programme</span>
             <span><i style="background: {KIND_FILL.Trailer}"></i>Trailer</span>
             <span><i style="background: {KIND_FILL.Advert}"></i>Advert</span>
         </div>
+
+        {#if week.dirty}
+            <!--
+                The way back. The owner asked for it in the same breath as asking for the week
+                to wait for Save: an edit you cannot take back is one you cannot afford to try.
+            -->
+            <button
+                type="button"
+                class="chip"
+                onclick={() => week.undo()}
+                disabled={week.busy}
+                title="Takes back {week.undoWords}"
+            >Undo</button>
+            <button
+                type="button"
+                class="chip quiet"
+                onclick={() => week.discard()}
+                disabled={week.busy}
+                title="Throws away every unsaved schedule change and goes back to what the server holds"
+            >Discard {week.pending.length} change{week.pending.length === 1 ? '' : 's'}</button>
+        {/if}
 
         <button
             type="button"
@@ -157,12 +306,32 @@
         <Grid {onDropItem} />
 
         {#if selected}
-            <div class="inspector">
+            <div class="inspector" onclick={(e) => e.stopPropagation()}>
                 <div class="edge" style="background: {KIND_FILL[selected.Kind]}"></div>
                 <div class="what">
                     <div class="name">{selected.Name}</div>
                     <div class="detail">{describe()}</div>
                 </div>
+
+                <label class="exact">
+                    Starts
+                    <select
+                        value={String(dayOf(selected.StartSecond))}
+                        onchange={(e) => setDay(e.currentTarget.value)}
+                        aria-label="Which day it airs"
+                    >
+                        {#each Array.from({ length: week.weeks * 7 }, (_, i) => i) as index (index)}
+                            <option value={String(index)}>{dayWords(index * SECONDS_PER_DAY)}</option>
+                        {/each}
+                    </select>
+                    <input
+                        type="time"
+                        step="60"
+                        value={clock(secondOfDay(selected.StartSecond))}
+                        onchange={(e) => setStartTime(e.currentTarget.value)}
+                        aria-label="What time it starts"
+                    />
+                </label>
                 <button type="button" class="chip" onclick={sameTimeTomorrow} disabled={week.busy}>
                     Same time tomorrow
                 </button>
@@ -230,6 +399,55 @@
 
     .zoom input { width: 110px; accent-color: var(--lt-accent); }
 
+    .weeks {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+        padding: 2px 3px;
+    }
+
+    .weeks button {
+        background: none;
+        border: none;
+        color: var(--lt-text-dim);
+        font-family: inherit;
+        font-size: 15px;
+        line-height: 1;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+
+    .weeks button:hover:not(:disabled) { color: var(--lt-text-strong); }
+    .weeks button:disabled { opacity: .3; cursor: default; }
+
+    .which {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--lt-text-title);
+        white-space: nowrap;
+    }
+
+    .onair {
+        font-style: normal;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: var(--lt-accent);
+        margin-left: 5px;
+    }
+
+    .length {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        color: var(--lt-text-dim);
+    }
+
+    .length input { width: 4.2em; font-size: 12.5px; padding: 5px 8px; }
+    .length input:disabled { opacity: .5; }
+
     .reading { min-width: 7em; font-size: 11.5px; }
 
     .spacer { flex-grow: 1; }
@@ -279,6 +497,25 @@
     }
 
     .edge { width: 3px; align-self: stretch; border-radius: 2px; min-height: 2.2em; }
+
+    .exact {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--lt-text-muted);
+        flex: 0 0 auto;
+    }
+
+    .exact select, .exact input {
+        font-size: 12.5px;
+        font-family: inherit;
+        padding: 5px 8px;
+        color: var(--lt-text);
+        background: var(--lt-field-solid);
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+    }
 
     .what { flex-grow: 1; min-width: 0; }
 

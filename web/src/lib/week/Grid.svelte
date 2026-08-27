@@ -34,11 +34,36 @@
         return () => clearInterval(timer);
     });
 
+    /*
+        Now, as a second of the CYCLE rather than of this week.
+
+        `nowSecond()` is seconds after this Monday, which is the whole story for a schedule one
+        week long and half of it for any other: on a fortnightly channel, Monday evening is
+        second 20*3600 of week one or of week two depending which week of the fortnight is
+        running, and only the server knows which - it counts from a fixed Monday. So it is
+        asked, and this adds the offset.
+    */
+    const nowInCycle = $derived(week.currentWeek * 7 * SECONDS_PER_DAY + now);
+
+    /** The first day column of the week being looked at, as a day of the whole cycle. */
+    const firstDay = $derived(week.weekIndex * 7);
+
     const pxPerSecond = $derived(week.zoom / 3600);
     const dayHeight = $derived(SECONDS_PER_DAY * pxPerSecond);
 
-    /** Which days are drawn: all seven, or just the one the day view is on. */
-    const days = $derived(week.view === 'week' ? [0, 1, 2, 3, 4, 5, 6] : [dayOf(now)]);
+    /*
+        Which days are drawn: the seven of the week being looked at, or the one the day view is
+        on. A schedule of four weeks is twenty-eight columns and nobody can find Thursday in
+        that, so the grid draws one week of the cycle at a time.
+    */
+    const days = $derived.by(() => {
+        if (week.view === 'week') {
+            return [0, 1, 2, 3, 4, 5, 6].map((d) => firstDay + d);
+        }
+        // The day view opens on today when today is in the week being looked at, and on its
+        // Monday otherwise - there is no "today" in next week.
+        return [week.weekIndex === week.currentWeek ? dayOf(nowInCycle) : firstDay];
+    });
 
     const placed = $derived(
         week.airings.filter((a) => a.Kind !== 'Gap' && a.Id !== null),
@@ -81,7 +106,11 @@
 
     function scrollToNow(): void {
         if (!body) { return; }
-        const target = secondOfDay(now) * pxPerSecond - body.clientHeight / 3;
+        // The evening, wherever the grid is: a week of the cycle that is not the current one
+        // has no "now" in it, and opening it at midnight is the absurdity the now-scroll was
+        // written to fix in the first place.
+        const at = week.weekIndex === week.currentWeek ? secondOfDay(nowInCycle) : 19 * 3600;
+        const target = at * pxPerSecond - body.clientHeight / 3;
         body.scrollTop = Math.max(0, target);
     }
 
@@ -146,6 +175,89 @@
     }
 
     /*
+        SNAPPING.
+
+        There was snapping before - the drop rounded to the nearest five minutes - and the
+        owner's report was that there is none. Both are true: five minutes at a week's zoom is
+        less than a pixel, so nothing about it could be seen, and rounding to an arbitrary
+        five-minute mark is not what anyone means by snapping a programme. What they mean is
+        that it lands FLUSH: against the end of the programme before it, the start of the one
+        after, or a round time on the clock.
+
+        So the targets are the edges that exist - every row's start and end - and the quarter
+        hours; the nearest one wins if it is within grabbing distance ON SCREEN rather than in
+        seconds, so zooming in makes snapping finer, which is what zooming is for; and the drop
+        line is DRAWN while the drag is in the air, with what it snapped to written beside it.
+        Holding Alt turns the whole thing off and drops on the second.
+    */
+    const SNAP_PIXELS = 9;
+    const QUARTER = 15 * 60;
+
+    /** Where the drop would land: drawn as a line, and used when the drop happens. */
+    let preview = $state<{ day: number; second: number; snapped: string | null } | null>(null);
+
+    /** How long the thing being dragged runs, so its END can snap too. Zero when unknown. */
+    let draggingSeconds = 0;
+
+    /** The edges a drop can land on: every row's start and end, and every quarter hour. */
+    function snapTargets(): number[] {
+        const out: number[] = [];
+        for (const airing of placed) {
+            out.push(airing.StartSecond, airing.StartSecond + airing.DurationSeconds);
+        }
+        for (let t = 0; t <= week.weeks * 7 * SECONDS_PER_DAY; t += QUARTER) { out.push(t); }
+        return out;
+    }
+
+    /**
+     * Where a drop at this position lands, and what it landed on.
+     *
+     * The dragged row's own end is offered as well as its start, so a programme can be laid
+     * flush BEFORE the next one as easily as after the last.
+     */
+    function snap(raw: number, free: boolean): { second: number; snapped: string | null } {
+        if (free) { return { second: Math.max(0, Math.round(raw)), snapped: null }; }
+
+        const within = SNAP_PIXELS / pxPerSecond;
+        let best: { second: number; distance: number; edge: 'start' | 'end' } | null = null;
+
+        for (const target of snapTargets()) {
+            for (const edge of ['start', 'end'] as const) {
+                if (edge === 'end' && draggingSeconds <= 0) { continue; }
+                const candidate = edge === 'start' ? target : target - draggingSeconds;
+                const distance = Math.abs(candidate - raw);
+                if (distance <= within && (best === null || distance < best.distance)) {
+                    best = { second: candidate, distance, edge };
+                }
+            }
+        }
+
+        if (best) {
+            return {
+                second: Math.max(0, Math.round(best.second)),
+                snapped: best.edge === 'end' ? 'ends flush' : 'starts flush',
+            };
+        }
+
+        // Nothing near. The nearest five minutes, which is still what anyone means by
+        // dropping a programme "at eight".
+        return { second: Math.max(0, Math.round(raw / 300) * 300), snapped: null };
+    }
+
+    /** The second under the pointer, allowing for where in the bar it was picked up. */
+    function secondAt(event: DragEvent, day: number): number {
+        const column = event.currentTarget as HTMLElement;
+        const y = event.clientY - column.getBoundingClientRect().top - grabbedAt;
+        return day * SECONDS_PER_DAY + Math.max(0, y / pxPerSecond);
+    }
+
+    function onDragOver(event: DragEvent, day: number): void {
+        event.preventDefault();
+        const landed = snap(secondAt(event, day), event.altKey);
+        preview = { day, second: landed.second, snapped: landed.snapped };
+    }
+
+    /*
         Two things can be dragged onto a day, and they are told apart by what the drag carries:
         an entry from the shelf, which the screen turns into a new airing, and a bar already on
         the week, which is a move. A move is done here because only the grid knows the airing.
@@ -153,15 +265,10 @@
     function onDrop(event: DragEvent, day: number): void {
         event.preventDefault();
         const payload = event.dataTransfer?.getData('text/plain');
+        preview = null;
         if (!payload) { return; }
 
-        const column = event.currentTarget as HTMLElement;
-        const y = event.clientY - column.getBoundingClientRect().top - grabbedAt;
-        let second = day * SECONDS_PER_DAY + Math.max(0, y / pxPerSecond);
-        // Alt drops on the second; otherwise it lands on the nearest five minutes, which is
-        // what anyone actually means by dropping a programme "at eight".
-        if (!event.altKey) { second = Math.round(second / 300) * 300; }
-        second = Math.round(second);
+        const second = snap(secondAt(event, day), event.altKey).second;
 
         let moved: WeekAiring | null = null;
         try {
@@ -192,9 +299,22 @@
     function onBarDragStart(event: DragEvent, airing: WeekAiring): void {
         const bar = event.currentTarget as HTMLElement;
         grabbedAt = event.clientY - bar.getBoundingClientRect().top;
+        draggingSeconds = airing.DurationSeconds;
         event.dataTransfer?.setData('text/plain', JSON.stringify({ airingId: airing.Id }));
         if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; }
         week.selectedId = airing.Id;
+    }
+
+    /*
+        A drag that began outside the grid - an entry from the shelf. Its length is not known
+        here, so only its start can snap; the grab point is zero because the pointer is the
+        thing being positioned.
+    */
+    function onOutsideDragEnter(): void {
+        // A bar's own drag clears both when it ends, so anything still set here belongs to the
+        // drag in progress. A shelf entry has neither: the pointer is the thing being placed,
+        // and its length is the server's to work out, so only its start can snap.
+        if (draggingSeconds === 0) { grabbedAt = 0; }
     }
 </script>
 
@@ -210,7 +330,7 @@
     <div class="heads">
         <div class="gutter"></div>
         {#each days as day (day)}
-            <div class="head" class:today={day === dayOf(nowSecond())}>{DAY_SHORT[day]}</div>
+            <div class="head" class:today={day === dayOf(nowInCycle)}>{DAY_SHORT[day % 7]}</div>
         {/each}
     </div>
 
@@ -227,7 +347,9 @@
                 style="height: {dayHeight}px"
                 role="gridcell"
                 tabindex="-1"
-                ondragover={(e) => e.preventDefault()}
+                ondragover={(e) => onDragOver(e, day)}
+                ondragenter={onOutsideDragEnter}
+                ondragleave={() => (preview = null)}
                 ondrop={(e) => onDrop(e, day)}
             >
                 {#each barsFor(day) as airing (airing.Id)}
@@ -238,7 +360,7 @@
                         class:selected={week.selectedId === airing.Id}
                         draggable="true"
                         ondragstart={(e) => onBarDragStart(e, airing)}
-                        ondragend={() => (grabbedAt = 0)}
+                        ondragend={() => { grabbedAt = 0; draggingSeconds = 0; preview = null; }}
                         style="top: {topOf(airing, day)}px; height: {height}px; background: {KIND_FILL[airing.Kind]};"
                         title="{airing.Name} — {clock(secondOfDay(airing.StartSecond))}, {Math.round(airing.DurationSeconds / 60)} min · drag to move it"
                         onclick={(e) => pick(airing, e)}
@@ -247,9 +369,22 @@
                     </button>
                 {/each}
 
-                {#if dayOf(now) === day}
-                    <div class="now" style="top: {secondOfDay(now) * pxPerSecond}px">
-                        <span class="now-time">{clock(secondOfDay(now))}</span>
+                {#if preview && preview.day === day}
+                    <!--
+                        The drop line. Snapping that cannot be seen is snapping nobody believes
+                        in, which is precisely how five-minute rounding was reported as "no
+                        snapping at all".
+                    -->
+                    <div class="drop" style="top: {secondOfDay(preview.second) * pxPerSecond}px">
+                        <span class="drop-time">
+                            {clock(secondOfDay(preview.second))}{preview.snapped ? ' · ' + preview.snapped : ''}
+                        </span>
+                    </div>
+                {/if}
+
+                {#if dayOf(nowInCycle) === day}
+                    <div class="now" style="top: {secondOfDay(nowInCycle) * pxPerSecond}px">
+                        <span class="now-time">{clock(secondOfDay(nowInCycle))}</span>
                     </div>
                 {/if}
             </div>
@@ -329,12 +464,32 @@
         cursor: pointer;
         line-height: 1.2;
         /*
-            A hairline along the top edge, so a channel that runs programmes back to back reads
-            as programmes rather than as one long blob. Every Programme bar is the same colour
-            and they abut exactly; at a week's zoom the names are dropped as well, which left
-            nothing at all to tell one from the next. Inset, so it costs no room.
+            A line ALL THE WAY ROUND, so a channel that runs programmes back to back reads as
+            programmes rather than as one long blob. Every Programme bar is the same colour and
+            they abut exactly; at a week's zoom the names are dropped as well, which left
+            nothing to tell one from the next.
+
+            A hairline along the top edge was the first attempt and the owner's answer was that
+            it is still hard to see where one part ends. So: a full inset outline, a lighter one
+            just inside it to lift the edge off the bar below, and a real one-pixel gap at the
+            foot - `bottom` rather than height, so nothing has to be subtracted anywhere else.
         */
-        box-shadow: inset 0 1px 0 rgba(0, 0, 0, .45);
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55), inset 0 1px 0 1px rgba(255, 255, 255, .1);
+    }
+
+    /*
+        The gap. Drawn by shrinking the bar rather than by a margin: a bar is absolutely
+        positioned from its start time, and a margin would move it off the time it airs at.
+    */
+    .bar::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 1px;
+        background: var(--lt-ground-bottom);
+        border-radius: 0 0 4px 4px;
     }
 
     .bar:hover { filter: brightness(1.12); }
@@ -347,6 +502,29 @@
         and a right and no bottom.
     */
     .bar.selected { box-shadow: inset 0 0 0 2px #fff; z-index: 1; }
+
+    .drop {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 0;
+        border-top: 2px dashed var(--lt-accent);
+        pointer-events: none;
+        z-index: 3;
+    }
+
+    .drop-time {
+        position: absolute;
+        left: 2px;
+        top: -1.05em;
+        font-size: 9.5px;
+        font-weight: 700;
+        color: #fff;
+        background: var(--lt-accent);
+        padding: 0 4px;
+        border-radius: 2px;
+        white-space: nowrap;
+    }
 
     .now {
         position: absolute;

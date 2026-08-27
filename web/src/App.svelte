@@ -2,6 +2,7 @@
     import './lib/theme.css';
     import Rail from './lib/Rail.svelte';
     import { store } from './lib/config.svelte';
+    import { week } from './lib/week/weekStore.svelte';
     import { hasDashboard, NoDashboardError } from './lib/jellyfin';
     import Week from './screens/Week.svelte';
     import Content from './screens/Content.svelte';
@@ -29,12 +30,39 @@
 
     const channel = $derived(store.channel);
 
+    /*
+        One Save, covering everything on the page.
+
+        The schedule used to write itself down the instant it changed, and the owner reported
+        exactly what that looks like from outside: an edit that does not light Save. Now the
+        week holds its edits until this button too, so "unsaved changes" means all of it and
+        the button is the only thing that writes.
+    */
+    const unsaved = $derived(store.dirty || week.dirty);
+
     const saved = $derived.by(() => {
+        if (store.dirty && week.dirty) { return 'unsaved changes, schedule included'; }
+        if (week.dirty) { return 'unsaved schedule changes'; }
         if (store.dirty) { return 'unsaved changes'; }
         if (!store.savedAt) { return ''; }
         const seconds = Math.round((Date.now() - store.savedAt.getTime()) / 1000);
         return seconds < 60 ? 'saved a moment ago' : 'saved ' + Math.round(seconds / 60) + ' min ago';
     });
+
+    /*
+        The configuration first, then the schedule. That order matters when both are waiting:
+        the week is stored against a channel the configuration has to already name, and a
+        schedule saved against a channel that was never written down would be orphaned.
+    */
+    async function saveAll(): Promise<void> {
+        if (store.dirty) { await store.save(); }
+        const hadSchedule = week.dirty;
+        await week.commit();
+        // "saved a moment ago" is about the PAGE, not only the configuration. Without this a
+        // save that was nothing but schedule work left the header blank, which reads as a
+        // button that did nothing.
+        if (hadSchedule && !week.dirty) { store.savedAt = new Date(); }
+    }
 </script>
 
 <div class="app">
@@ -49,9 +77,17 @@
 
         <div class="main">
             {#if destination === 'suggest'}
+                <!--
+                    A channel that has just been made opens on its WEEK.
+
+                    The tab is remembered across channels, which is right when you are moving
+                    between channels doing the same thing to each - and wrong the moment a
+                    channel is created, because it lands you on whichever screen you happened
+                    to leave last. The owner made one from nothing and arrived at Look.
+                -->
                 <Suggest
-                    onDone={() => (destination = 'channel')}
-                    onBlank={() => { store.addChannel('New channel'); destination = 'channel'; }}
+                    onDone={() => { destination = 'channel'; tab = 'week'; }}
+                    onBlank={() => { store.addChannel('New channel'); destination = 'channel'; tab = 'week'; }}
                 />
             {:else if destination === 'server'}
                 <Server />
@@ -65,8 +101,8 @@
                 <header>
                     <h1>No channels</h1>
                     <div class="spacer"></div>
-                    <span class="saved" class:dirty={store.dirty}>{saved}</span>
-                    <button type="button" class="save" disabled={!store.dirty} onclick={() => store.save()}>Save</button>
+                    <span class="saved" class:dirty={unsaved}>{saved}</span>
+                    <button type="button" class="save" disabled={!unsaved} onclick={saveAll}>Save</button>
                 </header>
                 <p class="unported">
                     {store.dirty
@@ -77,8 +113,8 @@
                 <header>
                     <h1>{channel.Name}</h1>
                     <div class="spacer"></div>
-                    <span class="saved" class:dirty={store.dirty}>{saved}</span>
-                    <button type="button" class="save" disabled={!store.dirty} onclick={() => store.save()}>Save</button>
+                    <span class="saved" class:dirty={unsaved}>{saved}</span>
+                    <button type="button" class="save" disabled={!unsaved} onclick={saveAll}>Save</button>
                 </header>
 
                 <nav class="tabs">

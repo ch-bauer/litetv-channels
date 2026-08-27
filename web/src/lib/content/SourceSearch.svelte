@@ -1,6 +1,6 @@
 <script lang="ts">
     import { search, toSource, type SearchHit } from '../search';
-    import { fetchPlaylist, looksLikePlaylist } from '../api/playlist';
+    import { fetchPlaylist, looksLikeAddress, looksLikePlaylist } from '../api/playlist';
     import type { ChannelSource } from '../types';
 
     let { sources }: { sources: ChannelSource[] } = $props();
@@ -95,8 +95,23 @@
         }
     }
 
+    /*
+        A link pasted into the search box is a link. It is moved into the playlist field rather
+        than searched for, because searching the library for an address can only ever answer
+        "nothing matches" - which reads as the search being broken, not as the box being the
+        wrong one.
+    */
+    const termIsAddress = $derived(looksLikeAddress(term));
+
     function onInput(): void {
         clearTimeout(timer);
+        if (termIsAddress) {
+            hits = [];
+            open = false;
+            playlist = term.trim();
+            term = '';
+            return;
+        }
         if (term.trim().length === 0) { hits = []; open = false; return; }
         timer = setTimeout(run, 250);
     }

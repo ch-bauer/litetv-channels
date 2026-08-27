@@ -1,4 +1,4 @@
-namespace Jellyfin.Plugin.LiteTv.Core;
+﻿namespace Jellyfin.Plugin.LiteTv.Core;
 
 /// <summary>
 /// The rules for changing a stored week: what happens to everything else when something is
@@ -40,8 +40,18 @@ public static class WeekEditing
     /// copy that eats its own original.</param>
     /// <returns>The week as it now stands, in order.</returns>
     public static List<StoredAiring> Place(IEnumerable<StoredAiring> airings, StoredAiring placed)
+        => Place(airings, placed, StoredWeek.SecondsPerWeek);
+
+    /// <summary>
+    /// Puts something on the timeline of a schedule that may be longer than a week.
+    /// </summary>
+    /// <param name="airings">What the schedule holds now.</param>
+    /// <param name="placed">What is being placed.</param>
+    /// <param name="cycleSeconds">How long the whole schedule is before it repeats.</param>
+    /// <returns>The schedule as it now stands, in order.</returns>
+    public static List<StoredAiring> Place(IEnumerable<StoredAiring> airings, StoredAiring placed, int cycleSeconds)
     {
-        var appointment = Clamp(placed);
+        var appointment = Clamp(placed, cycleSeconds);
         var result = new List<StoredAiring>();
 
         foreach (var existing in airings)
@@ -51,7 +61,7 @@ public static class WeekEditing
                 continue;
             }
 
-            result.AddRange(Subtract(existing, appointment.StartSecond, appointment.DurationSeconds));
+            result.AddRange(Subtract(existing, appointment.StartSecond, appointment.DurationSeconds, cycleSeconds));
         }
 
         result.Add(appointment);
@@ -78,17 +88,26 @@ public static class WeekEditing
     /// <param name="airings">The rows.</param>
     /// <returns>The normalised week.</returns>
     public static List<StoredAiring> Normalise(IEnumerable<StoredAiring> airings)
+        => Normalise(airings, StoredWeek.SecondsPerWeek);
+
+    /// <summary>
+    /// The same, for a schedule that runs for more than one week before it repeats.
+    /// </summary>
+    /// <param name="airings">The rows.</param>
+    /// <param name="cycleSeconds">How long the whole schedule is before it repeats.</param>
+    /// <returns>The normalised schedule.</returns>
+    public static List<StoredAiring> Normalise(IEnumerable<StoredAiring> airings, int cycleSeconds)
     {
         var result = new List<StoredAiring>();
         foreach (var airing in airings)
         {
-            var next = Clamp(airing);
+            var next = Clamp(airing, cycleSeconds);
             if (next.DurationSeconds < MinimumRemainderSeconds)
             {
                 continue;
             }
 
-            result = Place(result, next);
+            result = Place(result, next, cycleSeconds);
         }
 
         return Sorted(result);
@@ -101,11 +120,20 @@ public static class WeekEditing
     /// <param name="airings">A normalised week.</param>
     /// <returns>The gaps, as (start, duration) pairs in seconds of the week.</returns>
     public static List<(int StartSecond, int DurationSeconds)> Gaps(IReadOnlyList<StoredAiring> airings)
+        => Gaps(airings, StoredWeek.SecondsPerWeek);
+
+    /// <summary>
+    /// The stretches of a schedule nothing claims, in order.
+    /// </summary>
+    /// <param name="airings">A normalised schedule.</param>
+    /// <param name="cycleSeconds">How long the whole schedule is before it repeats.</param>
+    /// <returns>The gaps, as (start, duration) pairs in seconds of the cycle.</returns>
+    public static List<(int StartSecond, int DurationSeconds)> Gaps(IReadOnlyList<StoredAiring> airings, int cycleSeconds)
     {
         var gaps = new List<(int, int)>();
         if (airings.Count == 0)
         {
-            gaps.Add((0, StoredWeek.SecondsPerWeek));
+            gaps.Add((0, cycleSeconds));
             return gaps;
         }
 
@@ -117,12 +145,12 @@ public static class WeekEditing
             var end = ordered[i].EndSecond;
             var nextStart = i + 1 < ordered.Count
                 ? ordered[i + 1].StartSecond
-                : ordered[0].StartSecond + StoredWeek.SecondsPerWeek;
+                : ordered[0].StartSecond + cycleSeconds;
 
             var length = nextStart - end;
             if (length >= MinimumRemainderSeconds)
             {
-                gaps.Add((Modulo(end, StoredWeek.SecondsPerWeek), length));
+                gaps.Add((Modulo(end, cycleSeconds), length));
             }
         }
 
@@ -136,21 +164,22 @@ public static class WeekEditing
     /// <param name="existing">The row.</param>
     /// <param name="appointmentStart">Where the appointment starts, in seconds of the week.</param>
     /// <param name="appointmentLength">How long it runs.</param>
+    /// <param name="cycleSeconds">How long the whole schedule is before it repeats.</param>
     /// <returns>What survives.</returns>
-    private static IEnumerable<StoredAiring> Subtract(StoredAiring existing, int appointmentStart, int appointmentLength)
+    private static IEnumerable<StoredAiring> Subtract(StoredAiring existing, int appointmentStart, int appointmentLength, int cycleSeconds)
     {
         // Everything in the row's own frame: it begins at zero and runs to its length, so the
         // circle only has to be dealt with once, when the appointment is mapped into it.
         var length = existing.DurationSeconds;
-        var offset = Modulo(appointmentStart - existing.StartSecond, StoredWeek.SecondsPerWeek);
+        var offset = Modulo(appointmentStart - existing.StartSecond, cycleSeconds);
 
-        // The appointment as this row sees it, and again a week earlier: an appointment
-        // starting late in the week reaches a row that starts early in it by wrapping round,
+        // The appointment as this row sees it, and again a cycle earlier: an appointment
+        // starting late in the cycle reaches a row that starts early in it by wrapping round,
         // and in the row's frame that is a stretch beginning at a negative number.
         var cuts = new[]
         {
             (From: offset, To: offset + appointmentLength),
-            (From: offset - StoredWeek.SecondsPerWeek, To: offset - StoredWeek.SecondsPerWeek + appointmentLength)
+            (From: offset - cycleSeconds, To: offset - cycleSeconds + appointmentLength)
         };
 
         var cursor = 0;
@@ -163,7 +192,7 @@ public static class WeekEditing
 
             if (from > cursor)
             {
-                var piece = Piece(existing, cursor, from);
+                var piece = Piece(existing, cursor, from, cycleSeconds);
                 if (piece is not null)
                 {
                     yield return piece;
@@ -175,7 +204,7 @@ public static class WeekEditing
 
         if (cursor < length)
         {
-            var tail = Piece(existing, cursor, length);
+            var tail = Piece(existing, cursor, length, cycleSeconds);
             if (tail is not null)
             {
                 yield return tail;
@@ -189,8 +218,9 @@ public static class WeekEditing
     /// <param name="existing">The row.</param>
     /// <param name="from">Where the piece starts, in seconds from the row's start.</param>
     /// <param name="to">Where it ends.</param>
+    /// <param name="cycleSeconds">How long the whole schedule is before it repeats.</param>
     /// <returns>The piece, or null when it is too short to be worth airing.</returns>
-    private static StoredAiring? Piece(StoredAiring existing, int from, int to)
+    private static StoredAiring? Piece(StoredAiring existing, int from, int to, int cycleSeconds)
     {
         var duration = to - from;
         if (duration < MinimumRemainderSeconds)
@@ -203,7 +233,7 @@ public static class WeekEditing
             // A piece of a row is a new row. Keeping the id would give the week two rows
             // claiming to be the same one, and the page addresses rows by id.
             Id = from == 0 ? existing.Id : Guid.NewGuid(),
-            StartSecond = Modulo(existing.StartSecond + from, StoredWeek.SecondsPerWeek),
+            StartSecond = Modulo(existing.StartSecond + from, cycleSeconds),
             DurationSeconds = duration,
             Kind = existing.Kind,
             ItemId = existing.ItemId,
@@ -222,15 +252,16 @@ public static class WeekEditing
     }
 
     /// <summary>
-    /// A row with its start inside the week and its length inside a week, which everything
-    /// else here assumes and a request from a page does not promise.
+    /// A row with its start inside the cycle and its length no longer than one, which
+    /// everything else here assumes and a request from a page does not promise.
     /// </summary>
     /// <param name="airing">The row.</param>
+    /// <param name="cycleSeconds">How long the whole schedule is before it repeats.</param>
     /// <returns>The row, clamped.</returns>
-    private static StoredAiring Clamp(StoredAiring airing)
+    private static StoredAiring Clamp(StoredAiring airing, int cycleSeconds)
     {
-        airing.StartSecond = Modulo(airing.StartSecond, StoredWeek.SecondsPerWeek);
-        airing.DurationSeconds = Math.Clamp(airing.DurationSeconds, 0, StoredWeek.SecondsPerWeek);
+        airing.StartSecond = Modulo(airing.StartSecond, cycleSeconds);
+        airing.DurationSeconds = Math.Clamp(airing.DurationSeconds, 0, cycleSeconds);
         return airing;
     }
 

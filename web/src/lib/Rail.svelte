@@ -7,6 +7,7 @@
         regrouped underneath them by a channel going on or off air — the dot carries that.
     */
     import { store } from './config.svelte';
+    import { week } from './week/weekStore.svelte';
     import type { TvChannel } from './types';
 
     let { destination = $bindable<'channel' | 'server' | 'suggest'>('channel') }:
@@ -39,7 +40,15 @@
     }
 </script>
 
-<nav class="rail">
+<!--
+    Clicking the rail's own ground - beside the brand, under the last channel, anywhere that is
+    not a control - lets go of whatever is selected on the screen beside it. The owner reported
+    that letting go "works kinda, but only in the right side of the view": the grid cleared a
+    selection and nothing else did, so the empty half of the window was dead to the mouse.
+-->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<nav class="rail" onclick={() => (week.selectedId = null)}>
     <div class="brand">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--lt-accent)" stroke-width="1.8" aria-hidden="true">
             <rect x="2" y="7" width="20" height="14" rx="2.5" /><path d="m7 7 5-4 5 4" />

@@ -34,6 +34,20 @@ export interface Week {
     ChannelName: string;
     /** False means nobody has laid a week out; the channel airs from its sources instead. */
     Curated: boolean;
+    /**
+     * How many weeks the schedule runs for before it repeats. One for every channel that has
+     * never been told otherwise; more makes a fortnightly film sayable, which no arrangement
+     * of seven days can manage.
+     */
+    Weeks: number;
+    /**
+     * Which week of that cycle is on right now, counting from zero.
+     *
+     * The server's answer, not the page's: which week of a fortnight is running is counted
+     * from a fixed Monday, and a page working it out for itself would be a second
+     * implementation of the one sum that must never disagree with playback.
+     */
+    CurrentWeek: number;
     GeneratedUtc: string | null;
     ModifiedUtc: string | null;
     Airings: WeekAiring[];
@@ -46,34 +60,54 @@ export function getWeek(channelId: string): Promise<Week> {
     return api().getJSON<Week>(base(channelId));
 }
 
-export function generateWeek(channelId: string): Promise<Week> {
-    return api().fetch<Week>({ url: base(channelId, '/Generate'), type: 'POST', dataType: 'json' });
-}
+/**
+ * One change to the week, not yet made.
+ *
+ * The page holds a list of these rather than sending each one as it happens. That is what lets
+ * Save cover the schedule like it covers everything else, and what makes undo the removal of
+ * the last element and nothing more.
+ */
+export type WeekEdit =
+    | { Kind: 'Place'; Airing: Partial<WeekAiring> }
+    | { Kind: 'Remove'; AiringId: string }
+    | { Kind: 'Generate' }
+    | { Kind: 'Clear' }
+    | { Kind: 'Length'; Weeks: number };
 
-/** Adds or moves one airing. The server answers with the week as it now stands. */
-export function putAiring(channelId: string, airing: Partial<WeekAiring>): Promise<Week> {
+/**
+ * Asks what a run of edits comes to, and optionally writes it down.
+ *
+ * The whole run goes every time. Only the server knows what an appointment does to the rows
+ * around it - trims them, cuts one in two, drops one entirely - so a page that tried to draw
+ * its own pending edits would be drawing a week nobody is going to get. This way the rehearsal
+ * on screen and the week that Save stores are computed from the same input.
+ */
+export function applyEdits(channelId: string, edits: WeekEdit[], commit: boolean): Promise<Week> {
     return api().fetch<Week>({
-        url: base(channelId, '/Airings'),
-        type: 'PUT',
-        data: JSON.stringify(airing),
+        url: base(channelId, '/Edits?commit=' + (commit ? 'true' : 'false')),
+        type: 'POST',
+        data: JSON.stringify({ Edits: edits }),
         contentType: 'application/json',
         dataType: 'json',
     });
 }
 
-export function deleteAiring(channelId: string, airingId: string): Promise<Week> {
-    return api().fetch<Week>({
-        url: base(channelId, '/Airings/' + airingId),
-        type: 'DELETE',
-        dataType: 'json',
-    });
-}
-
-export function clearWeek(channelId: string): Promise<Week> {
-    return api().fetch<Week>({ url: base(channelId), type: 'DELETE', dataType: 'json' });
+/** What an edit is called on screen - for the undo button, and for saying what is waiting. */
+export function editWords(edit: WeekEdit): string {
+    if (edit.Kind === 'Generate') { return 'laying the week out again'; }
+    if (edit.Kind === 'Clear') { return 'emptying the week'; }
+    if (edit.Kind === 'Remove') { return 'taking one programme off'; }
+    if (edit.Kind === 'Length') {
+        return 'making the schedule ' + edit.Weeks + (edit.Weeks === 1 ? ' week long' : ' weeks long');
+    }
+    return edit.Airing.Id ? 'moving ' + (edit.Airing.Name ?? 'a programme') : 'adding ' + (edit.Airing.Name ?? 'a programme');
 }
 
 export const SECONDS_PER_DAY = 24 * 60 * 60;
+export const SECONDS_PER_WEEK = 7 * SECONDS_PER_DAY;
+
+/** The longest a schedule may run before it repeats. Matches the server's own cap. */
+export const MAX_WEEKS = 13;
 
 /** Which day of the stored week a second falls in, 0 = Monday. */
 export function dayOf(second: number): number {

@@ -1,4 +1,4 @@
-namespace Jellyfin.Plugin.LiteTv.Core;
+﻿namespace Jellyfin.Plugin.LiteTv.Core;
 
 /// <summary>
 /// Reads a stored week as a schedule: what is on now, and what is on over any window of time,
@@ -39,6 +39,7 @@ public static class WeekReader
         DateTime toUtc,
         TimeZoneInfo timeZone)
     {
+        var weeks = Math.Max(1, week.Weeks);
         var rows = BuildRows(week);
         if (rows.Count == 0)
         {
@@ -49,9 +50,9 @@ public static class WeekReader
         var fromLocal = ToLocal(fromUtc, timeZone);
         var toLocal = ToLocal(toUtc, timeZone);
 
-        // One week back, because the airing covering the start of the window may have begun in
-        // the copy of the week before this one - a film that started at 23:40 last night.
-        var weekStart = WeekStart(fromLocal).AddDays(-7);
+        // One cycle back, because the airing covering the start of the window may have begun in
+        // the copy of the schedule before this one - a film that started at 23:40 last night.
+        var weekStart = CycleStart(fromLocal, weeks).AddDays(-7 * weeks);
 
         while (weekStart < toLocal)
         {
@@ -99,8 +100,38 @@ public static class WeekReader
                 };
             }
 
-            weekStart = weekStart.AddDays(7);
+            weekStart = weekStart.AddDays(7 * weeks);
         }
+    }
+
+    /// <summary>
+    /// A fixed Monday, from which it is counted which week of a longer cycle is on now.
+    /// <para>
+    /// 5 January 1970, because it is a Monday and because it is not a date anything else here
+    /// depends on. Anchoring absolutely rather than to when a channel was made is what stops a
+    /// fortnightly channel swapping over to the other week when the server is restarted, or
+    /// disagreeing with itself between the guide and playback.
+    /// </para>
+    /// </summary>
+    private static readonly DateTime CycleEpoch = new(1970, 1, 5, 0, 0, 0, DateTimeKind.Unspecified);
+
+    /// <summary>
+    /// The Monday a schedule's current repetition began on.
+    /// </summary>
+    /// <param name="local">A local moment.</param>
+    /// <param name="weeks">How many weeks the schedule runs for.</param>
+    /// <returns>The Monday the cycle covering that moment started on.</returns>
+    public static DateTime CycleStart(DateTime local, int weeks)
+    {
+        var monday = WeekStart(local);
+        if (weeks <= 1)
+        {
+            return monday;
+        }
+
+        var weeksSinceEpoch = (int)Math.Floor((monday - CycleEpoch).TotalDays / 7);
+        var into = ((weeksSinceEpoch % weeks) + weeks) % weeks;
+        return monday.AddDays(-7 * into);
     }
 
     /// <summary>
@@ -126,6 +157,7 @@ public static class WeekReader
     /// <returns>The rows, in order of when they start.</returns>
     public static List<(StoredAiring Row, AiringKind Kind, ScheduledEntry? Next)> BuildRows(StoredWeek week)
     {
+        var cycleSeconds = week.CycleSeconds;
         var stored = week.Airings
             .Where(a => a.DurationSeconds > 0)
             .OrderBy(a => a.StartSecond)
@@ -137,7 +169,7 @@ public static class WeekReader
         }
 
         var all = new List<StoredAiring>(stored);
-        foreach (var (start, duration) in WeekEditing.Gaps(stored))
+        foreach (var (start, duration) in WeekEditing.Gaps(stored, cycleSeconds))
         {
             all.Add(new StoredAiring
             {

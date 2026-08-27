@@ -32,6 +32,21 @@ export function looksLikePlaylist(value: string): boolean {
     return !trimmed.includes('/') && !trimmed.includes('?') && /^[A-Za-z0-9_-]{12,}$/.test(trimmed);
 }
 
+/**
+ * True for anything that is plainly an address rather than a title.
+ *
+ * The owner asked for links to be detected instead of typed into the box that is for links:
+ * pasting one into a search box and being told nothing matches is the page failing to notice
+ * what it was handed. Deliberately narrow - a scheme, or a bare host with a dot and a path -
+ * so that a film called "Up" is never mistaken for one.
+ */
+export function looksLikeAddress(value: string): boolean {
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || /\s/.test(trimmed)) { return false; }
+    if (/^https?:\/\//i.test(trimmed)) { return true; }
+    return /^[a-z0-9-]+(\.[a-z0-9-]+)+\//i.test(trimmed);
+}
+
 export function fetchPlaylist(url: string): Promise<Playlist> {
     return api().getJSON<Playlist>(api().getUrl('LiteTv/YouTubePlaylist', { url }));
 }

@@ -1,4 +1,4 @@
-using Jellyfin.Plugin.LiteTv.Configuration;
+﻿using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Trailers;
 
 namespace Jellyfin.Plugin.LiteTv.Core;
@@ -179,29 +179,36 @@ public sealed class ChannelGuide
     /// </para>
     /// </summary>
     /// <param name="channel">The channel.</param>
+    /// <param name="weeks">How many weeks the schedule should run for before repeating. Kept
+    /// by the caller across a re-lay-out, so asking for the week again does not quietly turn a
+    /// fortnight back into a week.</param>
     /// <returns>The week, unsaved.</returns>
-    public StoredWeek GenerateWeek(TvChannel channel)
+    public StoredWeek GenerateWeek(TvChannel channel, int weeks = 1)
     {
+        var cycleWeeks = Math.Max(1, weeks);
         var timeZone = TimeZoneInfo.Local;
         var nowLocal = DateTime.SpecifyKind(
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone),
             DateTimeKind.Unspecified);
 
-        var weekStartLocal = WeekReader.WeekStart(nowLocal);
+        // Where THIS repetition of the schedule began, so a fortnight laid out on the second
+        // Monday still starts at the first. Anchored absolutely - see WeekReader.CycleStart.
+        var weekStartLocal = WeekReader.CycleStart(nowLocal, cycleWeeks);
         var fromUtc = ToUtc(weekStartLocal, timeZone);
-        var toUtc = ToUtc(weekStartLocal.AddDays(7), timeZone);
+        var toUtc = ToUtc(weekStartLocal.AddDays(7 * cycleWeeks), timeZone);
 
         // Capped because this walks a generated schedule, and a channel configured into a
         // corner - a slot grid of one minute, say - could otherwise hand back a week of
-        // hundreds of thousands of rows and a file to match.
-        var airings = GeneratedWindow(channel, fromUtc, toUtc).Take(8192);
+        // hundreds of thousands of rows and a file to match. The cap scales with the cycle, or
+        // a four-week schedule would simply stop somewhere in week two.
+        var airings = GeneratedWindow(channel, fromUtc, toUtc).Take(8192 * cycleWeeks);
 
         var advertUrls = channel.Adverts
             .Where(a => !string.IsNullOrWhiteSpace(a.Url))
             .Select(a => a.Url)
             .ToHashSet(StringComparer.Ordinal);
 
-        return WeekGenerator.Build(channel.Id, airings, weekStartLocal, timeZone, advertUrls);
+        return WeekGenerator.Build(channel.Id, airings, weekStartLocal, timeZone, advertUrls, cycleWeeks);
     }
 
     private static DateTime ToUtc(DateTime local, TimeZoneInfo timeZone)

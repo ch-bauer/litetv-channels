@@ -628,8 +628,12 @@
         text-decoration: underline;
     }
 
-    /* Left as the browser draws it, so it is obviously a list to choose from. */
-    select.text { appearance: auto; }
+    /*
+        Left as the browser draws it, so it is obviously a list to choose from - but on an
+        OPAQUE ground. `.text` above sets a translucent white, which the browser composites on
+        its own light ground when it opens the list, and the result was white on white.
+    */
+    select.text { appearance: auto; background-color: var(--lt-field-solid); }
     .bin:hover { color: #e08585; }
 
     .upload {

@@ -1,4 +1,4 @@
-namespace Jellyfin.Plugin.LiteTv.Core;
+﻿namespace Jellyfin.Plugin.LiteTv.Core;
 
 /// <summary>
 /// What one row of a stored week is.
@@ -120,6 +120,30 @@ public class StoredWeek
 
     /// <summary>Gets or sets the file format version, for whenever this shape has to change.</summary>
     public int Version { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets how many weeks the schedule runs for before it repeats.
+    /// <para>
+    /// One, for every channel ever made until now, and the file format is unchanged for them:
+    /// a missing value reads as one. More than one makes the cycle longer than a week, which
+    /// is what a fortnightly film or a four-week rotation needs and what no arrangement of
+    /// seven days can express. <see cref="StoredAiring.StartSecond"/> then runs over the whole
+    /// cycle rather than over one week - "Thursday" means the Thursday of a particular week of
+    /// it.
+    /// </para>
+    /// <para>
+    /// Which week of the cycle is on now is not a matter of when the channel was made: it is
+    /// counted from a fixed Monday, so every reader agrees and a server restart does not shift
+    /// a fortnightly channel onto the other week.
+    /// </para>
+    /// </summary>
+    public int Weeks { get; set; } = 1;
+
+    /// <summary>
+    /// Gets how long the whole schedule is, in seconds. Everything here is arithmetic on a
+    /// circle of this size.
+    /// </summary>
+    public int CycleSeconds => Math.Max(1, Weeks) * SecondsPerWeek;
 
     /// <summary>Gets or sets the channel the week belongs to.</summary>
     public Guid ChannelId { get; set; }
