@@ -1,421 +1,429 @@
 [
-    {
-        "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
-        "name": "LiteTV Channels",
-        "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
-        "overview": "TV channels from your library, without transcoding.",
-        "owner": "Christian",
-        "category": "General",
-        "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
-        "versions": [
-            {
-                "version": "1.0.76.0",
-                "changelog": "The app's whole TV section could disappear, and this is why. Jellyfin's own library lookup throws an error when it is handed an empty id instead of answering \"no such item\" - and half of what a channel schedules has no library item behind it at all: an advert is an address, a trailer is an address, and a break that is not announcing anything has no programme to name. One of those on air was enough to make the request that lists channels fail outright. The app reads a failure there as \"this server does not have the plugin\" and quietly takes TV out of its menu, so the channels vanished with nothing anywhere saying why - and whether it happened depended entirely on what happened to be airing at the moment somebody opened the app, which is why it looked random. Every library lookup in the plugin now treats an empty id as nothing rather than as a question, in one place that all of them go through; seventeen of them were unguarded. Caught by opening the app on an emulator and finding no TV section at all, then reading the server's log rather than the app's.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.76.0/litetv-channels_1.0.76.0.zip",
-                "checksum": "a3fc26584bb0f89917f9a5ba1ea9b521",
-                "timestamp": "2026-08-27T20:40:00Z"
-            },
-            {
-                "version": "1.0.75.0",
-                "changelog": "A channel can be deleted again. The old configuration page had a \"Remove this channel\" card and the rebuilt app lost it, which left a configuration you could only ever add to. It is back on Settings, where it was: two presses, because there is no undo, and the second one names the channel it is about to remove. Nothing reaches the server until Save, as everywhere else here. Two things behind it also had to be put right. A channel's schedule is kept in its own file rather than in the configuration - deliberately, so that saving the configuration can never destroy a week somebody spent an evening arranging - which meant a deleted channel would have left its schedule behind for ever, belonging to nothing and invisible to everyone. The server now throws that away when it notices the channel has gone, and refuses to do any such tidying when the channel list reads empty, since that is also what a configuration looks like when it has failed to load. And deleting the very last channel used to hide the Save button along with the channel it belonged to, so the one change you had just made could not be written down; the header stays now, and says what pressing Save would do.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.75.0/litetv-channels_1.0.75.0.zip",
-                "checksum": "7c81a148e9c6a437b6c9ec9aa85e4798",
-                "timestamp": "2026-08-27T20:15:00Z"
-            },
-            {
-                "version": "1.0.74.0",
-                "changelog": "YouTube playlists were reading as empty, and had been for some time. Asking the server for a real playlist answered nothing at all - no error, no warning in the log, just a playlist with no videos in it - and the same thing happened whenever a week was laid out with a playlist as one of its sources, which is the part that mattered. The cause is at YouTube's end: the entries in a playlist page used to arrive as one kind of object and now arrive as another, and the reader was still looking for the old one. It reads both now, taking the video, its title and its length from wherever they are, and it skips the things on a playlist page that are not videos rather than trying to schedule a channel as a programme. Three tests hold the new shape, written from a real answer rather than an imagined one. This was found by adding a playlist through the page that 1.0.73.0 built - the page reports an empty playlist out loud now, which is the only reason anybody noticed.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.74.0/litetv-channels_1.0.74.0.zip",
-                "checksum": "e7a01ad6dda138fc2d8fa4016f5819a8",
-                "timestamp": "2026-08-27T19:50:00Z"
-            },
-            {
-                "version": "1.0.73.0",
-                "changelog": "Twenty-five things the owner found by walking the new configuration app, and all of them are answered here. Four were one fault each seen from several ends. The selection highlight was cut off almost everywhere because every ring was drawn outside the thing it marks, so the bar that starts where a programme ends painted over its bottom edge - the rings are inside now, which also stops every card and list clipping them. The Save button stayed grey over real edits because dirty was a flag twenty places had to remember to set; it is measured now, against what the server last gave us, so no control can miss it and putting a value back un-marks it. Dragging a programme to another time was never built, and dragging from the shelf did reach the server - which stored a row of zero seconds, drawn as a hairline and playing for no time at all, because the page deliberately sends no length and nothing filled it in. And the two buttons on the new-channel screen that did nothing did nothing for a good reason: they minted an id with a browser call that only exists on https, so on a dashboard reached by its address on the network the click threw before it could change anything. That one also broke Create. The rest, screen by screen. A channel that runs programmes back to back is no longer one blob. Delete moves to the next airing so a run can be cleared. A series on the shelf opens into seasons and episodes to drag from. A YouTube playlist is read before it is added, on the content list and on the shelf, where it goes on as its videos rather than one tag - the plugin could always expand a playlist when a week was laid out, but nothing could ask, which is exactly what \"fetching does not work\" was. Blocks are a list, not a week view, asked for twice. Selecting a source now says what selecting is for. \"Nothing to play yet\" says whether it means the channel or the Save button. The break settings moved to Breaks, where anyone would look for them. On Look: the channel name is drawn only where a television draws it, the gallery searches the whole library instead of offering only this channel's own titles, previews show the whole picture instead of cropping it, the upload button wears an upload, and the television preview follows what the app actually does - banner first in the channel list, backdrop first behind the channel screen, both dimmed hard, with a line saying which picture it used and why. Suggestions gained a similarity cut-off that runs the whole range. The server screen offers its two typed fields as drop-downs - the YouTube client list is the resolver's own ladder, so the two cannot drift - and old builds can be cleared out in one press. The app also sizes itself to the room it is given rather than to a guessed height, which is what left a band of empty space under it and stopped the build list scrolling.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.73.0/litetv-channels_1.0.73.0.zip",
-                "checksum": "c0b5e129935468e6a006661764c14e11",
-                "timestamp": "2026-08-27T18:46:00Z"
-            },
-            {
-                "version": "1.0.72.0",
-                "changelog": "The configuration page was blank in 1.0.70.0 and still blank in 1.0.71.0, and this makes it appear. Both releases had the same shape of fault: the page waited to be told to draw itself. 1.0.71.0 added the second event name on the theory that the first one was wrong, and it changed nothing, because no such event arrives here under either name. The page it replaced had in fact never depended on one - it registered a listener and also loaded itself a tick later, and the tick is what drew it, every time, for seventy releases. That line was the part that got left behind. The page now mounts itself as soon as it is in the document and uses the events only to tidy up on the way out, which costs nothing, since loading was already written to be safe to ask for twice. The script has also moved back inside the page element, where the old one lived, so a host that injects only that element cannot drop it. And the loader now leaves a trail of what it did, so a page that comes up empty can say why instead of saying nothing.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.72.0/litetv-channels_1.0.72.0.zip",
-                "checksum": "9ee5ffebbbf7cac0ccfb565e1f2acd36",
-                "timestamp": "2026-08-27T14:37:00Z"
-            },
-            {
-                "version": "1.0.71.0",
-                "changelog": "The configuration page in 1.0.70.0 was blank, and this makes it appear. The new page waited for an event this dashboard does not send - it listened for viewshow, while the page it replaced had listened for pageshow for seventy releases - so the handler that loads the app never ran, no script tag was ever made, and the notice that exists to say the app is missing could not fire either. It now listens for both names, because a lifecycle whose name changed between versions has to be met halfway. A second fault behind that one is fixed at the same time: a module is evaluated once per document, so leaving the page and coming back would have re-added a script tag that never ran, and the page would have worked exactly once. Each visit now loads under its own query string and Svelte takes the previous one down properly. The link to the previous configuration page is gone; it never worked, for the same reason nothing else on the page did.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.71.0/litetv-channels_1.0.71.0.zip",
-                "checksum": "c34a9311ebbf4429d22aa380bbec5038",
-                "timestamp": "2026-08-27T12:45:00.000Z"
-            },
-            {
-                "version": "1.0.70.0",
-                "changelog": "The configuration page is no longer a page. It is a web app - Vite, TypeScript and Svelte - built from the design boards and shipped inside the plugin, the way the Segment Editor plugin packages its editor. All nine screens were ported: the week and the day, content, breaks, look, settings, the server, and both halves of making a channel out of what the library already holds. Most of what was wrong with the old page was wrong because it was one very large HTML file wearing dashboard components, and those complaints are simply gone: the cramped shelf, the search bar, the boxes that sized themselves oddly, the scaling. The rest were real and are answered - a selected slot can be unselected, the shelf is a list you drag entries out of, Delete removes and the arrow keys move, the grid opens scrolled to the now line, taking a channel off this week happens at once instead of after a round trip, and a block is edited without the whole week in the way. Two things arrived alongside it: a channel now says how long it takes to play through in words, and a YouTube playlist can be a channel source. The page as it was is still installed beside the new one and there is a link to it at the foot, because a rewrite with no way back is one nobody can afford to try.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.70.0/litetv-channels_1.0.70.0.zip",
-                "checksum": "a422252ea99dd1967e03dff4948eb69f",
-                "timestamp": "2026-08-27T10:00:00.000Z"
-            },
-            {
-                "version": "1.0.69.0",
-                "changelog": "Suggestions were quietly using the blunt scorer. Two faults, both in LiteTV's own call to the Smart Similar plugin, and neither of them visible: the answer was being read with a serialiser that cannot parse the ids Jellyfin actually writes - 32 hex characters with no dashes - so the whole scored pool was thrown away on its very first field and the fallback took over. And the call forwarded only the Authorization header, so a caller who had authenticated with X-Emby-Token reached Smart Similar as nobody at all and was answered 401. Both are fixed, with tests for the reading. The new-channel screen already said which engine had answered, which is how this was noticed at all.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.69.0/litetv-channels_1.0.69.0.zip",
-                "checksum": "b850d6f0a4202469c6dfc51788667b8a",
-                "timestamp": "2026-08-23T06:00:00.000Z"
-            },
-            {
-                "version": "1.0.68.0",
-                "changelog": "A programme's bar can no longer be resized, because its length was never yours to set. The plugin plays an episode or a film for as long as the file runs and ignores whatever length the stored week carries, so dragging the bottom of one never made it shorter - it changed how much room the programme was given, and if that room came out under the runtime the programme silently did not play at all. Dragging to move it is unchanged, and the tooltip now says where the length comes from. An address dropped onto the week still resizes, because there its stored length really is the one that is used.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.68.0/litetv-channels_1.0.68.0.zip",
-                "checksum": "3838313f67546da2d746f4648d6fe0ce",
-                "timestamp": "2026-08-23T05:10:00.000Z"
-            },
-            {
-                "version": "1.0.67.0",
-                "changelog": "The two screens of the design that had never been built: making a channel out of what the library already holds. The + button opens them instead of dropping an empty channel on you. Name a few things you like and the library is scored against all of them - by the Smart Similar plugin where it is installed, by a rougher genre match where it is not, and which one answered is said at the top rather than hidden. What the results have in common is drawn as signals with how much of the pool carries each. Or switch to the other half and tick libraries and genres; ticking two genres asks for titles in both, which is how Sci-Fi plus Horror gets you creature features rather than two piles. Either way it proposes one channel, says what it is made of, lays out a typical evening from the real runtimes, and Create makes it - Tweak makes it and opens it, Not that moves on. Nothing reaches a television until you save.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.67.0/litetv-channels_1.0.67.0.zip",
-                "checksum": "6b1ee4b97a5f2a487554c23fa5205977",
-                "timestamp": "2026-08-23T04:30:00.000Z"
-            },
-            {
-                "version": "1.0.66.0",
-                "changelog": "Found by comparing the installed page against the design, screen by screen. The schedule now draws a now line across the day it falls on, which the design has and the page did not - without it a stored week is seven identical columns with nothing saying which part of it matters. The day view also opens on today rather than on Monday. Play order is the design's pair of buttons rather than a dropdown: there are two answers and both should be readable without opening anything. The picture gallery gets the room it needs instead of a 323-pixel slot under two cards that were holding height they were not using. And the proof-of-origin line read \"Heldminted 37 min ago\" - two words with no space between them.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.66.0/litetv-channels_1.0.66.0.zip",
-                "checksum": "237a84517814cf46200e02f77a110a94",
-                "timestamp": "2026-08-23T03:30:00.000Z"
-            },
-            {
-                "version": "1.0.65.0",
-                "changelog": "A pass over the configuration page against a real server, which is where all of this was found. Nothing on the page moves when it should not any more: a channel with a long name used to widen the rail and carry the header, the tabs, the grid and the shelf with it, and opening a (?) explanation pushed every setting under it down the card. Explanations now float over the page and cost nothing to open. Several things could not be reached at all. The library and provider picture galleries could not be scrolled, because a card was not allowed to give room back to the thing scrolling inside it; the crop tool was appended below the gallery, so opening it pushed the column down past the picture being cropped with no way back, and it is a dialog now. The page also stops 74 pixels short of the window no longer. Content: the queue preview names the actual episodes and films in the order they would play, with their season and episode numbers and which source each came from - it used to repeat the series title, which said nothing. Boxes no longer resize as entries are added and removed, and an empty list is a quiet line rather than a grey slab the height of the screen. The schedule opens on the day view, and the week and the day each keep their own zoom, remembered between visits instead of being reset on the way past. Look is three compact rows - the picture in its own shape, what the slot is for, where the picture came from - rather than a column of large previews that had to be scrolled. Search results clear when you leave the box they belong to, text boxes shrink to their column instead of overflowing it, and the advert row fits on one line with a decade field that says what it is.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.65.0/litetv-channels_1.0.65.0.zip",
-                "checksum": "eac55901ac5a1080f95666c4421b1bc0",
-                "timestamp": "2026-08-23T02:30:00.000Z"
-            },
-            {
-                "version": "1.0.64.0",
-                "changelog": "The schedule can finally be read. Zooming in now enlarges the labels rather than only the bars, holds the place you were looking at instead of jumping back to the evening, goes far enough in that a four-minute advert carries its name, and adds half-hour lines and a readout of the shortest airing still labelled. Bars are drawn exactly as long as they run - the old eleven-pixel minimum made every short programme overlap the next, which is where the overlapping text came from - and the day header now stays put however far in you go. Several screens were missing pieces of their design and have them back: Content carries the play order and the interleave beside the sources they act on, with the dealt queue underneath; Look shows what the channel looks like on the television; Breaks explains why there is no length to type and works an example; Server settings reports whether a proof of origin is held, which is the difference between 1080p trailers and 360p ones. The update address the app needs is no longer clipped out of sight inside its own card, the shelf's address field no longer cuts off its own placeholder, the selected airing is drawn as a card that takes its room from the grid rather than over it, and the advert decade box says what it is instead of showing a bare 0. Enhanced Poster Tags is no longer reported among the neighbouring plugins. Dragging an airing is no longer guesswork: the bar moves with the pointer instead of staying put until the mouse comes up, carries the time it will land on, follows the grid when dragged to the edge of it, and actually snaps - the five-minute snap was being applied to the pointer rather than to the bar, so a bar could come to rest on any second at all and every drag looked unsnapped. Hold Alt for second-by-second, as before.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.64.0/litetv-channels_1.0.64.0.zip",
-                "checksum": "373e587b1e43d66d134555910de52ffa",
-                "timestamp": "2026-08-23T00:15:00.000Z"
-            },
-            {
-                "version": "1.0.63.0",
-                "changelog": "The configuration page now uses the whole width it has and clears the dashboard header. Jellyfin caps a settings form at about 800px and floats a fixed header over the page, so the rebuilt page arrived in a narrow column with its top row hidden; it now lifts that cap for itself, measures the header rather than assuming a height, and corrects its own height against the document so no scrollbar is left. The channel rail can also finally tell which channels have no week of their own - the guide reports it now - and shows the tag it was always meant to.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.63.0/litetv-channels_1.0.63.0.zip",
-                "checksum": "bc72b0b07bd3aefc06372ae601d84165",
-                "timestamp": "2026-08-22T21:30:00Z"
-            },
-            {
-                "version": "1.0.62.0",
-                "changelog": "Fixes the rebuilt configuration page, which arrived unstyled: Jellyfin keeps only the body of a plugin page, so the stylesheet in the head never reached the browser and the layout fell back to one plain column. The stylesheet now lives in the body, where the other plugins that ship one keep theirs, and the page measures the room it has left rather than guessing at it.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.62.0/litetv-channels_1.0.62.0.zip",
-                "checksum": "91989d05b2de2b21d20c5f89abb75ae2",
-                "timestamp": "2026-08-22T20:45:00Z"
-            },
-            {
-                "version": "1.0.61.0",
-                "changelog": "The configuration page is rebuilt: a channel rail down the side with a filter and what each channel is showing, the editor beside it as tabs, and every screen fitting the window - only the channel list scrolls. The week grid fills the height it is given and opens on the evening rather than on eight empty hours after midnight. New: a Day view for editing breaks too small to grab on a week, a strip showing which sibling plugins are installed and usable, and a Settings screen that shows a real evening from the server instead of describing what the numbers do. Every setting says one line and keeps its explanation behind a (?).",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.61.0/litetv-channels_1.0.61.0.zip",
-                "checksum": "b8e6e191dc8675fb4d65aa5cafa23450",
-                "timestamp": "2026-08-22T20:15:00Z"
-            },
-            {
-                "version": "1.0.60.0",
-                "changelog": "Break lengths are worked out rather than typed: a linked trailer or advert is given the time it actually plays for - its length minus the stretches SponsorBlock skips - and the seconds boxes are gone from the configuration page, replaced by a readout that says what was found and admits when it found nothing. And LiteTV now uses the plugins beside it: /LiteTv/Plugins reports which are installed, and suggestions are scored by the Smart Similar plugin over /LiteTv/Suggestions/Scored, falling back to a rough genre match - and saying so - when it is absent.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.60.0/litetv-channels_1.0.60.0.zip",
-                "checksum": "a2d6f1994872089c4504e4f6bc6e4378",
-                "timestamp": "2026-08-22T19:00:00Z"
-            },
-            {
-                "version": "1.0.59.0",
-                "changelog": "A channel's schedule is now a stored week you can edit. Every airing - programmes, adverts, trailers - is written down in the channel's own file, and the guide is that week read over and over, so what is on at nine on Thursday stays what is on at nine on Thursday even when a collection the channel plays gains a title. The configuration page opens on a week-long timeline: drag a bar to move it, drag its lower edge to resize it, drop films, episodes, adverts or an address onto empty time. Laying a week out from the channel's content is a button you press, never a side effect of saving. The printed schedule preview and the old list of schedule exceptions are gone, and the channel editor is now five tabs rather than one long scroll. A channel with no stored week is unchanged and still airs whatever its content and settings work out to.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.59.0/litetv-channels_1.0.59.0.zip",
-                "checksum": "3cd7a6b2f0a49613e985cd77d36378b3",
-                "timestamp": "2026-08-22T14:00:00.000Z"
-            },
-            {
-                "version": "1.0.58.0",
-                "changelog": "The proof-of-origin token is stored but no longer shown. Nobody types it - a television mints it and posts it - so there was nothing to show, and showing it was worse than useless: the configuration page posts back the whole configuration as it was when the page loaded, so opening the page before a television minted and saving it afterwards for some unrelated reason wiped the stored token. The field is gone, and any save that has forgotten the token now has it filled back in rather than clearing it. Ask GET /LiteTv/PoToken whether one is held; it answers without disclosing it.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.58.0/litetv-channels_1.0.58.0.zip",
-                "checksum": "2f0716ec2493b8d16dc5af346c5fa091",
-                "timestamp": "2026-08-22T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.57.0",
-                "changelog": "The proof-of-origin token now survives a restart, and a cached answer no longer outlives it. The token the television mints is what lifts YouTube's sixty-second wall on trailer streams; it was held only in memory, so every Jellyfin restart threw it away - and a restart happens on every plugin install, which meant trailers fell back to 360p until somebody next opened the app on a television. It is written to configuration now, masked on the page, and read back at start-up. Separately, a resolution cached before a token arrived is no longer served after one does: a token does not merely make the next resolution better, it makes the last one wrong, so the held token carries a generation and a cached answer from an older one is ignored.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.57.0/litetv-channels_1.0.57.0.zip",
-                "checksum": "2b94f854d8d480b177fd5aaaf87b8841",
-                "timestamp": "2026-08-22T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.56.0",
-                "changelog": "The television mints a proof-of-origin token and this takes it. Without one, YouTube gives this server a 1080p ladder whose streams stop being served after about sixty seconds, or one muxed 360p that plays to the end - measured, on every client that answers at all. The wall is `pot=` enforcement, and the token that lifts it comes from Google's BotGuard, which is JavaScript wanting a browser that a server does not have and an Android box does. So POST /LiteTv/PoToken takes what the box mints, the visitor id it was minted against goes into the player request, and every googlevideo address goes out carrying it. With no token held, nothing changes at all. The YouTube account setting is gone in the same release: it was measured worthless on every client, it is not the mechanism anybody else uses, and a live credential in plain-text configuration that buys nothing is the worst of both.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.56.0/litetv-channels_1.0.56.0.zip",
-                "checksum": "d28c507324bc5c10f1c1978816a042e0",
-                "timestamp": "2026-08-22T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.55.0",
-                "changelog": "A YouTube account can be pasted in. The setting was there and documented and did nothing; now the whole Cookie header from a logged-in tab is sent, and the request is signed the way YouTube's own web player signs it - SAPISIDHASH over the seconds, the session id and the origin, which carries no password because the secret is the cookie the browser already holds. Only the clients that are signed in in real life carry it: Android VR is logout-only and keeps asking exactly as it does today, so an empty setting changes nothing at all. Use an account you do not care about - it is stored in plain text and anybody who can read this configuration can act as it.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.55.0/litetv-channels_1.0.55.0.zip",
-                "checksum": "d37d5f8bf70327f58c93a3c35276a235",
-                "timestamp": "2026-08-22T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.54.0",
-                "changelog": "The check for a stream that stops now looks near the end rather than past the opening. Two thirds of the way in was not far enough: an iOS 1080p pair measured on 21 August served its audio at half way and refused it at nine tenths, so the check passed and the trailer would still have stopped - later than a minute in, and just as wrong. It asks at 95% now, and whatever serves that serves the lot.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.54.0/litetv-channels_1.0.54.0.zip",
-                "checksum": "430903904cabd472c1ee8d548a8f4763",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.53.0",
-                "changelog": "1080p is back, by asking the way ReVanced asks. Android VR was written off here as needing a login; it does not. It needs the request an application makes rather than the one a web page makes: the app endpoint at youtubei.googleapis.com instead of www.youtube.com, a deviceMake and deviceModel, and none of a browser's Origin and Referer headers - an Oculus user agent carrying a web page's headers is not a client YouTube has ever seen. Asked properly it answered with 22 renditions up to 2160p, every one of them carrying an address.\n\nThat matters because the plain Android client no longer carries addresses at all: nineteen adaptive renditions with no url on any of them, and one muxed 360p, which is exactly why trailers had dropped to 360p.\n\nAndroid VR is also refused a fair part of the time with \"Sign in to confirm you're not a bot\". That is a gate on the asker, not on the request, and the answer to it is to fall through to the next client rather than to hammer it - so a break gets 360p that day rather than nothing, and the good rendition whenever the gate is open.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.53.0/litetv-channels_1.0.53.0.zip",
-                "checksum": "8b5f4063f492be1cf3d15bf3e155b6d1",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.52.0",
-                "changelog": "The YouTube client can be pinned, and the answer says which one replied. What YouTube hands over depends on who is asking, and that cannot be settled from a server: measured on 21 August, the Android client returns nineteen adaptive renditions with no address on any of them - not obfuscated, simply withheld - and one muxed 360p with an address, while Android VR, which does return every rendition unobfuscated on a phone running ReVanced with microG, answers LOGIN_REQUIRED here because a server has no Google identity to offer. A visitor token does not change that.\n\nSo the client is a setting rather than a guess: leave it on \"try them all\" or name one and test it from the television. The resolve endpoint now reports the client that answered and the height it resolved, so a trailer that looks wrong can be explained without reading the server log.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.52.0/litetv-channels_1.0.52.0.zip",
-                "checksum": "27aa1fe5183d0a69b7e07c88a117f66f",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.51.0",
-                "changelog": "The client ladder is ReVanced's, not a guess. Their spoofing roster - read on 21 August, from GitLab, since their GitHub is DMCA-blocked - looks nothing like the one this had, and two differences matter more than the names.\n\nThe device fields are part of a client. This sent a client name and a version and nothing else, which is why ANDROID_VR answered LOGIN_REQUIRED every time it was tried here: without a Quest 3 and an Android 12 behind it, it is not a client YouTube recognises. deviceModel, osName, osVersion and androidSdkVersion are sent now.\n\nAnd the order is by what plays. Android VR 1.61.48 leads, because it is logged out by definition - no account restrictions apply to it and its streaming URLs come back unobfuscated - followed by the Android app at 20.44.38, Android Creator and visionOS. IOS is last on purpose: ReVanced's own tracker carries \"videos stop loading after 1 minute\" against it, which is exactly the fault this was rebuilt to fix.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.51.0/litetv-channels_1.0.51.0.zip",
-                "checksum": "0973fb39ec859c5871647fafb3893f14",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.50.0",
-                "changelog": "The capped stream no longer wins the ladder. 1.0.49.0 spotted that an adaptive pair would stop a minute in and fell back to muxed - but only within the client that found it, and a client with no muxed format to offer handed the capped 1080p back anyway, where it outranked the 360p another client had already provided. The server log said so plainly and the answer was still itag 137.\n\nA stream that will not play past its opening now ranks at the floor: below anything that plays through, above nothing at all. So the ladder keeps looking, any client's muxed format wins, and a capped stream is returned only when the whole ladder comes back capped - a minute of a trailer being better than silence when there is nothing else.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.50.0/litetv-channels_1.0.50.0.zip",
-                "checksum": "9a42a4a5079ac5ee6cdc14a0a37d482e",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.49.0",
-                "changelog": "A trailer that stops just past a minute. YouTube's conditions on adaptive streams moved again, and this time they serve only the opening of a file: measured against googlevideo on 21 August, a hundred kilobytes at 20% of the way in came back 206 and the same request at 46% came back 403 - on a URL seconds old, with the range asked for as a header and as a query parameter alike, and on a freshly resolved URL asked for the far offset first. For a 128 kbps audio stream that cap is about a minute of sound, which is exactly what it looked like from the sofa.\n\nSo the pick is checked instead of assumed. When an adaptive pair wins the ladder, one small range beyond the opening is requested - on the audio stream, which is the smaller file and the one that runs out first - and a refusal drops the answer to the best muxed format. 360p that plays through is worth more than 1080p that stops. It costs one request per resolve, only when adaptive has won, and when YouTube stops capping it starts preferring the good renditions again with nothing to change.\n\nAlso: a break is no longer announced as a preview of something with no trailer. A programme with neither a trailer file nor a provider link is skipped when the schedule looks for something to advertise, so the guide stops printing \"Vorschau: X\" for a preview that was never going to play. An episode's trailers are looked for on its series, the same fallback the resolver makes.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.49.0/litetv-channels_1.0.49.0.zip",
-                "checksum": "63b186b2250ef15e34779fed0ef4274a",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.48.0",
-                "changelog": "Clearing a channel's borrowed artwork no longer breaks the save. The page wrote the empty guid with dashes, and Jellyfin's own converter reads guids in the dash-less form and only that one - so the configuration came back 500, \"Unrecognized Guid format\", and nothing on the page was saved. Found while building a channel through the API, where the same rule bites: an empty string is not a guid either, so a field like this can never be blanked.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.48.0/litetv-channels_1.0.48.0.zip",
-                "checksum": "91d97f611b7a14f25380faa4ee2f6d2c",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.47.0",
-                "changelog": "An address the schedule names can be resolved. GET /LiteTv/Resolve?url= turns any address a break names - an advert, a bumper, a clip the library does not hold - into a stream the client can play, with the headers it has to be fetched with. It is the same resolving the trailer endpoint does; only where the address comes from differs.\n\nWithout it adverts were a schedule that could not be aired: the plugin placed them, the guide reported them, and the app had no way to turn one into anything playable, so it dropped them and ran the programmes together.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.47.0/litetv-channels_1.0.47.0.zip",
-                "checksum": "3a13a8ce9d266385e3392bfc49676049",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.46.0",
-                "changelog": "The web gallery works for a channel that has never had a picture chosen. It compared the channel's artwork item against the empty guid spelled with dashes, and Jellyfin returns configuration guids with the dashes stripped - so thirty-two zeros matched nothing, the page decided a picture had been chosen, asked the providers about an id that names no title, and reported that they had no pictures for it. Every channel on this server was in that state. Ids are compared without their dashes now.\n\nFound by opening the page and pressing the button, which is the only way this kind of fault is ever found: everything about it looked correct, including the answer.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.46.0/litetv-channels_1.0.46.0.zip",
-                "checksum": "0f8254aa7398261a88234a622821f414",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.45.0",
-                "changelog": "Two faults the adverts turned up the moment they ran on a real server, both of them about a break no longer being one airing.\n\nA channel reported an advert that had already finished. A window begins at the airing covering its first moment, and a break is now rebuilt into several - adverts, then the trailer, then what is left - so the first entry the schedule hands back is not necessarily the thing that is on. What is on air is now the entry that covers this moment, and anything already over is dropped before the guide is drawn.\n\nA break could fill with adverts and leave the trailer nowhere to go. Room is reserved for the trailer before any advert is placed, but the reservation was measured from local trailer *files* - and nearly every trailer a library has is a link the client resolves, whose length the server never learns. That measured zero, so with a pool of any size the adverts would take the whole break. A linked trailer now reserves two and a half minutes; over-reserving costs a little quiet at the end of a break, which is what a break was before any of this.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.45.0/litetv-channels_1.0.45.0.zip",
-                "checksum": "64e48c8446153283b63f8d318832d01b",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.44.0",
-                "changelog": "Adverts in the breaks. A break already plays trailers for what is coming up, and an advert is the same machinery pointed at something the library does not hold: an address the client resolves and plays, with nothing reported to Jellyfin, because an advert is not library content and has no item to record against. Add them per channel on the configuration page with a length and, if you like, a decade.\n\nThey go at the front of a break and the trailer goes last, which is television's order and not an accident of it - a break that ends on what is coming up leaves the viewer with the channel rather than with an advert. Room for the trailer is reserved first: an advert that only fits by pushing the trailer out has taken the break's reason for existing with it.\n\nAn advert of the decade the programme was made in is preferred, then undated ones, then the rest. A 1980s advert before a 1980s film is the whole charm; a current one is noise.\n\nWhich advert plays is worked out from the break's own moment and the channel, so every client arrives at the same break without being told, and the pool is walked from a different place each time. The obvious way to do that is wrong and the tests caught it: breaks land on round clock intervals, so a plain modulo of the minute count gives a five-advert pool with hourly breaks the same advert all evening.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.44.0/litetv-channels_1.0.44.0.zip",
-                "checksum": "b4a3e850a6ff81875c9c0f1774029ccb",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.43.0",
-                "changelog": "The schedule can be edited. A channel's schedule is worked out from its content, its grid and its anchor rather than written down anywhere - which is what makes it identical on every client, free to compute and endless - so there was nothing to edit. What is stored now is the difference: a handful of appointments, each holding its own stretch of the clock, with the generated schedule bending around them exactly as a broadcaster's does around a fixture.\n\nOn the configuration page every row of the schedule has Remove and Replace. Removing leaves the channel dark for that stretch rather than pulling everything forward, because pulling forward would move every programme after it and break every time the channel had promised. Replacing airs a library item from that moment for as long as it runs, taking as much of the generated schedule as it needs. What is left of a programme either side of an edit keeps its position, so a film interrupted resumes where it was cut rather than replaying the part that was skipped, and a remainder under two minutes is dropped instead of aired.\n\nEdits are tied to a moment rather than to a time of the week: dragging Saturday's film is about that airing, and something every week is what a trailer slot already is. One in the past can never fire again, so the list stays prunable. Nine tests cover the arithmetic, which is where an off-by-one would otherwise hide for weeks behind a schedule that still looks plausible.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.43.0/litetv-channels_1.0.43.0.zip",
-                "checksum": "2a45c0b37dc967869b564224dcd7bf0a",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.42.0",
-                "changelog": "Banners from TheTVDB, which were there all along. The gallery filtered the pictures it already had, and that answer is a few hundred TheMovieDB posters - so the banners sat past the end of it and the strip reported none while the provider held twenty. Measured on the test server: an untyped request for \"Marvel's Agents of S.H.I.E.L.D.\" returns 430 pictures with no banner among them; the same series asked for banners by name returns all 21, from TheTVDB. The Boys has 18, SpongeBob 8. So each shape is now asked for by name when it is chosen, rather than filtered out of a slice.\n\nBanner leads the shapes, because it is the slot that cannot be filled any other way - about five and a half to one, and nothing else is. TheTVDB draws them for series and not for films, so a film channel still fills that slot from a backdrop through the crop tool.\n\nThe rest of 1.0.41.0 stands: twenty-four tiles at a time behind a Load more button, the German-first ordering still applied over the whole set before anything is drawn, and a collection asked about and opened every time rather than only when it answered with nothing.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.42.0/litetv-channels_1.0.42.0.zip",
-                "checksum": "3bf358507f0ef203b751e51f635d51e2",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.41.0",
-                "changelog": "The web gallery draws a page at a time. Every tile is a picture fetched from the provider, and the strip drew the whole answer at once - two to four hundred of them for a well-known film, to fill one slot that is almost always filled from the first few. Twenty-four now, with a Load more button under them. The German-first ordering still runs over the whole set before anything is drawn, so paging cannot bury the German pictures the way a smaller request would.\n\nThere are shape filters above the strip. The hard slot to fill is the banner - about five and a half to one, and no provider offers one, so filling it means finding the widest picture there is and cropping it. Measured on this server: TheMovieDB and OMDb answer with Primary, Backdrop, Thumb and Logo, and no Banner at all, so Backdrop and Thumb are the candidates and the filter puts them first. Enabling Fanart.tv in Jellyfin would add real banners; nothing here can conjure them.\n\nA collection is asked about and opened, every time. It used to ask the providers about the collection and only fall back to the films inside when that answered with nothing - but a film series usually is a collection to TheMovieDB, so it answered with a handful of pictures and the films' own artwork, which is better and far more plentiful, was never reached. The collection's pictures lead, then one picture of each film in turn.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.41.0/litetv-channels_1.0.41.0.zip",
-                "checksum": "13eb7b135bb71beb99ec3e50be8209dd",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.40.0",
-                "changelog": "An ABI is only used if it is one. Smoke-testing the update server against the live server turned up a build whose file name was read as ABI \"gtest123-1-armeabi-v7a\", and so advertised as Wholphin-release-gtest123-1-armeabi-v7a.apk - a name the app never asks for, which means an update that is never offered and nothing anywhere saying why. The cause is that a name can be wrong in the middle and still match: a commit hash that is not hexadecimal leaves the version's commit part unmatched, the build number slides into its place, and everything after it looks like an ABI. Whatever the name says is now checked against the ABIs that exist, and a file whose name does not name one is treated as universal, which is the honest reading of \"the name does not say\".\n\nEverything else in 1.0.39.0 was confirmed working against the live server first: the release JSON, the three asset names in the order the app asks for them, the download, and range requests.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.40.0/litetv-channels_1.0.40.0.zip",
-                "checksum": "e8a010a279c09ddd682bb6d4759b15b3",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.39.0",
-                "changelog": "The plugin serves the app's updates. The television has been getting its builds over ADB, which is the only reason ADB is switched on at all - a standing way into the box kept open so an APK can be pushed. The app already knows how to update itself from a URL, so the plugin is now the thing at the other end of it: upload a build on the configuration page, and the television is offered it the next time it looks. Put the address the page shows into the app's Settings -> Advanced -> Update URL once, and that is the last time anything has to be installed by hand.\n\nIt answers in the shape the app expects, exactly. The version is written the way the app's own parser reads it, and the assets are advertised under the names it asks for, in the order it asks - which is the whole contract, and every part of it fails silently: an update that is simply never offered, with nothing in any log to say why. Each ABI gets its own name, a release build is never offered under a debug name, and downloads support range requests so a television that loses the connection half way can carry on.\n\nLiteTV is in the dashboard menu, and out of everyone else's sidebar. The link it used to add through Plugin Pages sat in every user's sidebar, not only an administrator's, and what it opened was this page - every channel, every source and the name of the playback account, to somebody who cannot save any of it. The page belongs in the dashboard, which is administrators only, and it is now in the dashboard's own menu beside the other plugins. Any entry left in Plugin Pages by an earlier version is removed on start.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.39.0/litetv-channels_1.0.39.0.zip",
-                "checksum": "74e146ceaf9f2c451e4c55cb27ce43af",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.38.0",
-                "changelog": "1080p trailers, and the two rules that make them play. The revert to 360p in 1.0.37.0 was one measurement short: adaptive streams do play, they simply come with conditions the plugin was breaking.\n\nRead them in windows. A request for the whole file, or for tens of megabytes, is answered 403; a megabyte at any offset is served happily. ExoPlayer asks for the whole file, which is why the good renditions never showed a frame while 360p muxed ones were fine.\n\nUse them soon. The expire on a googlevideo URL is hours away and means nothing - an address a few minutes old starts refusing everything past its first window. This cached resolutions for forty-five minutes, so a looping channel came back to a break and played a dead URL. It is two minutes now, only enough to stop a break asking twice while it starts; resolving costs a fifth of a second.\n\nMeasured: windows of a megabyte at every offset tried, on a URL still answering after five minutes, at 1080p H.264 with 128 kbps AAC. The client has to do the windowing - a player handed these addresses without it will still see 403s.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.38.0/litetv-channels_1.0.38.0.zip",
-                "checksum": "f08dbbc9c234da9aea051fac324861f5",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.37.0",
-                "changelog": "Trailers use muxed streams again, and play. Pairing adaptive video and audio was right about where the quality lives and wrong about being able to fetch it: measured on 21 August, an adaptive URL serves its first megabyte and answers 403 to everything after it - from any offset, on a URL seconds old, through ANDROID and IOS alike, with or without ratebypass, by Range header or by range query - while a muxed URL from the same answer serves its whole ten megabytes in one request. That is YouTube's proof-of-origin regime, and getting past it means minting a token by running their JavaScript.\n\nSo the resolver takes the best muxed format again: itag 18 at 360p for most videos, itag 22 at 720p where it survives. A trailer that plays is worth more than a resolution it never reached. The measurement is written into the code, along with the instruction not to prefer adaptive formats again without first checking that a window past the first megabyte still comes back 206.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.37.0/litetv-channels_1.0.37.0.zip",
-                "checksum": "0b3053d17d0da764953dd29e11696bc9",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.36.0",
-                "changelog": "The crop tool works on the automatic picture. It used to refuse any slot that had nothing chosen for it, which is the wrong way round: the automatic picture is the one most in need of cropping - nobody chose it for that shape, the plugin found it in the channel's lineup - and the only way to move the frame on it was to upload a copy of a picture the server already had. Cropping one now works exactly as cropping a chosen picture does, and turns it into a chosen picture, which is what saving a crop means anyway. It is fetched at full size rather than at the size of the thumbnail beside the slot, so a crop is a crop of the picture and not of a preview of it.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.36.0/litetv-channels_1.0.36.0.zip",
-                "checksum": "122d89105bf4243930c268793d97f4d0",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.35.0",
-                "changelog": "SponsorBlock, for trailers. German trailers mostly come from channels that wrap them in a branded card at the front and a plea to subscribe at the back, and a minute-long break has no room for either. GET /LiteTv/Trailer/{id} now carries the stretches to seek past, and a client is expected to take them without asking - the skip button an app shows for library content is right for a programme and wrong inside an advert. The lookup uses the hash-prefix form of the API, so the service is asked about every video whose id starts with the same four characters and is never told which one is playing. There is a switch for it on the configuration page; turned off, no request is made at all.\n\nA collection is followed to the films inside it when artwork is derived. A BoxSet is a name with a list behind it and usually has no pictures of its own, so a marathon channel built from one came out blank on the television and offered nothing in the configuration's gallery, while each film it airs has a poster and a thumb. The collection is still asked first: artwork somebody made for a collection was made for exactly this. The web gallery does the same, falling back to the films when the providers hold nothing for the collection itself.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.35.0/litetv-channels_1.0.35.0.zip",
-                "checksum": "f0c93b3281b03c13830bb95d64f13e2c",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.34.0",
-                "changelog": "No hardcoded API keys. The trailer resolver carried five AIzaSy keys copied from YouTube's own players, as every port of this trick does. Measured today, the player endpoint answers identically without one - same status, same formats, same 1080p - so they are gone. They look like credentials in a public repository, they belong to somebody else, and they are exactly the sort of constant that gets rotated without notice. What identifies the caller is the client name, its version and a matching User-Agent.\n\nThe client ladder is re-measured. ANDROID_VR and the TV player answer LOGIN_REQUIRED, WEB and MWEB answer UNPLAYABLE, IOS answers up to 720p and ANDROID answers the full ladder, so ANDROID leads and IOS backs it up. The failing ones stay behind them, because which of them works is the thing that changes.\n\nThe H.264 preference knows its place. It was worth four thousand points against a height in the hundreds, so 360p H.264 beat 1080p VP9 every time; it is a hundred points now, enough to decide between two streams of the same size and never enough to overrule a real difference in resolution. AV1 is skipped, being the codec a set-top box of unknown vintage most often cannot decode in hardware.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.34.0/litetv-channels_1.0.34.0.zip",
-                "checksum": "e057512cb99c80241a6eab9b71050c50",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.33.0",
-                "changelog": "Trailers play at the quality the trailer was made at. The resolver took the best of YouTube's muxed formats list whenever a client answered without a manifest, and that list holds itag 18 and little else: 360p with thin audio, which is what the channel was airing. Measured today, no client returns a manifest at all, so the muxed list was always the answer. Everything worth watching lives in adaptiveFormats as separate video and audio streams; the plugin now pairs them - H.264 in MP4 up to 1080p, AAC preferring stereo - and sends both addresses so the client can play them together. Three trailers measured at 1080p, 720p and 800p with 128 kbps audio, in a tenth of a second, where all three were 360p before.\n\nGerman comes first. A trailer's language now outranks which kind of trailer it is: a household being told about tonight's film in English is worse off than one told about it by a teaser. The markers are the ones the providers actually wrote - Deutsch, German, Offizieller, Kinotrailer - and fourteen of the fifteen films here that have trailers now air a German one. The artwork gallery orders provider pictures the same way: German first, then the ones with no language at all, which is what a textless backdrop is and exactly what the background slot wants.\n\nThe crop tool can zoom out. It started at cover and could only ever go further in, so a whole title could never fit inside a banner frame - there is no zoom at which it does, because the whole picture inside the frame leaves bars. The slider now runs down to contain, \"Fit whole picture\" goes straight there, and the space around the picture is filled with a blurred, over-sized copy of the picture itself rather than black.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.33.0/litetv-channels_1.0.33.0.zip",
-                "checksum": "394604b58cdbbf38231de01cd31f4e24",
-                "timestamp": "2026-08-21T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.32.0",
-                "changelog": "The sidebar page shows up. It was registered correctly and served correctly, and it was invisible: the configuration page is a whole document whose outermost element carries Jellyfin's own `page` class, which the web client's CSS hides until its view manager decides to show it - and nothing ever would, because the markup is appended into a container by hand. GET /LiteTv/Page now hands back the body as a fragment with that class removed.\n\nAn episode's trailer comes from its series. The metadata providers attach trailers to the series and never to the episode, so a channel advertising \"SpongeBob at 20:15\" found nothing to play for every break it scheduled. The series' trailer is the right answer anyway: what is being advertised is the programme, and nobody cuts a trailer per episode.\n\nA channel's pictures are the channel's, and they hold still. They were read off the schedule, so a channel's face changed every time its programme did - which is not a face at all, and it changed while somebody was looking at the list. They now come from the channel's own sources and change only when the channel is edited.\n\nCropping is done by hand, in the configuration page, and once. A banner is about five and a half to one and almost nothing else is, so every picture that is not already a banner lost most of its height to become one - from the middle, with no idea where the faces or the lettering were. Drag to move the frame, zoom, and the cropped picture is uploaded as the slot's own file.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.32.0/litetv-channels_1.0.32.0.zip",
-                "checksum": "f6da5fb08a8c54d16561f95b51228b27",
-                "timestamp": "2026-08-20T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.31.0",
-                "changelog": "A channel has three pictures now, not one wide one used twice. A banner is made to be looked at with a name over it, which is what a channel card is; a backdrop is the only artwork drawn to fill a screen; a cover is the upright one. Answering the first two with the same file made the channel screen a blown-up version of the card that led to it.\n\nThe channel's automatic cover asks the series before the episode. An episode's Primary image is a 16:9 still of one scene - neither upright nor a picture of the channel - which is what turned up in the cover slot.\n\nThe configuration page shows what a channel will actually air: times, titles and breaks, day by day. Everything else on that page describes a channel and none of it says what comes out, and a loop of three series on a fifteen-minute grid is not something anybody can hold in their head. A suggested channel now arrives with the same fields a hand-made one has, rather than half of them.\n\nChosen artwork can be downloaded and kept: POST /LiteTv/Artwork/{channelId}/{kind}/Fetch takes an address and stores the bytes here. A picture from a metadata provider does this automatically, since an address nobody here looks after stops working sooner or later, and a television behind a household firewall may not reach it even while it works. Pictures are drawn whole and in their own shape when choosing, rather than as small wide crops that turn every poster into a slice of somebody's face.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.31.0/litetv-channels_1.0.31.0.zip",
-                "checksum": "5d32b0d0229b561b69b86c9c2569416a",
-                "timestamp": "2026-08-20T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.30.0",
-                "changelog": "A guide row asks for one wide, specific picture of the programme, and which image that is depends on what the programme is. An episode's Primary image is its still - already the right shape, and the one thing that tells two episodes of a series apart. A film's Primary is its upright poster, and cropping that into a wide row is what left the films looking wrong next to the episodes. Films now ask for the Thumb (\"Miniaturansicht\"), which is the same artwork drawn wide.\n\nAn episode with no still of its own no longer falls through to the series poster, which is the same wrong shape one rung further away; it takes the series' Thumb or backdrop instead. Primary is still the last resort everywhere, because it is the one image nearly everything has and a badly-shaped picture of the right programme beats an empty rectangle.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.30.0/litetv-channels_1.0.30.0.zip",
-                "checksum": "4dffdb3eb98b00e3a39b637274764fe3",
-                "timestamp": "2026-08-20T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.29.0",
-                "changelog": "The channel schedule is edited as a week rather than as three text boxes. Seven tracks, one per day, with every block drawn where it actually sits: drag a bar to move it, drag its right edge to lengthen it, click an empty stretch to start a block there. Trailer slots show as thin marks. The old form is still there and still edits everything - the two are looking at the same objects - but the question nobody could answer before, \"what is this channel doing at eight on a Tuesday, and does it collide with anything\", is now answered by the picture.\n\nThe artwork editor shows what each slot is currently drawn with, including the picture the plugin falls back to when nothing is set - faded and labelled, so a picture that was chosen never looks like one that was found. Artwork can now come from any title in the library, not only the ones the channel airs, and from the metadata providers: TheMovieDB, TheTVDB and Fanart already hold artwork for every item, and asking them is one request.\n\nLiteTV adds itself to the web client's sidebar when the Plugin Pages plugin is installed, so configuring a channel is one navigation rather than three. The page is served at GET /LiteTv/Page and loads itself when nothing fires a dashboard event at it. A server without Plugin Pages gets no link and no stray file.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.29.0/litetv-channels_1.0.29.0.zip",
-                "checksum": "6988fa80ce2feba6527c467c6f7540e5",
-                "timestamp": "2026-08-20T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.28.0",
-                "changelog": "Channels have artwork of their own. A channel built from one series wears what is on air perfectly well; a channel built from a genre does not - what is on changes every hour, much of it has no wide picture, and during a break there is nothing on air to borrow from at all, which is how a channel card ends up a black rectangle. Each channel can now be given a card picture, a background and a cover, chosen from its own content, pasted as an address, or uploaded. A channel that sets none of them falls back to the first thing in its own lineup that has a picture, so no channel is faceless any more.\n\nThe guide can be asked for the breaks as well: GET /LiteTv/Channels/{id}/Now?breaks=true lists interstitials alongside programmes, each naming the programme it advertises. Without it there is no way to see, from the sofa, that trailer scheduling works at all. The upcoming list now goes to 64 entries rather than 20.\n\nNew: POST and GET /LiteTv/Artwork/{channelId}/{kind} store and serve an uploaded channel picture. The GET is open, like Jellyfin's own item images, because television clients draw these through an image loader that carries no credentials.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.28.0/litetv-channels_1.0.28.0.zip",
-                "checksum": "112e57c1fb280ddccd710d04a566ecd4",
-                "timestamp": "2026-08-20T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.27.0",
-                "changelog": "Breaks now advertise a programme a few slots further on rather than the one that starts when the break ends - television says \"at eight, the film\" an hour beforehand, and a trailer butted against its own programme tells the viewer nothing. How far ahead is the channel's Trailer lookahead, which had been in the configuration all along and was never read. The guide names the programme a break is advertising outright, so a client no longer has to guess it from what follows.\n\nChannels can place trailers themselves: a trailer slot is a standing instruction - this thing, at this time, on these days - claiming the break its start time falls inside. It can name a library item or an address.\n\nLinked trailers, which is nearly all of them, can be resolved into something a television can actually play: GET /LiteTv/Trailer/{itemId} answers with a stream URL and the headers to fetch it with. Trailers are ranked official first, teaser last.\n\nA break is no longer reported as \"off air\", which made the channel list announce dead air every time a gap came round. The playback account is now forbidden from transcoding, so a channel that cannot direct play fails where it can be seen rather than quietly putting the server to work.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.27.0/litetv-channels_1.0.27.0.zip",
-                "checksum": "e2a0f1c496fbad1035762469708067a5",
-                "timestamp": "2026-08-20T00:00:00.000Z"
-            },
-            {
-                "version": "1.0.26.0",
-                "changelog": "The channels are no longer published to Jellyfin at all - no \"TV-Sender\" library entry, nothing in Live TV. Both routes gave clients something they could not really play: a channel item is stored once and never re-resolved, so its entries went stale at every changeover, and Live TV hands a client a stream rather than a position in one. The schedule is served as data instead, and a client that understands a channel builds the queue itself. Everything else sees nothing, which is the point.\n\nChannel viewing is now kept off your account by playing it under a Jellyfin account of the plugin's own, created on first use and hidden from the login screen. The server records a playback against whoever the token belongs to, so the viewing lands there however playback started - which the old watch-state shield could never guarantee, because a player that re-prepares itself after a library scan reports playback nobody asked for.\n\nBreaking: the injected web UI is gone, and with it the home row, the guide button and the playback overlays. The Tuned, PlayOn and Playing endpoints are gone too. Clients now ask GET /LiteTv/PlaybackUser for the account to play under, and must refuse to play without it.",
-                "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.26.0/litetv-channels_1.0.26.0.zip",
-                "checksum": "5735e35daf3432670d9bf5acd8fde155",
-                "timestamp": "2026-08-20T00:00:00.000Z"
-            }
-        ]
-    }
+  {
+    "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
+    "name": "LiteTV Channels",
+    "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
+    "overview": "TV channels from your library, without transcoding.",
+    "owner": "Christian",
+    "category": "General",
+    "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
+    "versions": [
+      {
+        "version": "1.0.77.0",
+        "changelog": "Sixteen things found by walking the configuration page, and two of them change how the page works rather than how it looks. **The schedule now waits for Save like everything else.** Until now a schedule edit was written to the server the instant you made it, which is why moving or removing a programme never lit the Save button up - there was nothing waiting to save, it had already happened, and there was no way back from a mis-drop. Schedule edits are now held with the rest of your changes: the grid draws what they come to, Undo takes the last one back, Discard throws them all away, and one Save writes the configuration and the schedule together. What an edit does to the programmes around it is still worked out by the server, because only the server knows - dropping something on top of a film trims it, or cuts it in two - so what you are shown before you save is computed the same way as what gets stored. **And a channel's schedule can now be longer than a week**, up to thirteen: a fortnightly film cannot be said in seven days however the seven days are arranged. The grid draws one week of the cycle at a time with a picker that says which week is on air, counted from a fixed Monday so a restart cannot swap it over. Shortening a schedule keeps the first weeks and drops the rest rather than laying them on top of each other.\n\nThe rest: drop-down menus were unreadable white on white, because a translucent colour that is right on this page is composited by the browser on its own light ground when the list opens. Dragging a programme now snaps flush against the end of the one before it, the start of the one after, or a quarter hour - there was snapping before, of five minutes, which at a week's zoom is less than a pixel and so could not be seen - and the line it will land on is drawn while you drag, with Alt to place it freely and a box to type the exact day and time. Programmes on the timeline are outlined so a run of them reads as programmes rather than one long block. A selection can be let go by clicking anywhere that is not a programme, instead of only on the grid; and an item in the content list could not be unselected at all if the click drifted a pixel and became a drag. A YouTube playlist put on the shelf is now one entry that opens like a series - drag the whole thing and it lays the videos out one after another, or open it and take one video - instead of emptying forty rows onto the shelf. The picture gallery never asked an online provider at all; it now has a library half and an online half, library first, and nothing reaches out until you ask it to. Pictures are drawn larger when there are fewer of them. Every box you can type in shares one look, and a link pasted into a search box is recognised as a link rather than searched for. \"Not that\" on the new-channel screen cycles through other lineups again, keeping the titles and genres you gave it, instead of clearing everything; the similarity slider puts titles back when you widen it again; a channel made from nothing opens on its own empty week rather than on whichever screen you left last; and the page no longer scrolls when there is nothing below.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.77.0/litetv-channels_1.0.77.0.zip",
+        "checksum": "53d4b2f7cecd8528f32c156162195a4c",
+        "timestamp": "2026-08-28T16:20:00Z"
+      },
+      {
+        "version": "1.0.76.0",
+        "changelog": "The app's whole TV section could disappear, and this is why. Jellyfin's own library lookup throws an error when it is handed an empty id instead of answering \"no such item\" - and half of what a channel schedules has no library item behind it at all: an advert is an address, a trailer is an address, and a break that is not announcing anything has no programme to name. One of those on air was enough to make the request that lists channels fail outright. The app reads a failure there as \"this server does not have the plugin\" and quietly takes TV out of its menu, so the channels vanished with nothing anywhere saying why - and whether it happened depended entirely on what happened to be airing at the moment somebody opened the app, which is why it looked random. Every library lookup in the plugin now treats an empty id as nothing rather than as a question, in one place that all of them go through; seventeen of them were unguarded. Caught by opening the app on an emulator and finding no TV section at all, then reading the server's log rather than the app's.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.76.0/litetv-channels_1.0.76.0.zip",
+        "checksum": "a3fc26584bb0f89917f9a5ba1ea9b521",
+        "timestamp": "2026-08-27T20:40:00Z"
+      },
+      {
+        "version": "1.0.75.0",
+        "changelog": "A channel can be deleted again. The old configuration page had a \"Remove this channel\" card and the rebuilt app lost it, which left a configuration you could only ever add to. It is back on Settings, where it was: two presses, because there is no undo, and the second one names the channel it is about to remove. Nothing reaches the server until Save, as everywhere else here. Two things behind it also had to be put right. A channel's schedule is kept in its own file rather than in the configuration - deliberately, so that saving the configuration can never destroy a week somebody spent an evening arranging - which meant a deleted channel would have left its schedule behind for ever, belonging to nothing and invisible to everyone. The server now throws that away when it notices the channel has gone, and refuses to do any such tidying when the channel list reads empty, since that is also what a configuration looks like when it has failed to load. And deleting the very last channel used to hide the Save button along with the channel it belonged to, so the one change you had just made could not be written down; the header stays now, and says what pressing Save would do.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.75.0/litetv-channels_1.0.75.0.zip",
+        "checksum": "7c81a148e9c6a437b6c9ec9aa85e4798",
+        "timestamp": "2026-08-27T20:15:00Z"
+      },
+      {
+        "version": "1.0.74.0",
+        "changelog": "YouTube playlists were reading as empty, and had been for some time. Asking the server for a real playlist answered nothing at all - no error, no warning in the log, just a playlist with no videos in it - and the same thing happened whenever a week was laid out with a playlist as one of its sources, which is the part that mattered. The cause is at YouTube's end: the entries in a playlist page used to arrive as one kind of object and now arrive as another, and the reader was still looking for the old one. It reads both now, taking the video, its title and its length from wherever they are, and it skips the things on a playlist page that are not videos rather than trying to schedule a channel as a programme. Three tests hold the new shape, written from a real answer rather than an imagined one. This was found by adding a playlist through the page that 1.0.73.0 built - the page reports an empty playlist out loud now, which is the only reason anybody noticed.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.74.0/litetv-channels_1.0.74.0.zip",
+        "checksum": "e7a01ad6dda138fc2d8fa4016f5819a8",
+        "timestamp": "2026-08-27T19:50:00Z"
+      },
+      {
+        "version": "1.0.73.0",
+        "changelog": "Twenty-five things the owner found by walking the new configuration app, and all of them are answered here. Four were one fault each seen from several ends. The selection highlight was cut off almost everywhere because every ring was drawn outside the thing it marks, so the bar that starts where a programme ends painted over its bottom edge - the rings are inside now, which also stops every card and list clipping them. The Save button stayed grey over real edits because dirty was a flag twenty places had to remember to set; it is measured now, against what the server last gave us, so no control can miss it and putting a value back un-marks it. Dragging a programme to another time was never built, and dragging from the shelf did reach the server - which stored a row of zero seconds, drawn as a hairline and playing for no time at all, because the page deliberately sends no length and nothing filled it in. And the two buttons on the new-channel screen that did nothing did nothing for a good reason: they minted an id with a browser call that only exists on https, so on a dashboard reached by its address on the network the click threw before it could change anything. That one also broke Create. The rest, screen by screen. A channel that runs programmes back to back is no longer one blob. Delete moves to the next airing so a run can be cleared. A series on the shelf opens into seasons and episodes to drag from. A YouTube playlist is read before it is added, on the content list and on the shelf, where it goes on as its videos rather than one tag - the plugin could always expand a playlist when a week was laid out, but nothing could ask, which is exactly what \"fetching does not work\" was. Blocks are a list, not a week view, asked for twice. Selecting a source now says what selecting is for. \"Nothing to play yet\" says whether it means the channel or the Save button. The break settings moved to Breaks, where anyone would look for them. On Look: the channel name is drawn only where a television draws it, the gallery searches the whole library instead of offering only this channel's own titles, previews show the whole picture instead of cropping it, the upload button wears an upload, and the television preview follows what the app actually does - banner first in the channel list, backdrop first behind the channel screen, both dimmed hard, with a line saying which picture it used and why. Suggestions gained a similarity cut-off that runs the whole range. The server screen offers its two typed fields as drop-downs - the YouTube client list is the resolver's own ladder, so the two cannot drift - and old builds can be cleared out in one press. The app also sizes itself to the room it is given rather than to a guessed height, which is what left a band of empty space under it and stopped the build list scrolling.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.73.0/litetv-channels_1.0.73.0.zip",
+        "checksum": "c0b5e129935468e6a006661764c14e11",
+        "timestamp": "2026-08-27T18:46:00Z"
+      },
+      {
+        "version": "1.0.72.0",
+        "changelog": "The configuration page was blank in 1.0.70.0 and still blank in 1.0.71.0, and this makes it appear. Both releases had the same shape of fault: the page waited to be told to draw itself. 1.0.71.0 added the second event name on the theory that the first one was wrong, and it changed nothing, because no such event arrives here under either name. The page it replaced had in fact never depended on one - it registered a listener and also loaded itself a tick later, and the tick is what drew it, every time, for seventy releases. That line was the part that got left behind. The page now mounts itself as soon as it is in the document and uses the events only to tidy up on the way out, which costs nothing, since loading was already written to be safe to ask for twice. The script has also moved back inside the page element, where the old one lived, so a host that injects only that element cannot drop it. And the loader now leaves a trail of what it did, so a page that comes up empty can say why instead of saying nothing.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.72.0/litetv-channels_1.0.72.0.zip",
+        "checksum": "9ee5ffebbbf7cac0ccfb565e1f2acd36",
+        "timestamp": "2026-08-27T14:37:00Z"
+      },
+      {
+        "version": "1.0.71.0",
+        "changelog": "The configuration page in 1.0.70.0 was blank, and this makes it appear. The new page waited for an event this dashboard does not send - it listened for viewshow, while the page it replaced had listened for pageshow for seventy releases - so the handler that loads the app never ran, no script tag was ever made, and the notice that exists to say the app is missing could not fire either. It now listens for both names, because a lifecycle whose name changed between versions has to be met halfway. A second fault behind that one is fixed at the same time: a module is evaluated once per document, so leaving the page and coming back would have re-added a script tag that never ran, and the page would have worked exactly once. Each visit now loads under its own query string and Svelte takes the previous one down properly. The link to the previous configuration page is gone; it never worked, for the same reason nothing else on the page did.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.71.0/litetv-channels_1.0.71.0.zip",
+        "checksum": "c34a9311ebbf4429d22aa380bbec5038",
+        "timestamp": "2026-08-27T12:45:00.000Z"
+      },
+      {
+        "version": "1.0.70.0",
+        "changelog": "The configuration page is no longer a page. It is a web app - Vite, TypeScript and Svelte - built from the design boards and shipped inside the plugin, the way the Segment Editor plugin packages its editor. All nine screens were ported: the week and the day, content, breaks, look, settings, the server, and both halves of making a channel out of what the library already holds. Most of what was wrong with the old page was wrong because it was one very large HTML file wearing dashboard components, and those complaints are simply gone: the cramped shelf, the search bar, the boxes that sized themselves oddly, the scaling. The rest were real and are answered - a selected slot can be unselected, the shelf is a list you drag entries out of, Delete removes and the arrow keys move, the grid opens scrolled to the now line, taking a channel off this week happens at once instead of after a round trip, and a block is edited without the whole week in the way. Two things arrived alongside it: a channel now says how long it takes to play through in words, and a YouTube playlist can be a channel source. The page as it was is still installed beside the new one and there is a link to it at the foot, because a rewrite with no way back is one nobody can afford to try.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.70.0/litetv-channels_1.0.70.0.zip",
+        "checksum": "a422252ea99dd1967e03dff4948eb69f",
+        "timestamp": "2026-08-27T10:00:00.000Z"
+      },
+      {
+        "version": "1.0.69.0",
+        "changelog": "Suggestions were quietly using the blunt scorer. Two faults, both in LiteTV's own call to the Smart Similar plugin, and neither of them visible: the answer was being read with a serialiser that cannot parse the ids Jellyfin actually writes - 32 hex characters with no dashes - so the whole scored pool was thrown away on its very first field and the fallback took over. And the call forwarded only the Authorization header, so a caller who had authenticated with X-Emby-Token reached Smart Similar as nobody at all and was answered 401. Both are fixed, with tests for the reading. The new-channel screen already said which engine had answered, which is how this was noticed at all.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.69.0/litetv-channels_1.0.69.0.zip",
+        "checksum": "b850d6f0a4202469c6dfc51788667b8a",
+        "timestamp": "2026-08-23T06:00:00.000Z"
+      },
+      {
+        "version": "1.0.68.0",
+        "changelog": "A programme's bar can no longer be resized, because its length was never yours to set. The plugin plays an episode or a film for as long as the file runs and ignores whatever length the stored week carries, so dragging the bottom of one never made it shorter - it changed how much room the programme was given, and if that room came out under the runtime the programme silently did not play at all. Dragging to move it is unchanged, and the tooltip now says where the length comes from. An address dropped onto the week still resizes, because there its stored length really is the one that is used.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.68.0/litetv-channels_1.0.68.0.zip",
+        "checksum": "3838313f67546da2d746f4648d6fe0ce",
+        "timestamp": "2026-08-23T05:10:00.000Z"
+      },
+      {
+        "version": "1.0.67.0",
+        "changelog": "The two screens of the design that had never been built: making a channel out of what the library already holds. The + button opens them instead of dropping an empty channel on you. Name a few things you like and the library is scored against all of them - by the Smart Similar plugin where it is installed, by a rougher genre match where it is not, and which one answered is said at the top rather than hidden. What the results have in common is drawn as signals with how much of the pool carries each. Or switch to the other half and tick libraries and genres; ticking two genres asks for titles in both, which is how Sci-Fi plus Horror gets you creature features rather than two piles. Either way it proposes one channel, says what it is made of, lays out a typical evening from the real runtimes, and Create makes it - Tweak makes it and opens it, Not that moves on. Nothing reaches a television until you save.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.67.0/litetv-channels_1.0.67.0.zip",
+        "checksum": "6b1ee4b97a5f2a487554c23fa5205977",
+        "timestamp": "2026-08-23T04:30:00.000Z"
+      },
+      {
+        "version": "1.0.66.0",
+        "changelog": "Found by comparing the installed page against the design, screen by screen. The schedule now draws a now line across the day it falls on, which the design has and the page did not - without it a stored week is seven identical columns with nothing saying which part of it matters. The day view also opens on today rather than on Monday. Play order is the design's pair of buttons rather than a dropdown: there are two answers and both should be readable without opening anything. The picture gallery gets the room it needs instead of a 323-pixel slot under two cards that were holding height they were not using. And the proof-of-origin line read \"Heldminted 37 min ago\" - two words with no space between them.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.66.0/litetv-channels_1.0.66.0.zip",
+        "checksum": "237a84517814cf46200e02f77a110a94",
+        "timestamp": "2026-08-23T03:30:00.000Z"
+      },
+      {
+        "version": "1.0.65.0",
+        "changelog": "A pass over the configuration page against a real server, which is where all of this was found. Nothing on the page moves when it should not any more: a channel with a long name used to widen the rail and carry the header, the tabs, the grid and the shelf with it, and opening a (?) explanation pushed every setting under it down the card. Explanations now float over the page and cost nothing to open. Several things could not be reached at all. The library and provider picture galleries could not be scrolled, because a card was not allowed to give room back to the thing scrolling inside it; the crop tool was appended below the gallery, so opening it pushed the column down past the picture being cropped with no way back, and it is a dialog now. The page also stops 74 pixels short of the window no longer. Content: the queue preview names the actual episodes and films in the order they would play, with their season and episode numbers and which source each came from - it used to repeat the series title, which said nothing. Boxes no longer resize as entries are added and removed, and an empty list is a quiet line rather than a grey slab the height of the screen. The schedule opens on the day view, and the week and the day each keep their own zoom, remembered between visits instead of being reset on the way past. Look is three compact rows - the picture in its own shape, what the slot is for, where the picture came from - rather than a column of large previews that had to be scrolled. Search results clear when you leave the box they belong to, text boxes shrink to their column instead of overflowing it, and the advert row fits on one line with a decade field that says what it is.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.65.0/litetv-channels_1.0.65.0.zip",
+        "checksum": "eac55901ac5a1080f95666c4421b1bc0",
+        "timestamp": "2026-08-23T02:30:00.000Z"
+      },
+      {
+        "version": "1.0.64.0",
+        "changelog": "The schedule can finally be read. Zooming in now enlarges the labels rather than only the bars, holds the place you were looking at instead of jumping back to the evening, goes far enough in that a four-minute advert carries its name, and adds half-hour lines and a readout of the shortest airing still labelled. Bars are drawn exactly as long as they run - the old eleven-pixel minimum made every short programme overlap the next, which is where the overlapping text came from - and the day header now stays put however far in you go. Several screens were missing pieces of their design and have them back: Content carries the play order and the interleave beside the sources they act on, with the dealt queue underneath; Look shows what the channel looks like on the television; Breaks explains why there is no length to type and works an example; Server settings reports whether a proof of origin is held, which is the difference between 1080p trailers and 360p ones. The update address the app needs is no longer clipped out of sight inside its own card, the shelf's address field no longer cuts off its own placeholder, the selected airing is drawn as a card that takes its room from the grid rather than over it, and the advert decade box says what it is instead of showing a bare 0. Enhanced Poster Tags is no longer reported among the neighbouring plugins. Dragging an airing is no longer guesswork: the bar moves with the pointer instead of staying put until the mouse comes up, carries the time it will land on, follows the grid when dragged to the edge of it, and actually snaps - the five-minute snap was being applied to the pointer rather than to the bar, so a bar could come to rest on any second at all and every drag looked unsnapped. Hold Alt for second-by-second, as before.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.64.0/litetv-channels_1.0.64.0.zip",
+        "checksum": "373e587b1e43d66d134555910de52ffa",
+        "timestamp": "2026-08-23T00:15:00.000Z"
+      },
+      {
+        "version": "1.0.63.0",
+        "changelog": "The configuration page now uses the whole width it has and clears the dashboard header. Jellyfin caps a settings form at about 800px and floats a fixed header over the page, so the rebuilt page arrived in a narrow column with its top row hidden; it now lifts that cap for itself, measures the header rather than assuming a height, and corrects its own height against the document so no scrollbar is left. The channel rail can also finally tell which channels have no week of their own - the guide reports it now - and shows the tag it was always meant to.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.63.0/litetv-channels_1.0.63.0.zip",
+        "checksum": "bc72b0b07bd3aefc06372ae601d84165",
+        "timestamp": "2026-08-22T21:30:00Z"
+      },
+      {
+        "version": "1.0.62.0",
+        "changelog": "Fixes the rebuilt configuration page, which arrived unstyled: Jellyfin keeps only the body of a plugin page, so the stylesheet in the head never reached the browser and the layout fell back to one plain column. The stylesheet now lives in the body, where the other plugins that ship one keep theirs, and the page measures the room it has left rather than guessing at it.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.62.0/litetv-channels_1.0.62.0.zip",
+        "checksum": "91989d05b2de2b21d20c5f89abb75ae2",
+        "timestamp": "2026-08-22T20:45:00Z"
+      },
+      {
+        "version": "1.0.61.0",
+        "changelog": "The configuration page is rebuilt: a channel rail down the side with a filter and what each channel is showing, the editor beside it as tabs, and every screen fitting the window - only the channel list scrolls. The week grid fills the height it is given and opens on the evening rather than on eight empty hours after midnight. New: a Day view for editing breaks too small to grab on a week, a strip showing which sibling plugins are installed and usable, and a Settings screen that shows a real evening from the server instead of describing what the numbers do. Every setting says one line and keeps its explanation behind a (?).",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.61.0/litetv-channels_1.0.61.0.zip",
+        "checksum": "b8e6e191dc8675fb4d65aa5cafa23450",
+        "timestamp": "2026-08-22T20:15:00Z"
+      },
+      {
+        "version": "1.0.60.0",
+        "changelog": "Break lengths are worked out rather than typed: a linked trailer or advert is given the time it actually plays for - its length minus the stretches SponsorBlock skips - and the seconds boxes are gone from the configuration page, replaced by a readout that says what was found and admits when it found nothing. And LiteTV now uses the plugins beside it: /LiteTv/Plugins reports which are installed, and suggestions are scored by the Smart Similar plugin over /LiteTv/Suggestions/Scored, falling back to a rough genre match - and saying so - when it is absent.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.60.0/litetv-channels_1.0.60.0.zip",
+        "checksum": "a2d6f1994872089c4504e4f6bc6e4378",
+        "timestamp": "2026-08-22T19:00:00Z"
+      },
+      {
+        "version": "1.0.59.0",
+        "changelog": "A channel's schedule is now a stored week you can edit. Every airing - programmes, adverts, trailers - is written down in the channel's own file, and the guide is that week read over and over, so what is on at nine on Thursday stays what is on at nine on Thursday even when a collection the channel plays gains a title. The configuration page opens on a week-long timeline: drag a bar to move it, drag its lower edge to resize it, drop films, episodes, adverts or an address onto empty time. Laying a week out from the channel's content is a button you press, never a side effect of saving. The printed schedule preview and the old list of schedule exceptions are gone, and the channel editor is now five tabs rather than one long scroll. A channel with no stored week is unchanged and still airs whatever its content and settings work out to.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.59.0/litetv-channels_1.0.59.0.zip",
+        "checksum": "3cd7a6b2f0a49613e985cd77d36378b3",
+        "timestamp": "2026-08-22T14:00:00.000Z"
+      },
+      {
+        "version": "1.0.58.0",
+        "changelog": "The proof-of-origin token is stored but no longer shown. Nobody types it - a television mints it and posts it - so there was nothing to show, and showing it was worse than useless: the configuration page posts back the whole configuration as it was when the page loaded, so opening the page before a television minted and saving it afterwards for some unrelated reason wiped the stored token. The field is gone, and any save that has forgotten the token now has it filled back in rather than clearing it. Ask GET /LiteTv/PoToken whether one is held; it answers without disclosing it.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.58.0/litetv-channels_1.0.58.0.zip",
+        "checksum": "2f0716ec2493b8d16dc5af346c5fa091",
+        "timestamp": "2026-08-22T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.57.0",
+        "changelog": "The proof-of-origin token now survives a restart, and a cached answer no longer outlives it. The token the television mints is what lifts YouTube's sixty-second wall on trailer streams; it was held only in memory, so every Jellyfin restart threw it away - and a restart happens on every plugin install, which meant trailers fell back to 360p until somebody next opened the app on a television. It is written to configuration now, masked on the page, and read back at start-up. Separately, a resolution cached before a token arrived is no longer served after one does: a token does not merely make the next resolution better, it makes the last one wrong, so the held token carries a generation and a cached answer from an older one is ignored.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.57.0/litetv-channels_1.0.57.0.zip",
+        "checksum": "2b94f854d8d480b177fd5aaaf87b8841",
+        "timestamp": "2026-08-22T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.56.0",
+        "changelog": "The television mints a proof-of-origin token and this takes it. Without one, YouTube gives this server a 1080p ladder whose streams stop being served after about sixty seconds, or one muxed 360p that plays to the end - measured, on every client that answers at all. The wall is `pot=` enforcement, and the token that lifts it comes from Google's BotGuard, which is JavaScript wanting a browser that a server does not have and an Android box does. So POST /LiteTv/PoToken takes what the box mints, the visitor id it was minted against goes into the player request, and every googlevideo address goes out carrying it. With no token held, nothing changes at all. The YouTube account setting is gone in the same release: it was measured worthless on every client, it is not the mechanism anybody else uses, and a live credential in plain-text configuration that buys nothing is the worst of both.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.56.0/litetv-channels_1.0.56.0.zip",
+        "checksum": "d28c507324bc5c10f1c1978816a042e0",
+        "timestamp": "2026-08-22T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.55.0",
+        "changelog": "A YouTube account can be pasted in. The setting was there and documented and did nothing; now the whole Cookie header from a logged-in tab is sent, and the request is signed the way YouTube's own web player signs it - SAPISIDHASH over the seconds, the session id and the origin, which carries no password because the secret is the cookie the browser already holds. Only the clients that are signed in in real life carry it: Android VR is logout-only and keeps asking exactly as it does today, so an empty setting changes nothing at all. Use an account you do not care about - it is stored in plain text and anybody who can read this configuration can act as it.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.55.0/litetv-channels_1.0.55.0.zip",
+        "checksum": "d37d5f8bf70327f58c93a3c35276a235",
+        "timestamp": "2026-08-22T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.54.0",
+        "changelog": "The check for a stream that stops now looks near the end rather than past the opening. Two thirds of the way in was not far enough: an iOS 1080p pair measured on 21 August served its audio at half way and refused it at nine tenths, so the check passed and the trailer would still have stopped - later than a minute in, and just as wrong. It asks at 95% now, and whatever serves that serves the lot.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.54.0/litetv-channels_1.0.54.0.zip",
+        "checksum": "430903904cabd472c1ee8d548a8f4763",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.53.0",
+        "changelog": "1080p is back, by asking the way ReVanced asks. Android VR was written off here as needing a login; it does not. It needs the request an application makes rather than the one a web page makes: the app endpoint at youtubei.googleapis.com instead of www.youtube.com, a deviceMake and deviceModel, and none of a browser's Origin and Referer headers - an Oculus user agent carrying a web page's headers is not a client YouTube has ever seen. Asked properly it answered with 22 renditions up to 2160p, every one of them carrying an address.\n\nThat matters because the plain Android client no longer carries addresses at all: nineteen adaptive renditions with no url on any of them, and one muxed 360p, which is exactly why trailers had dropped to 360p.\n\nAndroid VR is also refused a fair part of the time with \"Sign in to confirm you're not a bot\". That is a gate on the asker, not on the request, and the answer to it is to fall through to the next client rather than to hammer it - so a break gets 360p that day rather than nothing, and the good rendition whenever the gate is open.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.53.0/litetv-channels_1.0.53.0.zip",
+        "checksum": "8b5f4063f492be1cf3d15bf3e155b6d1",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.52.0",
+        "changelog": "The YouTube client can be pinned, and the answer says which one replied. What YouTube hands over depends on who is asking, and that cannot be settled from a server: measured on 21 August, the Android client returns nineteen adaptive renditions with no address on any of them - not obfuscated, simply withheld - and one muxed 360p with an address, while Android VR, which does return every rendition unobfuscated on a phone running ReVanced with microG, answers LOGIN_REQUIRED here because a server has no Google identity to offer. A visitor token does not change that.\n\nSo the client is a setting rather than a guess: leave it on \"try them all\" or name one and test it from the television. The resolve endpoint now reports the client that answered and the height it resolved, so a trailer that looks wrong can be explained without reading the server log.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.52.0/litetv-channels_1.0.52.0.zip",
+        "checksum": "27aa1fe5183d0a69b7e07c88a117f66f",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.51.0",
+        "changelog": "The client ladder is ReVanced's, not a guess. Their spoofing roster - read on 21 August, from GitLab, since their GitHub is DMCA-blocked - looks nothing like the one this had, and two differences matter more than the names.\n\nThe device fields are part of a client. This sent a client name and a version and nothing else, which is why ANDROID_VR answered LOGIN_REQUIRED every time it was tried here: without a Quest 3 and an Android 12 behind it, it is not a client YouTube recognises. deviceModel, osName, osVersion and androidSdkVersion are sent now.\n\nAnd the order is by what plays. Android VR 1.61.48 leads, because it is logged out by definition - no account restrictions apply to it and its streaming URLs come back unobfuscated - followed by the Android app at 20.44.38, Android Creator and visionOS. IOS is last on purpose: ReVanced's own tracker carries \"videos stop loading after 1 minute\" against it, which is exactly the fault this was rebuilt to fix.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.51.0/litetv-channels_1.0.51.0.zip",
+        "checksum": "0973fb39ec859c5871647fafb3893f14",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.50.0",
+        "changelog": "The capped stream no longer wins the ladder. 1.0.49.0 spotted that an adaptive pair would stop a minute in and fell back to muxed - but only within the client that found it, and a client with no muxed format to offer handed the capped 1080p back anyway, where it outranked the 360p another client had already provided. The server log said so plainly and the answer was still itag 137.\n\nA stream that will not play past its opening now ranks at the floor: below anything that plays through, above nothing at all. So the ladder keeps looking, any client's muxed format wins, and a capped stream is returned only when the whole ladder comes back capped - a minute of a trailer being better than silence when there is nothing else.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.50.0/litetv-channels_1.0.50.0.zip",
+        "checksum": "9a42a4a5079ac5ee6cdc14a0a37d482e",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.49.0",
+        "changelog": "A trailer that stops just past a minute. YouTube's conditions on adaptive streams moved again, and this time they serve only the opening of a file: measured against googlevideo on 21 August, a hundred kilobytes at 20% of the way in came back 206 and the same request at 46% came back 403 - on a URL seconds old, with the range asked for as a header and as a query parameter alike, and on a freshly resolved URL asked for the far offset first. For a 128 kbps audio stream that cap is about a minute of sound, which is exactly what it looked like from the sofa.\n\nSo the pick is checked instead of assumed. When an adaptive pair wins the ladder, one small range beyond the opening is requested - on the audio stream, which is the smaller file and the one that runs out first - and a refusal drops the answer to the best muxed format. 360p that plays through is worth more than 1080p that stops. It costs one request per resolve, only when adaptive has won, and when YouTube stops capping it starts preferring the good renditions again with nothing to change.\n\nAlso: a break is no longer announced as a preview of something with no trailer. A programme with neither a trailer file nor a provider link is skipped when the schedule looks for something to advertise, so the guide stops printing \"Vorschau: X\" for a preview that was never going to play. An episode's trailers are looked for on its series, the same fallback the resolver makes.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.49.0/litetv-channels_1.0.49.0.zip",
+        "checksum": "63b186b2250ef15e34779fed0ef4274a",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.48.0",
+        "changelog": "Clearing a channel's borrowed artwork no longer breaks the save. The page wrote the empty guid with dashes, and Jellyfin's own converter reads guids in the dash-less form and only that one - so the configuration came back 500, \"Unrecognized Guid format\", and nothing on the page was saved. Found while building a channel through the API, where the same rule bites: an empty string is not a guid either, so a field like this can never be blanked.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.48.0/litetv-channels_1.0.48.0.zip",
+        "checksum": "91d97f611b7a14f25380faa4ee2f6d2c",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.47.0",
+        "changelog": "An address the schedule names can be resolved. GET /LiteTv/Resolve?url= turns any address a break names - an advert, a bumper, a clip the library does not hold - into a stream the client can play, with the headers it has to be fetched with. It is the same resolving the trailer endpoint does; only where the address comes from differs.\n\nWithout it adverts were a schedule that could not be aired: the plugin placed them, the guide reported them, and the app had no way to turn one into anything playable, so it dropped them and ran the programmes together.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.47.0/litetv-channels_1.0.47.0.zip",
+        "checksum": "3a13a8ce9d266385e3392bfc49676049",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.46.0",
+        "changelog": "The web gallery works for a channel that has never had a picture chosen. It compared the channel's artwork item against the empty guid spelled with dashes, and Jellyfin returns configuration guids with the dashes stripped - so thirty-two zeros matched nothing, the page decided a picture had been chosen, asked the providers about an id that names no title, and reported that they had no pictures for it. Every channel on this server was in that state. Ids are compared without their dashes now.\n\nFound by opening the page and pressing the button, which is the only way this kind of fault is ever found: everything about it looked correct, including the answer.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.46.0/litetv-channels_1.0.46.0.zip",
+        "checksum": "0f8254aa7398261a88234a622821f414",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.45.0",
+        "changelog": "Two faults the adverts turned up the moment they ran on a real server, both of them about a break no longer being one airing.\n\nA channel reported an advert that had already finished. A window begins at the airing covering its first moment, and a break is now rebuilt into several - adverts, then the trailer, then what is left - so the first entry the schedule hands back is not necessarily the thing that is on. What is on air is now the entry that covers this moment, and anything already over is dropped before the guide is drawn.\n\nA break could fill with adverts and leave the trailer nowhere to go. Room is reserved for the trailer before any advert is placed, but the reservation was measured from local trailer *files* - and nearly every trailer a library has is a link the client resolves, whose length the server never learns. That measured zero, so with a pool of any size the adverts would take the whole break. A linked trailer now reserves two and a half minutes; over-reserving costs a little quiet at the end of a break, which is what a break was before any of this.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.45.0/litetv-channels_1.0.45.0.zip",
+        "checksum": "64e48c8446153283b63f8d318832d01b",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.44.0",
+        "changelog": "Adverts in the breaks. A break already plays trailers for what is coming up, and an advert is the same machinery pointed at something the library does not hold: an address the client resolves and plays, with nothing reported to Jellyfin, because an advert is not library content and has no item to record against. Add them per channel on the configuration page with a length and, if you like, a decade.\n\nThey go at the front of a break and the trailer goes last, which is television's order and not an accident of it - a break that ends on what is coming up leaves the viewer with the channel rather than with an advert. Room for the trailer is reserved first: an advert that only fits by pushing the trailer out has taken the break's reason for existing with it.\n\nAn advert of the decade the programme was made in is preferred, then undated ones, then the rest. A 1980s advert before a 1980s film is the whole charm; a current one is noise.\n\nWhich advert plays is worked out from the break's own moment and the channel, so every client arrives at the same break without being told, and the pool is walked from a different place each time. The obvious way to do that is wrong and the tests caught it: breaks land on round clock intervals, so a plain modulo of the minute count gives a five-advert pool with hourly breaks the same advert all evening.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.44.0/litetv-channels_1.0.44.0.zip",
+        "checksum": "b4a3e850a6ff81875c9c0f1774029ccb",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.43.0",
+        "changelog": "The schedule can be edited. A channel's schedule is worked out from its content, its grid and its anchor rather than written down anywhere - which is what makes it identical on every client, free to compute and endless - so there was nothing to edit. What is stored now is the difference: a handful of appointments, each holding its own stretch of the clock, with the generated schedule bending around them exactly as a broadcaster's does around a fixture.\n\nOn the configuration page every row of the schedule has Remove and Replace. Removing leaves the channel dark for that stretch rather than pulling everything forward, because pulling forward would move every programme after it and break every time the channel had promised. Replacing airs a library item from that moment for as long as it runs, taking as much of the generated schedule as it needs. What is left of a programme either side of an edit keeps its position, so a film interrupted resumes where it was cut rather than replaying the part that was skipped, and a remainder under two minutes is dropped instead of aired.\n\nEdits are tied to a moment rather than to a time of the week: dragging Saturday's film is about that airing, and something every week is what a trailer slot already is. One in the past can never fire again, so the list stays prunable. Nine tests cover the arithmetic, which is where an off-by-one would otherwise hide for weeks behind a schedule that still looks plausible.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.43.0/litetv-channels_1.0.43.0.zip",
+        "checksum": "2a45c0b37dc967869b564224dcd7bf0a",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.42.0",
+        "changelog": "Banners from TheTVDB, which were there all along. The gallery filtered the pictures it already had, and that answer is a few hundred TheMovieDB posters - so the banners sat past the end of it and the strip reported none while the provider held twenty. Measured on the test server: an untyped request for \"Marvel's Agents of S.H.I.E.L.D.\" returns 430 pictures with no banner among them; the same series asked for banners by name returns all 21, from TheTVDB. The Boys has 18, SpongeBob 8. So each shape is now asked for by name when it is chosen, rather than filtered out of a slice.\n\nBanner leads the shapes, because it is the slot that cannot be filled any other way - about five and a half to one, and nothing else is. TheTVDB draws them for series and not for films, so a film channel still fills that slot from a backdrop through the crop tool.\n\nThe rest of 1.0.41.0 stands: twenty-four tiles at a time behind a Load more button, the German-first ordering still applied over the whole set before anything is drawn, and a collection asked about and opened every time rather than only when it answered with nothing.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.42.0/litetv-channels_1.0.42.0.zip",
+        "checksum": "3bf358507f0ef203b751e51f635d51e2",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.41.0",
+        "changelog": "The web gallery draws a page at a time. Every tile is a picture fetched from the provider, and the strip drew the whole answer at once - two to four hundred of them for a well-known film, to fill one slot that is almost always filled from the first few. Twenty-four now, with a Load more button under them. The German-first ordering still runs over the whole set before anything is drawn, so paging cannot bury the German pictures the way a smaller request would.\n\nThere are shape filters above the strip. The hard slot to fill is the banner - about five and a half to one, and no provider offers one, so filling it means finding the widest picture there is and cropping it. Measured on this server: TheMovieDB and OMDb answer with Primary, Backdrop, Thumb and Logo, and no Banner at all, so Backdrop and Thumb are the candidates and the filter puts them first. Enabling Fanart.tv in Jellyfin would add real banners; nothing here can conjure them.\n\nA collection is asked about and opened, every time. It used to ask the providers about the collection and only fall back to the films inside when that answered with nothing - but a film series usually is a collection to TheMovieDB, so it answered with a handful of pictures and the films' own artwork, which is better and far more plentiful, was never reached. The collection's pictures lead, then one picture of each film in turn.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.41.0/litetv-channels_1.0.41.0.zip",
+        "checksum": "13eb7b135bb71beb99ec3e50be8209dd",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.40.0",
+        "changelog": "An ABI is only used if it is one. Smoke-testing the update server against the live server turned up a build whose file name was read as ABI \"gtest123-1-armeabi-v7a\", and so advertised as Wholphin-release-gtest123-1-armeabi-v7a.apk - a name the app never asks for, which means an update that is never offered and nothing anywhere saying why. The cause is that a name can be wrong in the middle and still match: a commit hash that is not hexadecimal leaves the version's commit part unmatched, the build number slides into its place, and everything after it looks like an ABI. Whatever the name says is now checked against the ABIs that exist, and a file whose name does not name one is treated as universal, which is the honest reading of \"the name does not say\".\n\nEverything else in 1.0.39.0 was confirmed working against the live server first: the release JSON, the three asset names in the order the app asks for them, the download, and range requests.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.40.0/litetv-channels_1.0.40.0.zip",
+        "checksum": "e8a010a279c09ddd682bb6d4759b15b3",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.39.0",
+        "changelog": "The plugin serves the app's updates. The television has been getting its builds over ADB, which is the only reason ADB is switched on at all - a standing way into the box kept open so an APK can be pushed. The app already knows how to update itself from a URL, so the plugin is now the thing at the other end of it: upload a build on the configuration page, and the television is offered it the next time it looks. Put the address the page shows into the app's Settings -> Advanced -> Update URL once, and that is the last time anything has to be installed by hand.\n\nIt answers in the shape the app expects, exactly. The version is written the way the app's own parser reads it, and the assets are advertised under the names it asks for, in the order it asks - which is the whole contract, and every part of it fails silently: an update that is simply never offered, with nothing in any log to say why. Each ABI gets its own name, a release build is never offered under a debug name, and downloads support range requests so a television that loses the connection half way can carry on.\n\nLiteTV is in the dashboard menu, and out of everyone else's sidebar. The link it used to add through Plugin Pages sat in every user's sidebar, not only an administrator's, and what it opened was this page - every channel, every source and the name of the playback account, to somebody who cannot save any of it. The page belongs in the dashboard, which is administrators only, and it is now in the dashboard's own menu beside the other plugins. Any entry left in Plugin Pages by an earlier version is removed on start.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.39.0/litetv-channels_1.0.39.0.zip",
+        "checksum": "74e146ceaf9f2c451e4c55cb27ce43af",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.38.0",
+        "changelog": "1080p trailers, and the two rules that make them play. The revert to 360p in 1.0.37.0 was one measurement short: adaptive streams do play, they simply come with conditions the plugin was breaking.\n\nRead them in windows. A request for the whole file, or for tens of megabytes, is answered 403; a megabyte at any offset is served happily. ExoPlayer asks for the whole file, which is why the good renditions never showed a frame while 360p muxed ones were fine.\n\nUse them soon. The expire on a googlevideo URL is hours away and means nothing - an address a few minutes old starts refusing everything past its first window. This cached resolutions for forty-five minutes, so a looping channel came back to a break and played a dead URL. It is two minutes now, only enough to stop a break asking twice while it starts; resolving costs a fifth of a second.\n\nMeasured: windows of a megabyte at every offset tried, on a URL still answering after five minutes, at 1080p H.264 with 128 kbps AAC. The client has to do the windowing - a player handed these addresses without it will still see 403s.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.38.0/litetv-channels_1.0.38.0.zip",
+        "checksum": "f08dbbc9c234da9aea051fac324861f5",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.37.0",
+        "changelog": "Trailers use muxed streams again, and play. Pairing adaptive video and audio was right about where the quality lives and wrong about being able to fetch it: measured on 21 August, an adaptive URL serves its first megabyte and answers 403 to everything after it - from any offset, on a URL seconds old, through ANDROID and IOS alike, with or without ratebypass, by Range header or by range query - while a muxed URL from the same answer serves its whole ten megabytes in one request. That is YouTube's proof-of-origin regime, and getting past it means minting a token by running their JavaScript.\n\nSo the resolver takes the best muxed format again: itag 18 at 360p for most videos, itag 22 at 720p where it survives. A trailer that plays is worth more than a resolution it never reached. The measurement is written into the code, along with the instruction not to prefer adaptive formats again without first checking that a window past the first megabyte still comes back 206.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.37.0/litetv-channels_1.0.37.0.zip",
+        "checksum": "0b3053d17d0da764953dd29e11696bc9",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.36.0",
+        "changelog": "The crop tool works on the automatic picture. It used to refuse any slot that had nothing chosen for it, which is the wrong way round: the automatic picture is the one most in need of cropping - nobody chose it for that shape, the plugin found it in the channel's lineup - and the only way to move the frame on it was to upload a copy of a picture the server already had. Cropping one now works exactly as cropping a chosen picture does, and turns it into a chosen picture, which is what saving a crop means anyway. It is fetched at full size rather than at the size of the thumbnail beside the slot, so a crop is a crop of the picture and not of a preview of it.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.36.0/litetv-channels_1.0.36.0.zip",
+        "checksum": "122d89105bf4243930c268793d97f4d0",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.35.0",
+        "changelog": "SponsorBlock, for trailers. German trailers mostly come from channels that wrap them in a branded card at the front and a plea to subscribe at the back, and a minute-long break has no room for either. GET /LiteTv/Trailer/{id} now carries the stretches to seek past, and a client is expected to take them without asking - the skip button an app shows for library content is right for a programme and wrong inside an advert. The lookup uses the hash-prefix form of the API, so the service is asked about every video whose id starts with the same four characters and is never told which one is playing. There is a switch for it on the configuration page; turned off, no request is made at all.\n\nA collection is followed to the films inside it when artwork is derived. A BoxSet is a name with a list behind it and usually has no pictures of its own, so a marathon channel built from one came out blank on the television and offered nothing in the configuration's gallery, while each film it airs has a poster and a thumb. The collection is still asked first: artwork somebody made for a collection was made for exactly this. The web gallery does the same, falling back to the films when the providers hold nothing for the collection itself.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.35.0/litetv-channels_1.0.35.0.zip",
+        "checksum": "f0c93b3281b03c13830bb95d64f13e2c",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.34.0",
+        "changelog": "No hardcoded API keys. The trailer resolver carried five AIzaSy keys copied from YouTube's own players, as every port of this trick does. Measured today, the player endpoint answers identically without one - same status, same formats, same 1080p - so they are gone. They look like credentials in a public repository, they belong to somebody else, and they are exactly the sort of constant that gets rotated without notice. What identifies the caller is the client name, its version and a matching User-Agent.\n\nThe client ladder is re-measured. ANDROID_VR and the TV player answer LOGIN_REQUIRED, WEB and MWEB answer UNPLAYABLE, IOS answers up to 720p and ANDROID answers the full ladder, so ANDROID leads and IOS backs it up. The failing ones stay behind them, because which of them works is the thing that changes.\n\nThe H.264 preference knows its place. It was worth four thousand points against a height in the hundreds, so 360p H.264 beat 1080p VP9 every time; it is a hundred points now, enough to decide between two streams of the same size and never enough to overrule a real difference in resolution. AV1 is skipped, being the codec a set-top box of unknown vintage most often cannot decode in hardware.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.34.0/litetv-channels_1.0.34.0.zip",
+        "checksum": "e057512cb99c80241a6eab9b71050c50",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.33.0",
+        "changelog": "Trailers play at the quality the trailer was made at. The resolver took the best of YouTube's muxed formats list whenever a client answered without a manifest, and that list holds itag 18 and little else: 360p with thin audio, which is what the channel was airing. Measured today, no client returns a manifest at all, so the muxed list was always the answer. Everything worth watching lives in adaptiveFormats as separate video and audio streams; the plugin now pairs them - H.264 in MP4 up to 1080p, AAC preferring stereo - and sends both addresses so the client can play them together. Three trailers measured at 1080p, 720p and 800p with 128 kbps audio, in a tenth of a second, where all three were 360p before.\n\nGerman comes first. A trailer's language now outranks which kind of trailer it is: a household being told about tonight's film in English is worse off than one told about it by a teaser. The markers are the ones the providers actually wrote - Deutsch, German, Offizieller, Kinotrailer - and fourteen of the fifteen films here that have trailers now air a German one. The artwork gallery orders provider pictures the same way: German first, then the ones with no language at all, which is what a textless backdrop is and exactly what the background slot wants.\n\nThe crop tool can zoom out. It started at cover and could only ever go further in, so a whole title could never fit inside a banner frame - there is no zoom at which it does, because the whole picture inside the frame leaves bars. The slider now runs down to contain, \"Fit whole picture\" goes straight there, and the space around the picture is filled with a blurred, over-sized copy of the picture itself rather than black.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.33.0/litetv-channels_1.0.33.0.zip",
+        "checksum": "394604b58cdbbf38231de01cd31f4e24",
+        "timestamp": "2026-08-21T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.32.0",
+        "changelog": "The sidebar page shows up. It was registered correctly and served correctly, and it was invisible: the configuration page is a whole document whose outermost element carries Jellyfin's own `page` class, which the web client's CSS hides until its view manager decides to show it - and nothing ever would, because the markup is appended into a container by hand. GET /LiteTv/Page now hands back the body as a fragment with that class removed.\n\nAn episode's trailer comes from its series. The metadata providers attach trailers to the series and never to the episode, so a channel advertising \"SpongeBob at 20:15\" found nothing to play for every break it scheduled. The series' trailer is the right answer anyway: what is being advertised is the programme, and nobody cuts a trailer per episode.\n\nA channel's pictures are the channel's, and they hold still. They were read off the schedule, so a channel's face changed every time its programme did - which is not a face at all, and it changed while somebody was looking at the list. They now come from the channel's own sources and change only when the channel is edited.\n\nCropping is done by hand, in the configuration page, and once. A banner is about five and a half to one and almost nothing else is, so every picture that is not already a banner lost most of its height to become one - from the middle, with no idea where the faces or the lettering were. Drag to move the frame, zoom, and the cropped picture is uploaded as the slot's own file.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.32.0/litetv-channels_1.0.32.0.zip",
+        "checksum": "f6da5fb08a8c54d16561f95b51228b27",
+        "timestamp": "2026-08-20T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.31.0",
+        "changelog": "A channel has three pictures now, not one wide one used twice. A banner is made to be looked at with a name over it, which is what a channel card is; a backdrop is the only artwork drawn to fill a screen; a cover is the upright one. Answering the first two with the same file made the channel screen a blown-up version of the card that led to it.\n\nThe channel's automatic cover asks the series before the episode. An episode's Primary image is a 16:9 still of one scene - neither upright nor a picture of the channel - which is what turned up in the cover slot.\n\nThe configuration page shows what a channel will actually air: times, titles and breaks, day by day. Everything else on that page describes a channel and none of it says what comes out, and a loop of three series on a fifteen-minute grid is not something anybody can hold in their head. A suggested channel now arrives with the same fields a hand-made one has, rather than half of them.\n\nChosen artwork can be downloaded and kept: POST /LiteTv/Artwork/{channelId}/{kind}/Fetch takes an address and stores the bytes here. A picture from a metadata provider does this automatically, since an address nobody here looks after stops working sooner or later, and a television behind a household firewall may not reach it even while it works. Pictures are drawn whole and in their own shape when choosing, rather than as small wide crops that turn every poster into a slice of somebody's face.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.31.0/litetv-channels_1.0.31.0.zip",
+        "checksum": "5d32b0d0229b561b69b86c9c2569416a",
+        "timestamp": "2026-08-20T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.30.0",
+        "changelog": "A guide row asks for one wide, specific picture of the programme, and which image that is depends on what the programme is. An episode's Primary image is its still - already the right shape, and the one thing that tells two episodes of a series apart. A film's Primary is its upright poster, and cropping that into a wide row is what left the films looking wrong next to the episodes. Films now ask for the Thumb (\"Miniaturansicht\"), which is the same artwork drawn wide.\n\nAn episode with no still of its own no longer falls through to the series poster, which is the same wrong shape one rung further away; it takes the series' Thumb or backdrop instead. Primary is still the last resort everywhere, because it is the one image nearly everything has and a badly-shaped picture of the right programme beats an empty rectangle.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.30.0/litetv-channels_1.0.30.0.zip",
+        "checksum": "4dffdb3eb98b00e3a39b637274764fe3",
+        "timestamp": "2026-08-20T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.29.0",
+        "changelog": "The channel schedule is edited as a week rather than as three text boxes. Seven tracks, one per day, with every block drawn where it actually sits: drag a bar to move it, drag its right edge to lengthen it, click an empty stretch to start a block there. Trailer slots show as thin marks. The old form is still there and still edits everything - the two are looking at the same objects - but the question nobody could answer before, \"what is this channel doing at eight on a Tuesday, and does it collide with anything\", is now answered by the picture.\n\nThe artwork editor shows what each slot is currently drawn with, including the picture the plugin falls back to when nothing is set - faded and labelled, so a picture that was chosen never looks like one that was found. Artwork can now come from any title in the library, not only the ones the channel airs, and from the metadata providers: TheMovieDB, TheTVDB and Fanart already hold artwork for every item, and asking them is one request.\n\nLiteTV adds itself to the web client's sidebar when the Plugin Pages plugin is installed, so configuring a channel is one navigation rather than three. The page is served at GET /LiteTv/Page and loads itself when nothing fires a dashboard event at it. A server without Plugin Pages gets no link and no stray file.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.29.0/litetv-channels_1.0.29.0.zip",
+        "checksum": "6988fa80ce2feba6527c467c6f7540e5",
+        "timestamp": "2026-08-20T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.28.0",
+        "changelog": "Channels have artwork of their own. A channel built from one series wears what is on air perfectly well; a channel built from a genre does not - what is on changes every hour, much of it has no wide picture, and during a break there is nothing on air to borrow from at all, which is how a channel card ends up a black rectangle. Each channel can now be given a card picture, a background and a cover, chosen from its own content, pasted as an address, or uploaded. A channel that sets none of them falls back to the first thing in its own lineup that has a picture, so no channel is faceless any more.\n\nThe guide can be asked for the breaks as well: GET /LiteTv/Channels/{id}/Now?breaks=true lists interstitials alongside programmes, each naming the programme it advertises. Without it there is no way to see, from the sofa, that trailer scheduling works at all. The upcoming list now goes to 64 entries rather than 20.\n\nNew: POST and GET /LiteTv/Artwork/{channelId}/{kind} store and serve an uploaded channel picture. The GET is open, like Jellyfin's own item images, because television clients draw these through an image loader that carries no credentials.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.28.0/litetv-channels_1.0.28.0.zip",
+        "checksum": "112e57c1fb280ddccd710d04a566ecd4",
+        "timestamp": "2026-08-20T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.27.0",
+        "changelog": "Breaks now advertise a programme a few slots further on rather than the one that starts when the break ends - television says \"at eight, the film\" an hour beforehand, and a trailer butted against its own programme tells the viewer nothing. How far ahead is the channel's Trailer lookahead, which had been in the configuration all along and was never read. The guide names the programme a break is advertising outright, so a client no longer has to guess it from what follows.\n\nChannels can place trailers themselves: a trailer slot is a standing instruction - this thing, at this time, on these days - claiming the break its start time falls inside. It can name a library item or an address.\n\nLinked trailers, which is nearly all of them, can be resolved into something a television can actually play: GET /LiteTv/Trailer/{itemId} answers with a stream URL and the headers to fetch it with. Trailers are ranked official first, teaser last.\n\nA break is no longer reported as \"off air\", which made the channel list announce dead air every time a gap came round. The playback account is now forbidden from transcoding, so a channel that cannot direct play fails where it can be seen rather than quietly putting the server to work.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.27.0/litetv-channels_1.0.27.0.zip",
+        "checksum": "e2a0f1c496fbad1035762469708067a5",
+        "timestamp": "2026-08-20T00:00:00.000Z"
+      },
+      {
+        "version": "1.0.26.0",
+        "changelog": "The channels are no longer published to Jellyfin at all - no \"TV-Sender\" library entry, nothing in Live TV. Both routes gave clients something they could not really play: a channel item is stored once and never re-resolved, so its entries went stale at every changeover, and Live TV hands a client a stream rather than a position in one. The schedule is served as data instead, and a client that understands a channel builds the queue itself. Everything else sees nothing, which is the point.\n\nChannel viewing is now kept off your account by playing it under a Jellyfin account of the plugin's own, created on first use and hidden from the login screen. The server records a playback against whoever the token belongs to, so the viewing lands there however playback started - which the old watch-state shield could never guarantee, because a player that re-prepares itself after a library scan reports playback nobody asked for.\n\nBreaking: the injected web UI is gone, and with it the home row, the guide button and the playback overlays. The Tuned, PlayOn and Playing endpoints are gone too. Clients now ask GET /LiteTv/PlaybackUser for the account to play under, and must refuse to play without it.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.26.0/litetv-channels_1.0.26.0.zip",
+        "checksum": "5735e35daf3432670d9bf5acd8fde155",
+        "timestamp": "2026-08-20T00:00:00.000Z"
+      }
+    ]
+  }
 ]
