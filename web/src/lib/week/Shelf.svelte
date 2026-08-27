@@ -12,6 +12,8 @@
         at the top, rather than a separate control referring to a box that is not there.
     */
     import { search, type SearchHit } from '../search';
+    import { api } from '../jellyfin';
+    import { fetchPlaylist, looksLikePlaylist } from '../api/playlist';
     import { absolute } from '../jellyfin';
 
     export interface ShelfEntry {
@@ -20,6 +22,8 @@
         detail: string;
         itemId: string | null;
         url: string | null;
+        /** A series can be opened to pick episodes out of; nothing else can. */
+        seriesId?: string;
     }
 
     let { open = $bindable(true) }: { open?: boolean } = $props();
@@ -32,7 +36,21 @@
     let extra = $state<ShelfEntry[]>([]);
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const entries = $derived<ShelfEntry[]>([
+    /*
+        A series opened in the shelf. The owner asked for a season drop-down to pick episodes
+        from: dragging "Miami Vice" onto a Tuesday is not what anyone means - they mean an
+        episode of it. So a series row opens, the shelf shows that season's episodes, and the
+        back button puts the search results back.
+    */
+    interface Season { Id: string; Name: string; IndexNumber?: number; }
+
+    let opened = $state<{ id: string; name: string } | null>(null);
+    let seasons = $state<Season[]>([]);
+    let seasonId = $state<string | null>(null);
+    let episodes = $state<ShelfEntry[]>([]);
+    let openingError = $state<string | null>(null);
+
+    const entries = $derived<ShelfEntry[]>(opened !== null ? episodes : [
         ...extra,
         ...hits.map((hit) => ({
             key: hit.id,
@@ -40,8 +58,69 @@
             detail: hit.detail,
             itemId: hit.id,
             url: null,
+            seriesId: hit.kind === 'Series' ? hit.id : undefined,
         })),
     ]);
+
+    async function openSeries(entry: ShelfEntry): Promise<void> {
+        if (!entry.seriesId) { return; }
+        opened = { id: entry.seriesId, name: entry.label };
+        seasons = [];
+        seasonId = null;
+        episodes = [];
+        openingError = null;
+        try {
+            const answer = await api().getItems<{ Items?: Season[] }>(api().getCurrentUserId(), {
+                parentId: entry.seriesId,
+                includeItemTypes: 'Season',
+                sortBy: 'IndexNumber',
+                sortOrder: 'Ascending',
+                limit: 100,
+            });
+            seasons = answer.Items ?? [];
+            // Straight into the first season: a drop-down that has to be used before anything
+            // appears is a second click for no reason.
+            if (seasons.length > 0) { await loadSeason(seasons[0].Id); }
+        } catch (err) {
+            openingError = err instanceof Error ? err.message : String(err);
+        }
+    }
+
+    async function loadSeason(id: string): Promise<void> {
+        seasonId = id;
+        openingError = null;
+        try {
+            const answer = await api().getItems<{
+                Items?: { Id: string; Name: string; IndexNumber?: number; RunTimeTicks?: number }[];
+            }>(api().getCurrentUserId(), {
+                parentId: id,
+                includeItemTypes: 'Episode',
+                sortBy: 'IndexNumber',
+                sortOrder: 'Ascending',
+                limit: 200,
+                fields: 'RunTimeTicks',
+            });
+            episodes = (answer.Items ?? []).map((item) => ({
+                key: 'ep:' + item.Id,
+                label: (item.IndexNumber ? item.IndexNumber + '. ' : '') + item.Name,
+                detail: item.RunTimeTicks
+                    ? Math.round(item.RunTimeTicks / 600000000) + ' min'
+                    : 'episode',
+                itemId: item.Id,
+                url: null,
+            }));
+        } catch (err) {
+            openingError = err instanceof Error ? err.message : String(err);
+        }
+    }
+
+    function closeSeries(): void {
+        opened = null;
+        seasons = [];
+        seasonId = null;
+        episodes = [];
+        openingError = null;
+    }
 
     async function run(): Promise<void> {
         const asked = term;
@@ -64,9 +143,50 @@
         timer = setTimeout(run, 250);
     }
 
-    function addAddress(): void {
+    let addressBusy = $state(false);
+    let addressNote = $state<string | null>(null);
+
+    /*
+        An address goes on the shelf. A PLAYLIST address goes on the shelf as its videos, one
+        entry each - the owner asked for exactly that, because a playlist as a single tag can
+        only be dropped on the week whole, and that is not what anyone wants at eight o'clock on
+        a Tuesday.
+    */
+    async function addAddress(): Promise<void> {
         const url = address.trim();
         if (url.length === 0) { return; }
+
+        if (looksLikePlaylist(url)) {
+            addressBusy = true;
+            addressNote = null;
+            try {
+                const found = await fetchPlaylist(url);
+                if (found.Items.length === 0) {
+                    addressNote = 'YouTube gave nothing back for that playlist.';
+                    return;
+                }
+                extra = [
+                    ...found.Items.map((item) => ({
+                        key: 'yt:' + item.VideoId,
+                        label: item.Title,
+                        detail: item.Seconds > 0
+                            ? Math.round(item.Seconds / 60) + ' min - from a playlist'
+                            : 'from a playlist',
+                        itemId: null,
+                        url: item.Url,
+                    })),
+                    ...extra,
+                ];
+                address = '';
+            } catch (err) {
+                addressNote = 'That playlist could not be read: '
+                    + (err instanceof Error ? err.message : String(err));
+            } finally {
+                addressBusy = false;
+            }
+            return;
+        }
+
         extra = [{
             key: 'url:' + url,
             label: url.replace(/^https?:\/\//, '').slice(0, 60),
@@ -116,11 +236,38 @@
             placeholder="…or paste an address"
             aria-label="Add an address to the shelf"
         />
-        <button type="button" class="ghost" onclick={addAddress} disabled={address.trim().length === 0}>
-            Put on the shelf
+        <button
+            type="button"
+            class="ghost"
+            onclick={addAddress}
+            disabled={addressBusy || address.trim().length === 0}
+        >
+            {addressBusy ? 'Reading the playlist...' : 'Put on the shelf'}
         </button>
         <span class="hint">drag onto the week · hold Alt to drop on the second</span>
+        {#if addressNote}<span class="hint bad">{addressNote}</span>{/if}
     </header>
+
+    {#if open && opened}
+        <div class="opened">
+            <button type="button" class="ghost" onclick={closeSeries}>&lsaquo; Back to the search</button>
+            <span class="opened-name" title={opened.name}>{opened.name}</span>
+            {#if seasons.length > 0}
+                <select
+                    aria-label="Season"
+                    value={seasonId}
+                    onchange={(e) => loadSeason(e.currentTarget.value)}
+                >
+                    {#each seasons as season (season.Id)}
+                        <option value={season.Id}>{season.Name}</option>
+                    {/each}
+                </select>
+            {:else}
+                <span class="hint">no seasons</span>
+            {/if}
+            {#if openingError}<span class="hint bad">{openingError}</span>{/if}
+        </div>
+    {/if}
 
     {#if open}
         <div class="entries">
@@ -147,6 +294,14 @@
                         {/if}
                         <span class="label" title={entry.label}>{entry.label}</span>
                         <span class="detail">{entry.detail}</span>
+                        {#if entry.seriesId}
+                            <button
+                                type="button"
+                                class="episodes"
+                                onclick={() => openSeries(entry)}
+                                title="Pick an episode out of this series"
+                            >Episodes &rsaquo;</button>
+                        {/if}
                     </div>
                 {/each}
             {/if}
@@ -155,6 +310,40 @@
 </section>
 
 <style>
+    .opened {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 9px;
+        font-size: 12.5px;
+    }
+
+    .opened-name { font-weight: 600; color: var(--lt-text-title); }
+
+    .opened select {
+        background: var(--lt-field);
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+        color: var(--lt-text);
+        font-family: inherit;
+        font-size: 12.5px;
+        padding: 4px 7px;
+    }
+
+    .episodes {
+        flex: 0 0 auto;
+        background: none;
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+        color: var(--lt-text-dim);
+        font-family: inherit;
+        font-size: 11px;
+        padding: 3px 7px;
+        cursor: pointer;
+    }
+
+    .episodes:hover { color: var(--lt-text-title); border-color: var(--lt-accent); }
+
     .shelf {
         border-top: 1px solid var(--lt-line);
         padding: 10px 22px 12px;

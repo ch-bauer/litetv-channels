@@ -107,7 +107,25 @@
 
         if (event.key === 'Delete' || event.key === 'Backspace') {
             event.preventDefault();
-            if (selected.Id) { void week.remove(selected.Id); }
+            if (!selected.Id) { return; }
+
+            /*
+                Taking one off moves the selection to what follows it, so a run of them can be
+                cleared with the key held down. Leaving nothing selected meant reaching for the
+                mouse between every deletion, which is what the owner objected to. The last one
+                in the week hands the selection back to the one before it.
+            */
+            const order = placed.slice().sort((a, b) => a.StartSecond - b.StartSecond);
+            const at = order.findIndex((a) => a.Id === selected.Id);
+            const next = order[at + 1] ?? order[at - 1] ?? null;
+
+            const going = selected.Id;
+            void week.remove(going).then(() => {
+                // Only if nothing else has claimed the selection in the meantime.
+                if (week.selectedId === null && next && next.Id !== going) {
+                    week.selectedId = next.Id;
+                }
+            });
             return;
         }
 
@@ -310,6 +328,13 @@
         text-align: left;
         cursor: pointer;
         line-height: 1.2;
+        /*
+            A hairline along the top edge, so a channel that runs programmes back to back reads
+            as programmes rather than as one long blob. Every Programme bar is the same colour
+            and they abut exactly; at a week's zoom the names are dropped as well, which left
+            nothing at all to tell one from the next. Inset, so it costs no room.
+        */
+        box-shadow: inset 0 1px 0 rgba(0, 0, 0, .45);
     }
 
     .bar:hover { filter: brightness(1.12); }

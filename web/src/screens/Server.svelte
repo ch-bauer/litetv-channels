@@ -37,7 +37,16 @@
         Builds: Build[];
     }
 
+    interface ServerUser { Id: string; Name: string; }
+
+    /** The drop-down's escape hatch. Not a name any account can have. */
+    const NEW_ACCOUNT = '\u0000another';
+
     let pane = $state<'playback' | 'updates'>('playback');
+    let users = $state<ServerUser[]>([]);
+    let clients = $state<string[]>([]);
+    let namingNewAccount = $state(false);
+    let clearing = $state(false);
     let po = $state<PoToken | null>(null);
     let builds = $state<BuildList | null>(null);
     let buildsError = $state<string | null>(null);
@@ -52,6 +61,64 @@
             .then((answer) => (po = answer))
             .catch(() => (po = null));
     });
+
+    /*
+        Both of these are offered rather than typed. A typed client name that matches nothing in
+        the ladder falls back to the whole ladder, and a typed account name that is not an
+        account is made into one - neither of which is visible from the page, so both read as
+        the setting being ignored. The client list is the resolver's OWN ladder, so the page and
+        the resolver cannot drift apart.
+    */
+    $effect(() => {
+        api().getJSON<{ Items?: ServerUser[] } | ServerUser[]>(api().getUrl('Users'))
+            .then((answer) => {
+                users = Array.isArray(answer) ? answer : answer.Items ?? [];
+            })
+            .catch(() => (users = []));
+    });
+
+    $effect(() => {
+        api().getJSON<string[]>(api().getUrl('LiteTv/YouTubeClients'))
+            .then((answer) => (clients = answer ?? []))
+            .catch(() => (clients = []));
+    });
+
+    /** Whether the server already has the account the configuration names. */
+    const accountKnown = $derived(
+        config !== null && users.some((u) => u.Name === config.ChannelUserName));
+
+    /*
+        Every build the store holds except the version actually on offer - and there is one
+        build of that version per ABI, so this is a version test rather than a single name. A
+        store filling up with builds nobody is served is not readable, which is why it was asked
+        for.
+    */
+    const supplanted = $derived.by(() => {
+        const held = builds;
+        if (!held) { return [] as Build[]; }
+        return held.Builds.filter((b) => b.Version !== held.LatestVersion);
+    });
+
+    async function clearOutOldBuilds(): Promise<void> {
+        const going = supplanted;
+        if (going.length === 0) { return; }
+        clearing = true;
+        try {
+            for (const build of going) {
+                await api().fetch({
+                    url: api().getUrl('LiteTv/Update/Builds/' + encodeURIComponent(build.FileName)),
+                    type: 'DELETE',
+                });
+            }
+        } catch (err) {
+            dashboard().alert(err instanceof Error ? err.message : String(err));
+        } finally {
+            // Whatever happened, the list is re-read: half a clear-out must not be drawn as if
+            // it had not happened at all.
+            await loadBuilds();
+            clearing = false;
+        }
+    }
 
     async function loadBuilds(): Promise<void> {
         buildsError = null;
@@ -157,7 +224,35 @@
                         <span class="label">Channel playback account</span>
                         <button type="button" class="help" class:on={accountHelp} onclick={() => (accountHelp = !accountHelp)} aria-label="About the playback account">?</button>
                     </div>
-                    <input class="text" bind:value={config.ChannelUserName} />
+                    {#if users.length === 0}
+                        <input class="text" bind:value={config.ChannelUserName} />
+                    {:else if namingNewAccount || !accountKnown}
+                        <input class="text" bind:value={config.ChannelUserName} />
+                        <p class="note">
+                            No account of that name yet - the server makes one the first time a
+                            channel plays.
+                            <button type="button" class="link" onclick={() => (namingNewAccount = false)}>
+                                Pick an existing account instead
+                            </button>
+                        </p>
+                    {:else}
+                        <select
+                            class="text"
+                            value={config.ChannelUserName}
+                            onchange={(e) => {
+                                if (e.currentTarget.value === NEW_ACCOUNT) {
+                                    namingNewAccount = true;
+                                    return;
+                                }
+                                config.ChannelUserName = e.currentTarget.value;
+                            }}
+                        >
+                            {#each users as user (user.Id)}
+                                <option value={user.Name}>{user.Name}</option>
+                            {/each}
+                            <option value={NEW_ACCOUNT}>Another name...</option>
+                        </select>
+                    {/if}
                     <p class="note">Channel viewing is recorded against this account, never yours.</p>
                     {#if accountHelp}
                         <p class="deeper">A channel plays with this account's token, so what it watches lands on its watch history and not on the account of whoever is looking. That is the whole reason it exists.</p>
@@ -184,7 +279,24 @@
 
                 <div class="field">
                     <span class="label">Ask YouTube as</span>
-                    <input class="text" bind:value={config.YouTubeClient} placeholder="default" />
+                    {#if clients.length === 0}
+                        <input class="text" bind:value={config.YouTubeClient} placeholder="default" />
+                    {:else}
+                        <select class="text" bind:value={config.YouTubeClient}>
+                            <option value="">Try them all, in order</option>
+                            {#each clients as client (client)}
+                                <option value={client}>{client}</option>
+                            {/each}
+                            {#if config.YouTubeClient && !clients.includes(config.YouTubeClient)}
+                                <!--
+                                    Something configured that this build's ladder no longer
+                                    carries. Shown, rather than quietly swapped for a client
+                                    nobody chose.
+                                -->
+                                <option value={config.YouTubeClient}>{config.YouTubeClient} (not in this build)</option>
+                            {/if}
+                        </select>
+                    {/if}
                     <p class="note">
                         Only change this if trailers stop working; what YouTube hands over differs
                         by client and by day.
@@ -263,6 +375,25 @@
                             <p class="none">Nothing in the store — the app has nothing to update to.</p>
                         {/each}
                     </div>
+
+                    {#if supplanted.length > 0}
+                        <button
+                            type="button"
+                            class="clear-out"
+                            onclick={clearOutOldBuilds}
+                            disabled={clearing}
+                        >
+                            {clearing
+                                ? 'Removing...'
+                                : 'Remove the ' + supplanted.length
+                                    + (supplanted.length === 1 ? ' build' : ' builds')
+                                    + ' nobody is offered'}
+                        </button>
+                        <p class="note small">
+                            Everything except {builds.LatestVersion}, which is what a television
+                            asking this server is handed.
+                        </p>
+                    {/if}
 
                     <label class="upload">
                         <input
@@ -469,6 +600,36 @@
     .size { flex: 0 0 auto; font-size: 12px; color: var(--lt-text-dim); }
 
     .bin { background: none; border: none; color: var(--lt-text-dim); cursor: pointer; font-size: 12px; }
+
+    .clear-out {
+        align-self: flex-start;
+        margin-top: 12px;
+        padding: 7px 13px;
+        border-radius: var(--lt-radius-small);
+        border: 1px solid rgba(217, 154, 58, .35);
+        background: rgba(217, 154, 58, .12);
+        color: var(--lt-collection);
+        font-family: inherit;
+        font-size: 12.5px;
+        cursor: pointer;
+    }
+
+    .clear-out:disabled { opacity: .6; cursor: default; }
+
+    .note.small { font-size: 11.5px; margin-top: 5px; }
+
+    .link {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: #9b8bf7;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+
+    /* Left as the browser draws it, so it is obviously a list to choose from. */
+    select.text { appearance: auto; }
     .bin:hover { color: #e08585; }
 
     .upload {

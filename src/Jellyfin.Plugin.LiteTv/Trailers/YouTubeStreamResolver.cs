@@ -142,6 +142,18 @@ public sealed class YouTubeStreamResolver
     /// <c>YouTubeCookie</c>).
     /// </para>
     /// </summary>
+    /// <summary>
+    /// The clients this resolver knows how to be, in the order it tries them, each named once.
+    /// <para>
+    /// Exposed so the configuration page can OFFER them rather than ask for one to be typed:
+    /// a name that matches nothing silently falls back to the whole ladder, which looks exactly
+    /// like the setting being ignored.
+    /// </para>
+    /// </summary>
+    /// <returns>The client names.</returns>
+    public static IReadOnlyList<string> ClientNames()
+        => Clients.Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
     private static readonly InnertubeClient[] Clients =
     {
         // ANDROID_VR 1.61.48 - Oculus Quest 3, Android 12, SDK 32, build SQ3A.220605.009.A1.

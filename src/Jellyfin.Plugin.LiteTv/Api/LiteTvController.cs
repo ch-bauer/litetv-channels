@@ -40,6 +40,7 @@ public class LiteTvController : ControllerBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly SiblingPlugins _siblings;
     private readonly SmartSimilarClient _smartSimilar;
+    private readonly YouTubePlaylist _playlists;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
@@ -62,7 +63,8 @@ public class LiteTvController : ControllerBase
         SponsorBlockClient sponsorBlock,
         IHttpClientFactory httpClientFactory,
         SiblingPlugins siblings,
-        SmartSimilarClient smartSimilar)
+        SmartSimilarClient smartSimilar,
+        YouTubePlaylist playlists)
     {
         _guide = guide;
         _weeks = weeks;
@@ -73,6 +75,7 @@ public class LiteTvController : ControllerBase
         _httpClientFactory = httpClientFactory;
         _siblings = siblings;
         _smartSimilar = smartSimilar;
+        _playlists = playlists;
     }
 
     /// <summary>
@@ -279,6 +282,47 @@ public class LiteTvController : ControllerBase
         return "Plays through in " + how + " - "
             + entries.ToString(CultureInfo.InvariantCulture)
             + (entries == 1 ? " thing" : " things") + " - then starts over.";
+    }
+
+    /// <summary>
+    /// What is in a YouTube playlist, so the page can show it before it is added.
+    /// <para>
+    /// The plugin could already expand a playlist when a week was laid out, but nothing could
+    /// ASK - so adding one from the configuration page put a row called "YouTube playlist" on
+    /// the list and gave no sign whether the address was any good. A source nobody can see the
+    /// contents of is a source nobody can trust.
+    /// </para>
+    /// <para>
+    /// Nothing is stored: this is a look, and the week is still expanded afresh when it is laid
+    /// out, so a playlist that gains a video reaches the channel at the next lay-out.
+    /// </para>
+    /// </summary>
+    /// <param name="url">The playlist address, or a bare playlist id.</param>
+    /// <returns>The videos, in the playlist's own order.</returns>
+    [HttpGet("YouTubePlaylist")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PlaylistDto>> GetYouTubePlaylist([FromQuery] string? url)
+    {
+        var id = YouTubePlaylist.PlaylistId(url);
+        if (id is null)
+        {
+            return BadRequest("That is not a playlist address.");
+        }
+
+        var items = await _playlists.ItemsAsync(url, HttpContext.RequestAborted).ConfigureAwait(false);
+        return new PlaylistDto
+        {
+            PlaylistId = id,
+            Items = items.Select(i => new PlaylistItemDto
+            {
+                VideoId = i.VideoId,
+                Title = i.Title,
+                Url = i.Url,
+                Seconds = i.Seconds
+            }).ToList()
+        };
     }
 
     [HttpGet("Duration")]
@@ -906,6 +950,16 @@ public class LiteTvController : ControllerBase
     [HttpGet("PoToken")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<PoTokenStatusDto> GetPoToken() => Status(ProofOfOrigin.Held);
+
+    /// <summary>
+    /// Which clients the trailer resolver can pretend to be. The configuration page offers
+    /// these instead of asking for a name to be typed.
+    /// </summary>
+    /// <returns>The client names, in the order they are tried.</returns>
+    [HttpGet("YouTubeClients")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<string>> GetYouTubeClients()
+        => Ok(YouTubeStreamResolver.ClientNames());
 
     private static PoTokenStatusDto Status(ProofOfOrigin.Minted? held)
     {
@@ -2098,6 +2152,36 @@ public class WeekDto
 /// <summary>
 /// One row of a stored week, over the wire.
 /// </summary>
+/// <summary>
+/// What a YouTube playlist holds, as the configuration page asks for it.
+/// </summary>
+public class PlaylistDto
+{
+    /// <summary>Gets or sets the playlist's own id.</summary>
+    public string PlaylistId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the videos, in the playlist's order.</summary>
+    public IReadOnlyList<PlaylistItemDto> Items { get; set; } = Array.Empty<PlaylistItemDto>();
+}
+
+/// <summary>
+/// One video in a playlist.
+/// </summary>
+public class PlaylistItemDto
+{
+    /// <summary>Gets or sets the video's id.</summary>
+    public string VideoId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets its title.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets a watchable address for it.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets how long it runs, or zero when the page did not say.</summary>
+    public int Seconds { get; set; }
+}
+
 public class WeekAiringDto
 {
     /// <summary>

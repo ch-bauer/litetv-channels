@@ -1,10 +1,13 @@
 <script lang="ts">
     import { search, toSource, type SearchHit } from '../search';
+    import { fetchPlaylist, looksLikePlaylist } from '../api/playlist';
     import type { ChannelSource } from '../types';
 
     let { sources }: { sources: ChannelSource[] } = $props();
 
     let playlist = $state('');
+    let fetching = $state(false);
+    let playlistNote = $state<{ text: string; bad: boolean } | null>(null);
 
     /*
         A YouTube playlist as CONTENT, not as something inside a break. It has no library item
@@ -12,24 +15,59 @@
         queue is built, and never stores that list - so a playlist that gains a video reaches
         the channel the next time the week is laid out.
     */
-    function looksLikePlaylist(value: string): boolean {
-        const trimmed = value.trim();
-        if (trimmed.length === 0) { return false; }
-        if (/[?&]list=/.test(trimmed)) { return true; }
-        return !trimmed.includes('/') && !trimmed.includes('?') && /^[A-Za-z0-9_-]{12,}$/.test(trimmed);
-    }
+    /*
+        The playlist is READ before it is added. It used to be taken on trust: a row called
+        "YouTube playlist" appeared whatever the address was, and whether it held four hundred
+        videos or nothing at all was invisible until a week was laid out. The owner reported that
+        as "fetching a YouTube playlist does not work", and they were right - nothing fetched.
 
-    function addPlaylist(): void {
+        What is stored is still only the address. The server expands it afresh every time a week
+        is laid out, so a playlist that gains a video is picked up then.
+    */
+    async function addPlaylist(): Promise<void> {
         const url = playlist.trim();
         if (!looksLikePlaylist(url)) { return; }
-        if (sources.some((s) => s.Url === url)) { return; }
-        sources.push({
-            Type: 'YouTube',
-            ItemId: '00000000-0000-0000-0000-000000000000',
-            Name: 'YouTube playlist',
-            Url: url,
-        });
-        playlist = '';
+        if (sources.some((s) => s.Url === url)) {
+            playlistNote = { text: 'That playlist is already on the list.', bad: true };
+            return;
+        }
+
+        fetching = true;
+        playlistNote = null;
+        try {
+            const found = await fetchPlaylist(url);
+            if (found.Items.length === 0) {
+                playlistNote = {
+                    text: 'YouTube gave nothing back for that address. A private or deleted '
+                        + 'playlist looks exactly like this.',
+                    bad: true,
+                };
+                return;
+            }
+
+            sources.push({
+                Type: 'YouTube',
+                ItemId: '00000000-0000-0000-0000-000000000000',
+                // Named by what is in it, so the row says something. The first title is the one
+                // thing about a playlist a person recognises.
+                Name: found.Items.length + ' videos - ' + found.Items[0].Title,
+                Url: url,
+            });
+            playlistNote = {
+                text: 'Added ' + found.Items.length + ' videos. They are read again every time the '
+                    + 'week is laid out, so the list stays current.',
+                bad: false,
+            };
+            playlist = '';
+        } catch (err) {
+            playlistNote = {
+                text: 'That playlist could not be read: '
+                    + (err instanceof Error ? err.message : String(err)),
+                bad: true,
+            };
+        } finally {
+            fetching = false;
+        }
     }
 
     let term = $state('');
@@ -106,10 +144,19 @@
         placeholder="…or a YouTube playlist address"
         aria-label="Add a YouTube playlist as content"
     />
-    <button class="add-playlist" type="button" onclick={addPlaylist} disabled={!looksLikePlaylist(playlist)}>
-        Add playlist
+    <button
+        class="add-playlist"
+        type="button"
+        onclick={addPlaylist}
+        disabled={fetching || !looksLikePlaylist(playlist)}
+    >
+        {fetching ? 'Reading it...' : 'Add playlist'}
     </button>
 </div>
+
+{#if playlistNote}
+    <p class="playlist-note" class:bad={playlistNote.bad}>{playlistNote.text}</p>
+{/if}
 
 {#if open}
     <div class="results">
@@ -178,6 +225,14 @@
     }
 
     .add-playlist:disabled { opacity: .45; cursor: default; }
+
+    .playlist-note {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--lt-text-muted);
+    }
+
+    .playlist-note.bad { color: #e08585; }
 
     .results {
         max-height: 15em;

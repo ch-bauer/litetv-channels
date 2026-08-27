@@ -6,85 +6,12 @@
         Anchor, interleaving and shuffle are deliberately NOT here - the board says so in as many
         words, and they now live on Content beside the sources they act on.
     */
-    import Card from '../lib/ui/Card.svelte';
     import type { TvChannel } from '../lib/types';
 
     let { channel }: { channel: TvChannel } = $props();
 
-    let open = $state<Record<string, boolean>>({});
-
-    interface Setting {
-        key: string;
-        label: string;
-        unit: string;
-        oneLine: string;
-        deeper: string;
-        width: string;
-        min: number;
-        max: number;
-        get: () => number;
-        set: (value: number) => void;
-    }
-
-    const settings: Setting[] = [
-        {
-            key: 'trailerEvery',
-            label: 'A break every',
-            unit: 'programmes',
-            width: '90px',
-            min: 0,
-            max: 20,
-            oneLine: 'How often the channel stops for a trailer.',
-            deeper: `Zero means never: the channel runs one programme straight into the next.
-
-A break carries the channel's adverts first and the trailer last, so it ends on what is about to be shown. What goes in one is on the Breaks tab.`,
-            get: () => channel.TrailerEveryPrograms,
-            set: (v) => { channel.TrailerEveryPrograms = v; },
-        },
-        {
-            key: 'lookahead',
-            label: 'Trail something up to',
-            unit: 'programmes ahead',
-            width: '90px',
-            min: 1,
-            max: 12,
-            oneLine: 'How far ahead the trailer is allowed to look.',
-            deeper: `A trailer announces something the channel has not shown yet, and it is rarely the very next thing - the next thing is minutes away, which is no announcement at all.
-
-This is how far down the schedule it may reach to find something worth trailing.`,
-            get: () => channel.TrailerLookahead,
-            set: (v) => { channel.TrailerLookahead = v; },
-        },
-    ];
-
-    function change(setting: Setting, raw: string): void {
-        const value = Number(raw);
-        if (!Number.isFinite(value)) { return; }
-        setting.set(Math.min(setting.max, Math.max(setting.min, Math.round(value))));
-    }
-
-    /** A typical evening, as the settings stand. */
-    const preview = $derived.by(() => {
-        const rows: { clock: string; label: string; fill: string }[] = [];
-        let minutes = 20 * 60 + 15;
-        const clock = (m: number) =>
-            String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-
-        const names = channel.Sources.length > 0
-            ? channel.Sources.map((s) => s.Name)
-            : ['Something from this channel'];
-
-        const every = channel.TrailerEveryPrograms;
-        for (let i = 0; i < 4; i++) {
-            rows.push({ clock: clock(minutes), label: names[i % names.length], fill: '#5b6ee1' });
-            minutes += 105;
-            if (every > 0 && (i + 1) % every === 0) {
-                rows.push({ clock: clock(minutes), label: 'Break — adverts, then a trailer', fill: '#d99a3a' });
-                minutes += 5;
-            }
-        }
-        return rows;
-    });
+    // The break cadence and the evening it makes moved to the Breaks screen, where the owner
+    // expects to find them. What is left here is what the channel IS rather than how it runs.
 </script>
 
 <div class="screen">
@@ -121,58 +48,9 @@ This is how far down the schedule it may reach to find something worth trailing.
             </span>
         </button>
 
-        {#each settings as setting (setting.key)}
-            <div class="field">
-                <div class="label-row">
-                    <span class="label">{setting.label}</span>
-                    <button
-                        type="button"
-                        class="help"
-                        class:on={open[setting.key]}
-                        aria-expanded={!!open[setting.key]}
-                        aria-label="More about {setting.label}"
-                        onclick={() => (open[setting.key] = !open[setting.key])}
-                    >?</button>
-                </div>
-
-                <div class="value-row">
-                    <input
-                        class="number"
-                        style="flex: 0 0 {setting.width}"
-                        type="number"
-                        min={setting.min}
-                        max={setting.max}
-                        value={setting.get()}
-                        oninput={(e) => change(setting, e.currentTarget.value)}
-                        aria-label={setting.label}
-                    />
-                    <span class="unit">{setting.unit}</span>
-                </div>
-
-                <p class="note">{setting.oneLine}</p>
-
-                {#if open[setting.key]}
-                    <p class="deeper">{setting.deeper}</p>
-                {/if}
-            </div>
-        {/each}
     </div>
 
     <div class="right">
-        <Card>
-            <h3>What this adds up to</h3>
-            <p class="sub">A typical evening with the settings as they stand.</p>
-            <div class="preview">
-                {#each preview as row, index (index)}
-                    <div class="prow">
-                        <span class="at">{row.clock}</span>
-                        <span class="bar" style="background: {row.fill}"></span>
-                        <span class="what" title={row.label}>{row.label}</span>
-                    </div>
-                {/each}
-            </div>
-        </Card>
-
         <div class="warn">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d99a3a" stroke-width="1.9" aria-hidden="true">
                 <path d="M12 9v4.5M12 17h.01" />
@@ -192,7 +70,8 @@ This is how far down the schedule it may reach to find something worth trailing.
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
                 <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" />
             </svg>
-            Anchor, episode interleaving and shuffle live under Content, beside the sources they act on.
+            Anchor, episode interleaving and shuffle live under Content, beside the sources they
+            act on; how often the channel breaks lives under Breaks, beside what goes in one.
         </div>
     </div>
 </div>
@@ -310,24 +189,6 @@ This is how far down the schedule it may reach to find something worth trailing.
 
     .onair-text { display: block; }
     .note-inline { display: block; font-size: 12.5px; color: var(--lt-text-muted); }
-
-    h3 { font-size: 13px; font-weight: 700; color: var(--lt-text-title); margin: 0 0 5px; }
-    .sub { font-size: 12.5px; color: var(--lt-text-muted); margin: 0 0 13px; }
-
-    .preview { display: flex; flex-direction: column; gap: 8px; }
-    .prow { display: flex; align-items: stretch; gap: 11px; }
-    .at { flex: 0 0 42px; font-size: 12.5px; font-weight: 700; color: rgba(255, 255, 255, .7); }
-    .bar { flex: 0 0 3px; border-radius: 2px; min-height: 1.2em; }
-
-    .what {
-        flex-grow: 1;
-        min-width: 0;
-        font-size: 12.5px;
-        color: var(--lt-text-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
 
     .warn {
         border: 1px solid rgba(217, 154, 58, .25);

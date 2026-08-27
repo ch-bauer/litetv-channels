@@ -12,6 +12,8 @@
         just a smaller number.
     */
     import Card from '../lib/ui/Card.svelte';
+    import Cadence from '../lib/breaks/Cadence.svelte';
+    import TypicalEvening from '../lib/breaks/TypicalEvening.svelte';
     import Note from '../lib/ui/Note.svelte';
     import SectionTitle from '../lib/ui/SectionTitle.svelte';
     import { mmss, resolveDuration, skipNote, type Duration } from '../lib/api/duration';
@@ -113,7 +115,7 @@
 
     /** The worked example on the right: a break built from what is actually here. */
     const breakdown = $derived.by(() => {
-        const rows: { clock: string; label: string; length: string; fill: string }[] = [];
+        const rows: { clock: string; label: string; length: string; fill: string; about: boolean }[] = [];
         let at = 0;
         for (const advert of adverts.slice(0, 3)) {
             const seconds = measured[advert.Url]?.PlayableSeconds ?? advert.DurationSeconds;
@@ -122,14 +124,18 @@
                 label: advert.Name,
                 length: mmss(seconds),
                 fill: '#2f9e8f',
+                about: false,
             });
             at += seconds;
         }
+        // The trailer is whatever is being announced when the break comes round, so its length
+        // is not knowable here. Marked as a typical one rather than dressed up as a measurement.
         rows.push({
             clock: mmss(at),
             label: 'Trailer for what is on next',
-            length: '~2:30',
+            length: 'about 2:30',
             fill: '#d99a3a',
+            about: true,
         });
         return rows;
     });
@@ -137,6 +143,19 @@
 
 <div class="screen">
     <div class="left">
+        <div>
+            <SectionTitle>How often</SectionTitle>
+            <div class="spaced">
+                <Note>
+                    Both of these were on Settings, which is not where anyone looks for them.
+                    They shape a week the next time it is laid out, not the one already written
+                    down.
+                </Note>
+            </div>
+        </div>
+
+        <Cadence {channel} />
+
         <div>
             <SectionTitle>Adverts</SectionTitle>
             <div class="spaced">
@@ -256,21 +275,44 @@
 
         <Card>
             <h3>A break, made of that</h3>
+            {#if adverts.length === 0}
+                <!--
+                    The card used to draw the trailer row on its own, which reads as a card that
+                    has not worked rather than as a break with nothing in front of the trailer.
+                -->
+                <p class="prose">
+                    Nothing is in front of the trailer yet: with no adverts on this channel, a
+                    break <em>is</em> the trailer. Add one on the left and it appears here, at the
+                    length it actually plays for.
+                </p>
+            {/if}
             <div class="breakdown">
                 {#each breakdown as row (row.clock + row.label)}
                     <div class="brow">
                         <span class="at">{row.clock}</span>
                         <span class="bar" style="background: {row.fill}"></span>
                         <span class="what" title={row.label}>{row.label}</span>
-                        <span class="len">{row.length}</span>
+                        <span class="len" class:about={row.about}>{row.length}</span>
                     </div>
                 {/each}
             </div>
+            <p class="prose small">
+                {channel.TrailerEveryPrograms > 0
+                    ? 'One of these every ' + channel.TrailerEveryPrograms
+                        + (channel.TrailerEveryPrograms === 1 ? ' programme.' : ' programmes.')
+                    : 'This channel takes no breaks at all - one programme runs straight into the next.'}
+            </p>
         </Card>
+
+        <TypicalEvening {channel} />
     </div>
 </div>
 
 <style>
+    .len.about { color: var(--lt-text-dim); font-style: italic; }
+
+    .prose.small { font-size: 12px; margin-top: 10px; }
+
     .screen {
         flex-grow: 1;
         min-height: 0;
