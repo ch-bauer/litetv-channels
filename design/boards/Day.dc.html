@@ -1,0 +1,182 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, 'Noto Sans', sans-serif; line-height: 1.35; }
+    a { color: #9b8bf7; } a:hover { color: #b6a9fa; }
+    .lt-row:hover { filter: brightness(1.12); }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 860px; display: flex; flex-direction: column; background: linear-gradient(180deg, #1d2635 0%, #111827 55%); color: #d1d5db; font-size: 15px; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 13px; padding: 16px 22px 0 22px;">
+    <div style="font-size: 21px; font-weight: 700; color: rgba(255,255,255,.9);">Action-Kanal</div>
+    <div style="display: flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(119,91,244,.14); border: 1px solid rgba(119,91,244,.22); color: #9b8bf7; font-size: 12px; font-weight: 600;">
+      <span style="width: 6px; height: 6px; border-radius: 50%; background: #775bf4; display: inline-block;"></span>
+      on air &middot; 20:15 Avatar
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="font-size: 12.5px; color: rgba(255,255,255,.45);">saved a moment ago</div>
+  </div>
+
+  <div style="display: flex; gap: 9px; padding: 13px 22px; border-bottom: 1px solid rgba(255,255,255,.08);">
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: #775bf4; border: 1px solid #775bf4; color: #fff; box-shadow: 0 4px 12px rgba(119,91,244,.3);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>
+      Week
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      Content
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 1.8"/></svg>
+      Breaks
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17 5-4.5 4.5 4 3-2.5L21 18"/></svg>
+      Look
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.8"/><path d="M9.7 3h4.6l.5 2.6 2.3 1.3 2.4-1 2.3 4-2 1.7v2.6l2 1.7-2.3 4-2.4-1-2.3 1.3-.5 2.8H9.7l-.5-2.8-2.3-1.3-2.4 1-2.3-4 2-1.7v-2.6l-2-1.7 2.3-4 2.4 1 2.3-1.3z"/></svg>
+      Settings
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 11px; padding: 14px 22px 11px 22px;">
+    <div style="display: flex; border: 1px solid rgba(255,255,255,.12); border-radius: 6px; overflow: hidden;">
+      <div style="padding: 6px 15px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.55); cursor: pointer;">Week</div>
+      <div style="padding: 6px 15px; font-size: 13px; font-weight: 600; background: #775bf4; color: #fff; cursor: pointer;">Day</div>
+    </div>
+
+    <div style="display: flex; gap: 4px;">
+      <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+        <div onClick="{{ d.pick }}" style="padding: 6px 13px; border-radius: 6px; font-size: 13px; font-weight: 600; background: {{d.bg}}; border: 1px solid {{d.edge}}; color: {{d.fg}}; cursor: pointer;">{{d.label}}</div>
+      </sc-for>
+    </div>
+
+    <div style="flex-grow: 1;"></div>
+    <div style="font-size: 12.5px; color: rgba(255,255,255,.45);">8 scheduled &middot; 18:00 to midnight</div>
+  </div>
+
+  <!-- The evening at a scale where a thirty-second advert is a thing you can grab -->
+  <div style="flex-grow: 1; min-height: 0; margin: 0 22px 16px 22px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.03); display: flex; overflow: hidden;">
+
+    <div style="flex: 0 0 58px; border-right: 1px solid rgba(255,255,255,.08); position: relative;">
+      <sc-for list="{{ticks}}" as="t" hint-placeholder-count="7">
+        <div style="position: absolute; right: 9px; top: {{t.top}}px; font-size: 11px; color: rgba(255,255,255,.35);">{{t.label}}</div>
+      </sc-for>
+    </div>
+
+    <div style="flex-grow: 1; position: relative; min-width: 0;">
+      <sc-for list="{{lines}}" as="l" hint-placeholder-count="13">
+        <div style="position: absolute; left: 0; right: 0; top: {{l.top}}px; height: 1px; background: {{l.color}};"></div>
+      </sc-for>
+
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+        <div class="lt-row" style="position: absolute; left: 12px; right: 16px; top: {{r.top}}px; height: {{r.height}}px; background: {{r.fill}}; border-radius: 5px; box-sizing: border-box; padding: 0 12px; display: flex; align-items: center; gap: 12px; overflow: hidden; cursor: grab; color: #fff;">
+          <div style="font-size: 12px; font-weight: 700; opacity: .85; flex: 0 0 auto;">{{r.clock}}</div>
+          <div style="font-size: {{r.size}}; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1;">{{r.label}}</div>
+          <div style="font-size: 11.5px; opacity: .8; flex: 0 0 auto;">{{r.length}}</div>
+        </div>
+      </sc-for>
+
+      <div style="position: absolute; left: 0; right: 0; top: {{nowTop}}px; height: 2px; background: #d95454;"></div>
+      <div style="position: absolute; left: 0; top: {{nowLabel}}px; padding: 1px 7px; background: #d95454; color: #fff; font-size: 10.5px; font-weight: 700; border-radius: 3px;">now</div>
+    </div>
+  </div>
+
+  <div style="border-top: 1px solid rgba(255,255,255,.08); padding: 12px 22px 16px 22px; display: flex; align-items: center; gap: 10px;">
+    <div style="font-size: 12.5px; font-weight: 700; color: rgba(255,255,255,.87);">Shelf</div>
+    <div style="flex: 0 1 250px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 6px 10px; font-size: 13px; color: rgba(255,255,255,.4);">Search films and episodes&hellip;</div>
+    <div style="padding: 6px 12px; border-radius: 999px; background: #2f9e8f; font-size: 12.5px; color: #fff; cursor: grab;">Melitta &rsquo;87 &middot; 0:28</div>
+    <div style="padding: 6px 12px; border-radius: 999px; background: #2f9e8f; font-size: 12.5px; color: #fff; cursor: grab;">Kinder Pingui &rsquo;89 &middot; 0:31</div>
+    <div style="padding: 6px 12px; border-radius: 999px; background: #d99a3a; font-size: 12.5px; color: #fff; cursor: grab;">An address&hellip;</div>
+    <div style="flex-grow: 1;"></div>
+    <div style="font-size: 11.5px; color: rgba(255,255,255,.4);">Alt while dragging for second-by-second</div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { day: 0 };
+  }
+
+  renderVals() {
+    const ACCENT = '#775bf4';
+    const FILL = { programme: '#5b6ee1', trailer: '#d99a3a', advert: '#2f9e8f' };
+
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => {
+      const on = i === this.state.day;
+      return {
+        label,
+        bg: on ? ACCENT : 'rgba(255,255,255,.03)',
+        edge: on ? ACCENT : 'rgba(255,255,255,.08)',
+        fg: on ? '#fff' : 'rgba(255,255,255,.55)',
+        pick: () => this.setState({ day: i })
+      };
+    });
+
+    // 18:00 to midnight over 470px. The week view answers "what shape is my week"; this one
+    // answers "what exactly happens at 20:15", which is where the half-minute things live.
+    const FROM = 18, SPAN = 6, PX = 470;
+    const y = (h) => Math.round(((h - FROM) / SPAN) * PX);
+
+    const ticks = [];
+    const lines = [];
+    for (let h = 18; h <= 24; h += 0.5) {
+      const top = y(h);
+      const onHour = h % 1 === 0;
+      lines.push({ top, color: onHour ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.035)' });
+      if (onHour) {
+        ticks.push({ label: (h === 24 ? '00' : String(h)) + ':00', top: top - 7 });
+      }
+    }
+
+    const clock = (h) => {
+      const total = Math.round(h * 60);
+      const hh = Math.floor(total / 60) % 24;
+      const mm = total % 60;
+      return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+    };
+
+    const plan = [
+      { start: 18, len: 1.25, label: 'Tatort-Wiederholung', kind: 'programme' },
+      { start: 19.25, len: 0.75, label: 'Kurzfilmstrecke', kind: 'programme' },
+      { start: 20, len: 0.1, label: 'Melitta ’87', kind: 'advert' },
+      { start: 20.1, len: 0.1, label: 'Kinder Pingui ’89', kind: 'advert' },
+      { start: 20.2, len: 0.05, label: 'Vorschau: Blade Runner', kind: 'trailer' },
+      { start: 20.25, len: 2.1, label: 'Avatar', kind: 'programme' },
+      { start: 22.35, len: 0.1, label: 'Vorschau: Dune', kind: 'trailer' },
+      { start: 22.45, len: 1.55, label: 'Blade Runner', kind: 'programme' }
+    ];
+
+    const rows = plan.map((p) => {
+      const height = Math.max(11, y(p.start + p.len) - y(p.start) - 3);
+      return {
+        top: y(p.start),
+        height,
+        fill: FILL[p.kind],
+        clock: clock(p.start),
+        label: p.label,
+        length: Math.round(p.len * 60) + ' min',
+        size: height > 26 ? '13.5px' : '11.5px'
+      };
+    });
+
+    return { days, ticks, lines, rows, nowTop: y(21.1), nowLabel: y(21.1) - 8 };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
-﻿using Jellyfin.Data.Enums;
+﻿using System.Globalization;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Core;
 using Jellyfin.Plugin.LiteTv.Integrations;
@@ -226,6 +227,60 @@ public class LiteTvController : ControllerBase
     /// </summary>
     /// <param name="url">The address - a YouTube link, or anything the resolver knows.</param>
     /// <returns>The lengths, and the segments they were worked out from.</returns>
+    /// <summary>
+    /// How long this channel takes to play everything once, before it starts over.
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <returns>The cycle, in ticks and in words.</returns>
+    [HttpGet("Channels/{channelId}/Cycle")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<CycleDto> GetCycle([FromRoute] Guid channelId)
+    {
+        var channel = ChannelGuide.Channel(channelId);
+        if (channel is null)
+        {
+            return NotFound();
+        }
+
+        var (length, entries) = _guide.Cycle(channel);
+        return new CycleDto
+        {
+            Ticks = length.Ticks,
+            Entries = entries,
+            Words = CycleWords(length, entries)
+        };
+    }
+
+    /// <summary>
+    /// The cycle said in words. Written here rather than on the page because the page is not
+    /// the only thing that will want to say it, and because "months" is the answer that makes
+    /// the setting worth having at all.
+    /// </summary>
+    /// <param name="length">How long one cycle runs.</param>
+    /// <param name="entries">How many things are in it.</param>
+    /// <returns>A sentence.</returns>
+    internal static string CycleWords(TimeSpan length, int entries)
+    {
+        if (entries == 0 || length <= TimeSpan.Zero)
+        {
+            return "Nothing to play yet.";
+        }
+
+        var how = length.TotalDays >= 60
+            ? Math.Round(length.TotalDays / 30.44, 1).ToString(CultureInfo.InvariantCulture) + " months"
+            : length.TotalDays >= 2
+                ? Math.Round(length.TotalDays, 1).ToString(CultureInfo.InvariantCulture) + " days"
+                : length.TotalHours >= 1
+                    ? Math.Round(length.TotalHours, 1).ToString(CultureInfo.InvariantCulture) + " hours"
+                    : Math.Round(length.TotalMinutes).ToString(CultureInfo.InvariantCulture) + " minutes";
+
+        return "Plays through in " + how + " - "
+            + entries.ToString(CultureInfo.InvariantCulture)
+            + (entries == 1 ? " thing" : " things") + " - then starts over.";
+    }
+
     [HttpGet("Duration")]
     [Authorize(Policy = "RequiresElevation")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -794,13 +849,53 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<PoTokenStatusDto> GetPoToken() => Status(ProofOfOrigin.Held);
 
-    private static PoTokenStatusDto Status(ProofOfOrigin.Minted? held) => new()
+    private static PoTokenStatusDto Status(ProofOfOrigin.Minted? held)
     {
-        Held = held is not null,
-        MintedUtc = held?.MintedUtc,
-        AgeSeconds = held is null ? null : (int)(DateTime.UtcNow - held.MintedUtc).TotalSeconds,
-        HasPlayerToken = held?.PlayerToken is not null
-    };
+        var last = YouTubeStreamResolver.Last;
+
+        return new PoTokenStatusDto
+        {
+            Held = held is not null,
+            MintedUtc = held?.MintedUtc,
+            AgeSeconds = held is null ? null : (int)(DateTime.UtcNow - held.MintedUtc).TotalSeconds,
+            HasPlayerToken = held?.PlayerToken is not null,
+            LastResolved = LastResolvedWords(last),
+            LastResolvedLow = last?.Low ?? false
+        };
+    }
+
+    /// <summary>
+    /// The last resolution, said in words.
+    /// <para>
+    /// It names whether a token was held <b>at the time</b>, not now, because that is the whole
+    /// point: a resolution made before a television minted one is capped, and the reading only
+    /// makes sense next to that fact. Anything cached from before a mint stops counting the
+    /// instant it happens - the cache is keyed on the token generation - so a low reading with a
+    /// token now held means the next play will be better, and a low reading WITH a token held at
+    /// the time is a real fault worth chasing.
+    /// </para>
+    /// </summary>
+    /// <param name="last">The last resolution, or null.</param>
+    /// <returns>A sentence, or null when nothing has been resolved.</returns>
+    internal static string? LastResolvedWords(YouTubeStreamResolver.Resolution? last)
+    {
+        if (last is null)
+        {
+            return null;
+        }
+
+        var quality = last.Quality > 0
+            ? last.Quality.ToString(CultureInfo.InvariantCulture) + "p"
+            : "unknown quality";
+
+        var client = string.IsNullOrWhiteSpace(last.Client) ? "unknown client" : last.Client;
+
+        var token = last.TokenHeld
+            ? "with a token"
+            : "with no token — a mint would improve this";
+
+        return quality + " · " + client + " · " + token;
+    }
 
     /// <summary>
     /// Suggests channels based on the media present in the library: genre channels,
@@ -943,7 +1038,9 @@ public class LiteTvController : ControllerBase
             // together or ending the window on one.
             TrailsItemId = airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.ItemId : null,
             TrailsName = airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.Name : null,
-            TrailerUrl = airing.TrailerUrl
+            // PlayUrl, so a programme that is a YouTube video hands over its address the same
+            // way a trailer always has.
+            TrailerUrl = airing.PlayUrl
         };
 
         // An interstitial wears the artwork of the programme it is trailing, which is what a
@@ -1896,6 +1993,19 @@ public class PoTokenStatusDto
 
     /// <summary>Gets or sets a value indicating whether a separate player token came with it.</summary>
     public bool HasPlayerToken { get; set; }
+
+    /// <summary>
+    /// Gets or sets what the last resolution actually produced, in words - or null when this
+    /// server has not resolved anything since it started.
+    /// <para>
+    /// Without this, a channel serving 360p to the whole house and one serving a 1080p ladder
+    /// look identical: both simply play.
+    /// </para>
+    /// </summary>
+    public string? LastResolved { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether that last resolution came out low.</summary>
+    public bool LastResolvedLow { get; set; }
 }
 
 /// <summary>
@@ -1977,6 +2087,21 @@ public class WeekAiringDto
     /// guide cannot disagree about it.
     /// </summary>
     public bool OffAir { get; set; }
+}
+
+/// <summary>
+/// How long a channel takes to play everything once.
+/// </summary>
+public class CycleDto
+{
+    /// <summary>Gets or sets the length of one full cycle, in ticks.</summary>
+    public long Ticks { get; set; }
+
+    /// <summary>Gets or sets how many entries are in it.</summary>
+    public int Entries { get; set; }
+
+    /// <summary>Gets or sets the same thing said in words.</summary>
+    public string Words { get; set; } = string.Empty;
 }
 
 /// <summary>

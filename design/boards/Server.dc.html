@@ -1,0 +1,222 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, 'Noto Sans', sans-serif; line-height: 1.35; }
+    a { color: #9b8bf7; } a:hover { color: #b6a9fa; }
+    .lt-help:hover { border-color: #775bf4; color: #9b8bf7; }
+    .lt-row:hover { background: rgba(255,255,255,.06); }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 860px; display: flex; flex-direction: column; background: linear-gradient(180deg, #1d2635 0%, #111827 55%); color: #d1d5db; font-size: 15px; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 13px; padding: 16px 22px 0 22px;">
+    <div style="font-size: 21px; font-weight: 700; color: rgba(255,255,255,.9);">Server settings</div>
+    <div style="flex-grow: 1;"></div>
+    <div style="font-size: 12.5px; color: rgba(255,255,255,.45);">applies to every channel</div>
+  </div>
+
+  <div style="display: flex; gap: 9px; padding: 13px 22px; border-bottom: 1px solid rgba(255,255,255,.08);">
+    <div onClick="{{ pickServer }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: {{svBg}}; border: 1px solid {{svEdge}}; color: {{svColor}}; box-shadow: {{svGlow}};">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.8"/><path d="M9.7 3h4.6l.5 2.6 2.3 1.3 2.4-1 2.3 4-2 1.7v2.6l2 1.7-2.3 4-2.4-1-2.3 1.3-.5 2.8H9.7l-.5-2.8-2.3-1.3-2.4 1-2.3-4 2-1.7v-2.6l-2-1.7 2.3-4 2.4 1 2.3-1.3z"/></svg>
+      Playback &amp; trailers
+    </div>
+    <div onClick="{{ pickApp }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: {{apBg}}; border: 1px solid {{apEdge}}; color: {{apColor}}; box-shadow: {{apGlow}};">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      App updates
+    </div>
+  </div>
+
+  <sc-if value="{{onServer}}" hint-placeholder-val="{{ true }}">
+    <div style="flex-grow: 1; min-height: 0; padding: 22px; display: flex; gap: 30px; overflow: hidden;">
+
+      <div style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 20px;">
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <div style="font-size: 14px; font-weight: 600; color: rgba(255,255,255,.87);">Channel playback account</div>
+            <div class="lt-help" onClick="{{ toggleAccount }}" style="width: 18px; height: 18px; border-radius: 50%; border: 1px solid {{accountEdge}}; color: {{accountColor}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer;">?</div>
+          </div>
+          <div style="background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 8px 11px; font-size: 15px; max-width: 300px;">LiteTV</div>
+          <div style="font-size: 12.5px; color: rgba(255,255,255,.5); padding-left: 14px; border-left: 2px solid rgba(255,255,255,.08);">Channel viewing is recorded against this account, never yours.</div>
+
+          <sc-if value="{{accountOpen}}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top: 3px; padding: 11px 15px; border-radius: 6px; background: rgba(119,91,244,.07); border-left: 2px solid #775bf4; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,.72); max-width: 620px; white-space: pre-line;">{{accountText}}</div>
+          </sc-if>
+        </div>
+
+        <div style="display: flex; align-items: flex-start; gap: 11px; padding: 12px 14px; border-radius: 6px; background: linear-gradient(90deg, rgba(119,91,244,.13) 0%, rgba(119,91,244,.02) 100%); border: 1px solid rgba(119,91,244,.2);">
+          <div onClick="{{ toggleSkip }}" style="flex: 0 0 auto; width: 18px; height: 18px; border-radius: 4px; border: 2px solid {{skipEdge}}; background: {{skipFill}}; display: flex; align-items: center; justify-content: center; margin-top: 1px; cursor: pointer;">
+            <sc-if value="{{skipOn}}" hint-placeholder-val="{{ true }}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4"><path d="m5 13 4.5 4.5L19 7"/></svg>
+            </sc-if>
+          </div>
+          <div style="flex-grow: 1;">
+            <div style="display: flex; align-items: center; gap: 9px;">
+              <div style="font-size: 14px; font-weight: 600; color: rgba(255,255,255,.87);">Skip the parts of a trailer that are not the trailer</div>
+              <div class="lt-help" onClick="{{ toggleSkipHelp }}" style="width: 18px; height: 18px; border-radius: 50%; border: 1px solid {{skipHelpEdge}}; color: {{skipHelpColor}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer;">?</div>
+            </div>
+            <div style="font-size: 12.5px; color: rgba(255,255,255,.55); margin-top: 3px;">{{skipNote}}</div>
+
+            <sc-if value="{{skipHelpOpen}}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top: 9px; padding: 11px 15px; border-radius: 6px; background: rgba(0,0,0,.2); border-left: 2px solid #775bf4; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,.72); white-space: pre-line;">{{skipText}}</div>
+            </sc-if>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 14px; font-weight: 600; color: rgba(255,255,255,.87);">Ask YouTube as</div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="flex: 0 0 220px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 8px 11px; font-size: 14px; display: flex; align-items: center; justify-content: space-between;">
+              Try them all in order
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div style="font-size: 12.5px; color: rgba(255,255,255,.5); padding-left: 14px; border-left: 2px solid rgba(255,255,255,.08);">Only change this if trailers stop working; what YouTube hands over differs by client and by day.</div>
+        </div>
+      </div>
+
+      <div style="flex: 0 0 390px; display: flex; flex-direction: column; gap: 15px;">
+
+        <div style="border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 15px 17px; background: rgba(255,255,255,.03);">
+          <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 11px;">
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #2f9e8f;"></div>
+            <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,.87);">Trailer quality</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: baseline; gap: 9px;">
+              <div style="flex: 0 0 118px; font-size: 12px; color: rgba(255,255,255,.5);">Proof of origin</div>
+              <div style="font-size: 12.5px; color: rgba(255,255,255,.8);">held &middot; minted 40 min ago</div>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 9px;">
+              <div style="flex: 0 0 118px; font-size: 12px; color: rgba(255,255,255,.5);">Last resolved</div>
+              <div style="font-size: 12.5px; color: rgba(255,255,255,.8);">1080p ladder &middot; VISIONOS</div>
+            </div>
+          </div>
+          <div style="font-size: 12px; line-height: 1.5; color: rgba(255,255,255,.45); margin-top: 11px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.07);">
+            A television mints this in the background. Without one YouTube caps this server at 360p, so if it ever says &ldquo;none held&rdquo;, open the app once.
+          </div>
+        </div>
+
+        <div style="border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 15px 17px; background: rgba(255,255,255,.03);">
+          <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,.87); margin-bottom: 9px;">Where channels play</div>
+          <div style="font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.55);">
+            Channels are shown on the television app only. Nothing is published to the web client, to other Jellyfin apps, or to Live TV &mdash; there is no tuner and no channel list anywhere else.
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{onApp}}" hint-placeholder-val="{{ false }}">
+    <div style="flex-grow: 1; min-height: 0; padding: 22px; display: flex; gap: 30px; overflow: hidden;">
+
+      <div style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 16px;">
+        <div>
+          <div style="font-size: 15px; font-weight: 700; color: rgba(255,255,255,.9);">Builds this server hands the television</div>
+          <div style="font-size: 12.5px; color: rgba(255,255,255,.5); padding-left: 14px; border-left: 2px solid rgba(255,255,255,.08); margin-top: 6px;">
+            The app checks here for its own updates, so a new build is uploaded rather than pushed over ADB.
+          </div>
+        </div>
+
+        <div style="border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.03); overflow: hidden;">
+          <sc-for list="{{builds}}" as="b" hint-placeholder-count="4">
+            <div class="lt-row" style="display: flex; align-items: center; gap: 13px; padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,.05);">
+              <div style="flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; background: {{b.tagBg}}; color: {{b.tagColor}}; font-size: 10.5px; font-weight: 700;">{{b.tag}}</div>
+              <div style="flex-grow: 1; min-width: 0;">
+                <div style="font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,.87);">{{b.version}}</div>
+                <div style="font-size: 11.5px; color: rgba(255,255,255,.42); margin-top: 2px;">{{b.detail}}</div>
+              </div>
+              <div style="flex: 0 0 auto; font-size: 12px; color: rgba(255,255,255,.4);">{{b.size}}</div>
+            </div>
+          </sc-for>
+
+          <div style="display: flex; align-items: center; gap: 11px; padding: 13px 14px; background: rgba(255,255,255,.02);">
+            <div style="padding: 8px 15px; border-radius: 6px; background: #775bf4; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(119,91,244,.3);">Upload a build</div>
+            <div style="font-size: 12.5px; color: rgba(255,255,255,.45);">an .apk from the fork&rsquo;s release output</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex: 0 0 390px; display: flex; flex-direction: column; gap: 15px;">
+        <div style="border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 15px 17px; background: rgba(255,255,255,.03);">
+          <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,.87); margin-bottom: 9px;">Put this in the app</div>
+          <div style="background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.1); border-radius: 6px; padding: 9px 11px; font-family: consolas, monaco, monospace; font-size: 12px; color: #9b8bf7; word-break: break-all;">http://192.168.178.94:8096/LiteTv/Update</div>
+          <div style="font-size: 12px; line-height: 1.5; color: rgba(255,255,255,.45); margin-top: 9px;">Settings &rsaquo; Updates &rsaquo; Update source, on the television.</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'server', account: false, skip: true, skipHelp: false };
+  }
+
+  renderVals() {
+    const ACCENT = '#775bf4';
+    const onServer = this.state.tab === 'server';
+
+    const builds = [
+      { version: 'v1.0.6-40', detail: 'universal · e6a9e0ee · 22 Aug', size: '53.8 MB', current: true },
+      { version: 'v1.0.6-40', detail: 'arm64-v8a · e6a9e0ee · 22 Aug', size: '42.0 MB', current: false },
+      { version: 'v1.0.6-40', detail: 'armeabi-v7a · e6a9e0ee · 22 Aug', size: '40.6 MB', current: false },
+      { version: 'v1.0.6-38', detail: 'universal · 3a56cbe0 · 21 Aug', size: '53.6 MB', current: false }
+    ].map((b) => ({
+      ...b,
+      tag: b.current ? 'SERVED' : 'kept',
+      tagBg: b.current ? 'rgba(47,158,143,.2)' : 'rgba(255,255,255,.06)',
+      tagColor: b.current ? '#63c4b5' : 'rgba(255,255,255,.5)'
+    }));
+
+    return {
+      builds,
+      onServer,
+      onApp: !onServer,
+      pickServer: () => this.setState({ tab: 'server' }),
+      pickApp: () => this.setState({ tab: 'app' }),
+      svBg: onServer ? ACCENT : 'rgba(255,255,255,.03)',
+      svEdge: onServer ? ACCENT : 'rgba(255,255,255,.08)',
+      svColor: onServer ? '#fff' : 'rgba(255,255,255,.6)',
+      svGlow: onServer ? '0 4px 12px rgba(119,91,244,.3)' : 'none',
+      apBg: onServer ? 'rgba(255,255,255,.03)' : ACCENT,
+      apEdge: onServer ? 'rgba(255,255,255,.08)' : ACCENT,
+      apColor: onServer ? 'rgba(255,255,255,.6)' : '#fff',
+      apGlow: onServer ? 'none' : '0 4px 12px rgba(119,91,244,.3)',
+
+      accountOpen: this.state.account,
+      accountEdge: this.state.account ? ACCENT : 'rgba(255,255,255,.25)',
+      accountColor: this.state.account ? '#9b8bf7' : 'rgba(255,255,255,.45)',
+      toggleAccount: () => this.setState({ account: !this.state.account }),
+      accountText: 'Jellyfin works out whose history a playback belongs to from the token on the request. Channel playback is sent with this account’s token, so every write lands on it instead of on you.\n\nIt is made on first use, hidden from the login screen, and can do nothing but play. Nothing watched on a channel reaches your Continue Watching or your Next Up.',
+
+      skipOn: this.state.skip,
+      skipEdge: this.state.skip ? '#4f46e5' : 'rgba(255,255,255,.25)',
+      skipFill: this.state.skip ? '#4f46e5' : 'transparent',
+      toggleSkip: () => this.setState({ skip: !this.state.skip }),
+      skipNote: this.state.skip
+        ? 'On. Breaks are sized by what actually plays, not by the video’s full length.'
+        : 'Off. Trailers play whole, branded card and all, and breaks are sized by the full length.',
+      skipHelpOpen: this.state.skipHelp,
+      skipHelpEdge: this.state.skipHelp ? ACCENT : 'rgba(255,255,255,.25)',
+      skipHelpColor: this.state.skipHelp ? '#9b8bf7' : 'rgba(255,255,255,.45)',
+      toggleSkipHelp: () => this.setState({ skipHelp: !this.state.skipHelp }),
+      skipText: 'German trailers mostly come from channels that wrap them — a branded card at the front, a plea to subscribe at the back. In a sixty-second break a quarter of it can be somebody else’s advertising inside what is already an advert.\n\nSponsorBlock is asked which parts those are, and the television skips them silently rather than offering a button. The lookup asks about a four-character hash of the video id rather than the id itself, so the service is never told what is being watched.'
+    };
+  }
+}
+</script>
+</body>
+</html>

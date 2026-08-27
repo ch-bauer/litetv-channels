@@ -47,6 +47,17 @@ public sealed record Airing(
     public string? TrailerUrl { get; init; }
 
     /// <summary>
+    /// Gets the address this airing should play, whichever way it came to have one: a trailer
+    /// slot that names an address outright, or an entry that IS an address because it came from
+    /// a YouTube playlist. Null when the airing is a library item, which is still most of them.
+    /// <para>
+    /// Everything that plays an airing should read this rather than <see cref="TrailerUrl"/>,
+    /// which only ever knew about the first of the two.
+    /// </para>
+    /// </summary>
+    public string? PlayUrl => TrailerUrl ?? Entry?.Url;
+
+    /// <summary>
     /// Gets how far into the program a viewer joining at the given moment comes in - the
     /// position to start playback at, which is the whole point of a channel.
     /// </summary>
@@ -175,6 +186,14 @@ public sealed class ChannelSchedule
     /// Gets a value indicating whether the channel has anything to air at all.
     /// </summary>
     public bool IsSilent => _lineups.Values.All(l => l.IsEmpty);
+
+    /// <summary>
+    /// Gets the queue the channel airs when no block covers the moment - its own lineup, as
+    /// opposed to a block's. This is the one that loops, and its length is how long the channel
+    /// takes to play everything it has before starting again.
+    /// </summary>
+    public Lineup? BaseLineup =>
+        _lineups.TryGetValue(WeekTimeline.BaseLineup, out var lineup) ? lineup : null;
 
     /// <summary>
     /// Walks the schedule over a window of time.

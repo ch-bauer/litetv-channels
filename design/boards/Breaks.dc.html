@@ -1,0 +1,236 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, 'Noto Sans', sans-serif; line-height: 1.35; }
+    a { color: #9b8bf7; } a:hover { color: #b6a9fa; }
+    .lt-row:hover { background: rgba(255,255,255,.06); }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 860px; display: flex; flex-direction: column; background: linear-gradient(180deg, #1d2635 0%, #111827 55%); color: #d1d5db; font-size: 15px; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 13px; padding: 16px 22px 0 22px;">
+    <div style="font-size: 21px; font-weight: 700; color: rgba(255,255,255,.9);">Action-Kanal</div>
+    <div style="flex-grow: 1;"></div>
+    <div style="font-size: 12.5px; color: rgba(255,255,255,.45);">saved a moment ago</div>
+  </div>
+
+  <div style="display: flex; gap: 9px; padding: 13px 22px; border-bottom: 1px solid rgba(255,255,255,.08);">
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>
+      Week
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      Content
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: #775bf4; border: 1px solid #775bf4; color: #fff; box-shadow: 0 4px 12px rgba(119,91,244,.3);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 1.8"/></svg>
+      Breaks
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17 5-4.5 4.5 4 3-2.5L21 18"/></svg>
+      Look
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.8"/><path d="M9.7 3h4.6l.5 2.6 2.3 1.3 2.4-1 2.3 4-2 1.7v2.6l2 1.7-2.3 4-2.4-1-2.3 1.3-.5 2.8H9.7l-.5-2.8-2.3-1.3-2.4 1-2.3-4 2-1.7v-2.6l-2-1.7 2.3-4 2.4 1 2.3-1.3z"/></svg>
+      Settings
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; min-height: 0; padding: 20px 22px; display: flex; gap: 28px; overflow: hidden;">
+
+    <div style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 16px;">
+
+      <div>
+        <div style="font-size: 15px; font-weight: 700; color: rgba(255,255,255,.9);">Adverts</div>
+        <div style="font-size: 12.5px; color: rgba(255,255,255,.5); padding-left: 14px; border-left: 2px solid rgba(255,255,255,.08); margin-top: 6px;">
+          Addresses the television resolves and plays. They go at the front of a break, with the trailer last, so a break ends on what the channel is about to show.
+        </div>
+      </div>
+
+      <!-- No "seconds" box. The plugin asks YouTube how long the video is and SponsorBlock
+           which parts of it get skipped, and the break is sized by what is left. -->
+      <div style="border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.03); overflow: hidden;">
+        <sc-for list="{{adverts}}" as="a" hint-placeholder-count="4">
+          <div class="lt-row" style="display: flex; align-items: center; gap: 13px; padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,.05);">
+            <div style="flex: 0 0 3px; align-self: stretch; border-radius: 2px; background: #2f9e8f;"></div>
+            <div style="flex-grow: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 9px;">
+                <div style="font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,.87); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{a.name}}</div>
+                <div style="flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,.07); font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.6);">{{a.decade}}</div>
+              </div>
+              <div style="font-size: 11.5px; color: rgba(255,255,255,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">{{a.url}}</div>
+            </div>
+
+            <div style="flex: 0 0 auto; text-align: right;">
+              <div style="font-size: 14px; font-weight: 700; color: rgba(255,255,255,.87);">{{a.playable}}</div>
+              <div style="font-size: 11px; color: {{a.skipColor}}; margin-top: 1px;">{{a.skipNote}}</div>
+            </div>
+
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.8" style="flex: 0 0 auto; cursor: pointer;"><path d="M5 7h14M10 11v6M14 11v6M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9.5 7V4.5A1.5 1.5 0 0 1 11 3h2a1.5 1.5 0 0 1 1.5 1.5V7"/></svg>
+          </div>
+        </sc-for>
+
+        <!-- Adding one: an address and a name. The length is not a question anybody is asked. -->
+        <div style="display: flex; align-items: center; gap: 10px; padding: 13px 14px; background: rgba(255,255,255,.02);">
+          <div style="flex: 1 1 0; min-width: 0; background: rgba(255,255,255,.05); border: 1px solid {{urlEdge}}; border-radius: 6px; padding: 8px 11px; font-size: 13px; color: {{urlColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{urlText}}</div>
+          <div style="flex: 0 1 150px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 8px 11px; font-size: 13px; color: rgba(255,255,255,.4);">Name (optional)</div>
+          <div onClick="{{ addAdvert }}" style="padding: 8px 14px; border-radius: 6px; background: {{addBg}}; border: 1px solid {{addEdge}}; color: {{addColor}}; font-size: 13px; font-weight: 600; cursor: pointer;">Add</div>
+        </div>
+
+        <!-- What the old seconds box has been replaced by -->
+        <div style="padding: 0 14px 13px 14px; background: rgba(255,255,255,.02);">
+          <div style="display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 6px; background: {{noteBg}}; border-left: 2px solid {{noteEdge}};">
+            <sc-if value="{{resolving}}" hint-placeholder-val="{{ false }}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9b8bf7" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
+            </sc-if>
+            <sc-if value="{{resolved}}" hint-placeholder-val="{{ true }}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2f9e8f" stroke-width="2.4"><path d="m5 13 4.5 4.5L19 7"/></svg>
+            </sc-if>
+            <div style="font-size: 12.5px; color: {{noteColor}};">{{noteText}}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 9px;">
+        <div onClick="{{ toggleState }}" style="padding: 5px 11px; border-radius: 6px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); font-size: 12px; color: rgba(255,255,255,.55); cursor: pointer;">
+          Show what happens while it works it out
+        </div>
+      </div>
+    </div>
+
+    <div style="flex: 0 0 400px; display: flex; flex-direction: column; gap: 15px;">
+
+      <div style="border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 15px 17px; background: rgba(255,255,255,.03);">
+        <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,.87); margin-bottom: 5px;">Why there is no length to type</div>
+        <div style="font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.6);">
+          A trailer from YouTube is rarely only the trailer. The uploader wraps it in a branded card and a plea to subscribe, and the television skips both &mdash; so the number that matters is not how long the video is, but how long it <em>plays</em> for.
+          <br><br>
+          Nobody can type that. The plugin asks YouTube for the length and SponsorBlock for the parts that get skipped, and the break is sized by what is left.
+        </div>
+      </div>
+
+      <div style="border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 15px 17px; background: rgba(255,255,255,.03);">
+        <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,.87); margin-bottom: 11px;">A break, made of that</div>
+        <div style="display: flex; flex-direction: column; gap: 7px;">
+          <sc-for list="{{breakdown}}" as="b" hint-placeholder-count="5">
+            <div style="display: flex; align-items: stretch; gap: 10px;">
+              <div style="flex: 0 0 40px; font-size: 12px; font-weight: 700; color: rgba(255,255,255,.7);">{{b.clock}}</div>
+              <div style="flex: 0 0 3px; border-radius: 2px; background: {{b.fill}};"></div>
+              <div style="flex-grow: 1; min-width: 0; font-size: 12.5px; color: {{b.color}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{b.label}}</div>
+              <div style="flex: 0 0 auto; font-size: 11.5px; color: rgba(255,255,255,.4);">{{b.length}}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255,255,255,.07); font-size: 12px; color: rgba(255,255,255,.5);">
+          The break is 24 minutes; this fills 3:16 of it and the rest is quiet. Sized by the old typed guess it would have overrun by 41 seconds.
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; color: rgba(255,255,255,.45);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex: 0 0 auto; margin-top: 1px;"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        Skipping can be switched off under Server settings. With it off, the full length is used &mdash; because then the full length is what plays.
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { stage: 'resolved' };
+  }
+
+  renderVals() {
+    const adverts = [
+      { name: 'Melitta ’87', url: 'youtube.com/watch?v=7Kx1a2Bd9Qk', decade: '1980s', playable: '0:28', skipped: 4 },
+      { name: 'Kinder Pingui ’89', url: 'youtube.com/watch?v=Lp3nQ8vRt1Y', decade: '1980s', playable: '0:31', skipped: 0 },
+      { name: 'Ariel ’92', url: 'youtube.com/watch?v=Zx9mKq2Vd7A', decade: '1990s', playable: '0:24', skipped: 7 },
+      { name: 'Bundesbahn ’85', url: 'youtube.com/watch?v=Qn4vT8sLp2E', decade: '1980s', playable: '0:44', skipped: 0 }
+    ].map((a) => ({
+      ...a,
+      skipNote: a.skipped ? a.skipped + ' s skipped' : 'nothing skipped',
+      skipColor: a.skipped ? '#d99a3a' : 'rgba(255,255,255,.35)'
+    }));
+
+    const stage = this.state.stage;
+    const stages = {
+      empty: {
+        urlText: 'Paste a YouTube address…',
+        urlColor: 'rgba(255,255,255,.4)',
+        urlEdge: 'rgba(255,255,255,.12)',
+        noteText: 'Paste an address and its length is worked out.',
+        noteColor: 'rgba(255,255,255,.45)',
+        noteBg: 'transparent',
+        noteEdge: 'rgba(255,255,255,.12)',
+        addBg: 'rgba(255,255,255,.04)',
+        addEdge: 'rgba(255,255,255,.1)',
+        addColor: 'rgba(255,255,255,.35)',
+        resolving: false,
+        resolved: false
+      },
+      resolving: {
+        urlText: 'youtube.com/watch?v=d9MyW72ELq0',
+        urlColor: 'rgba(255,255,255,.85)',
+        urlEdge: 'rgba(255,255,255,.2)',
+        noteText: 'Asking how long that is…',
+        noteColor: '#9b8bf7',
+        noteBg: 'rgba(119,91,244,.07)',
+        noteEdge: '#775bf4',
+        addBg: 'rgba(255,255,255,.04)',
+        addEdge: 'rgba(255,255,255,.1)',
+        addColor: 'rgba(255,255,255,.35)',
+        resolving: true,
+        resolved: false
+      },
+      resolved: {
+        urlText: 'youtube.com/watch?v=d9MyW72ELq0',
+        urlColor: 'rgba(255,255,255,.85)',
+        urlEdge: 'rgba(255,255,255,.2)',
+        noteText: '2:17 of playing time  ·  2:28 long  ·  11 s skipped (outro)',
+        noteColor: 'rgba(255,255,255,.75)',
+        noteBg: 'rgba(47,158,143,.08)',
+        noteEdge: '#2f9e8f',
+        addBg: '#775bf4',
+        addEdge: '#775bf4',
+        addColor: '#fff',
+        resolving: false,
+        resolved: true
+      }
+    };
+
+    const order = ['empty', 'resolving', 'resolved'];
+    const next = order[(order.indexOf(stage) + 1) % order.length];
+
+    const dim = 'rgba(255,255,255,.5)';
+    const breakdown = [
+      { clock: '22:21', label: 'Avatar ends', fill: 'rgba(255,255,255,.18)', color: dim, length: '' },
+      { clock: '22:21', label: 'Melitta ’87', fill: '#2f9e8f', color: 'rgba(255,255,255,.8)', length: '0:28' },
+      { clock: '22:22', label: 'Kinder Pingui ’89', fill: '#2f9e8f', color: 'rgba(255,255,255,.8)', length: '0:31' },
+      { clock: '22:22', label: 'Vorschau: Blade Runner', fill: '#d99a3a', color: 'rgba(255,255,255,.8)', length: '2:17' },
+      { clock: '22:45', label: 'Blade Runner', fill: '#5b6ee1', color: 'rgba(255,255,255,.85)', length: '' }
+    ];
+
+    return {
+      adverts,
+      breakdown,
+      ...stages[stage],
+      toggleState: () => this.setState({ stage: next }),
+      addAdvert: () => this.setState({ stage: 'empty' })
+    };
+  }
+}
+</script>
+</body>
+</html>

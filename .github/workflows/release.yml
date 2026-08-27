@@ -22,6 +22,31 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # The configuration app. web/dist is not in git - it is built here, and the csproj embeds
+      # whatever this step leaves behind. So this MUST run before dotnet publish: skip it and
+      # the plugin still compiles, still packages and still installs, and simply has no
+      # configuration page inside it. That silence is the whole reason for the guard below.
+      - name: Build the configuration app
+        run: |
+          npm ci
+          npm run build
+        working-directory: web
+
+      - name: Check the bundle is really there
+        run: |
+          test -f web/dist/litetv.js || {
+            echo "::error::web/dist/litetv.js is missing - the plugin would ship with no configuration page."
+            exit 1
+          }
+          echo "Bundle contents:"
+          ls -la web/dist
+
       - name: Test
         run: dotnet test tests/Jellyfin.Plugin.LiteTv.Tests
 

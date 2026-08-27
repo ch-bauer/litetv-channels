@@ -22,6 +22,7 @@ public class ChannelPlaylistBuilder
 
     private readonly ILibraryManager _libraryManager;
     private readonly ILogger<ChannelPlaylistBuilder> _logger;
+    private readonly Trailers.YouTubePlaylist? _playlists;
     private readonly ConcurrentDictionary<Guid, (DateTime BuiltUtc, string Fingerprint, IReadOnlyList<ScheduledEntry> Entries)> _cache = new();
     private readonly ConcurrentDictionary<Guid, (DateTime BuiltUtc, string Fingerprint, ChannelSchedule Schedule)> _schedules = new();
 
@@ -30,10 +31,14 @@ public class ChannelPlaylistBuilder
     /// </summary>
     /// <param name="libraryManager">The library manager.</param>
     /// <param name="logger">The logger.</param>
-    public ChannelPlaylistBuilder(ILibraryManager libraryManager, ILogger<ChannelPlaylistBuilder> logger)
+    public ChannelPlaylistBuilder(
+        ILibraryManager libraryManager,
+        ILogger<ChannelPlaylistBuilder> logger,
+        Trailers.YouTubePlaylist? playlists = null)
     {
         _libraryManager = libraryManager;
         _logger = logger;
+        _playlists = playlists;
 
         // Channel edits should be visible immediately, not after the cache TTL.
         if (Plugin.Instance is not null)
@@ -130,7 +135,12 @@ public class ChannelPlaylistBuilder
     {
         foreach (var source in sources)
         {
-            text.Append(source.ItemId.ToString("N")).Append('-').Append((int)source.Type).Append(';');
+            // The address is part of what a source IS, not decoration: a YouTube source has no
+            // item id at all, so without this every playlist fingerprints the same and swapping
+            // one for another would go on airing the old queue until the cache aged out.
+            text.Append(source.ItemId.ToString("N")).Append('-')
+                .Append((int)source.Type).Append('-')
+                .Append(source.Url).Append(';');
         }
     }
 
@@ -411,6 +421,17 @@ public class ChannelPlaylistBuilder
         var streams = new List<List<ScheduledEntry>>();
         foreach (var source in sources)
         {
+            if (source.Type == ChannelSourceType.YouTube)
+            {
+                var fromYouTube = FromYouTube(source, channelName);
+                if (fromYouTube.Count > 0)
+                {
+                    streams.Add(fromYouTube);
+                }
+
+                continue;
+            }
+
             var item = _libraryManager.GetItemById(source.ItemId);
             if (item is null)
             {
@@ -439,6 +460,73 @@ public class ChannelPlaylistBuilder
         }
 
         return streams;
+    }
+
+    /// <summary>
+    /// Expands a YouTube source into playable entries.
+    /// <para>
+    /// A playlist becomes its videos, in playlist order; a single video becomes itself. The
+    /// list is read <b>now</b>, while the queue is being built, and never stored - the same rule
+    /// the stored week follows.
+    /// </para>
+    /// <para>
+    /// A video YouTube gives no length for is <b>dropped</b>, not guessed at. A schedule is a
+    /// promise about when things start, and one entry of made-up length moves everything after
+    /// it - which is the same reasoning that removed the typed-length box twice already.
+    /// </para>
+    /// </summary>
+    /// <param name="source">The source, whose Url names a playlist or a video.</param>
+    /// <param name="channelName">The channel, for the log.</param>
+    /// <returns>The entries, in order.</returns>
+    private List<ScheduledEntry> FromYouTube(ChannelSource source, string channelName)
+    {
+        var entries = new List<ScheduledEntry>();
+
+        if (_playlists is null || string.IsNullOrWhiteSpace(source.Url))
+        {
+            _logger.LogWarning(
+                "LiteTV channel {Channel}: a YouTube source has no address, or no reader is available.",
+                channelName);
+            return entries;
+        }
+
+        // Built synchronously because everything that asks for a queue does; the answer is
+        // cached by the builder, so this runs when the lineup changes rather than per request.
+        var items = _playlists.ItemsAsync(source.Url, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        var skipped = 0;
+        foreach (var item in items)
+        {
+            if (item.Seconds <= 0)
+            {
+                skipped++;
+                continue;
+            }
+
+            entries.Add(new ScheduledEntry(
+                Guid.Empty,
+                item.Title,
+                source.Name.Length > 0 ? source.Name : null,
+                null,
+                TimeSpan.FromSeconds(item.Seconds).Ticks)
+            {
+                Url = item.Url
+            });
+        }
+
+        if (skipped > 0)
+        {
+            _logger.LogInformation(
+                "LiteTV channel {Channel}: {Skipped} of {Total} videos in {Source} had no length and were left out.",
+                channelName,
+                skipped,
+                items.Count,
+                source.Name.Length > 0 ? source.Name : source.Url);
+        }
+
+        return entries;
     }
 
     /// <summary>

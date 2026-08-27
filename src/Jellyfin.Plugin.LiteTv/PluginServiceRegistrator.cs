@@ -16,6 +16,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
+        // Reads YouTube playlists, so a playlist can be a channel's content rather than only
+        // something inside a break. Registered before the builder, which takes it.
+        serviceCollection.AddSingleton<YouTubePlaylist>();
+
         serviceCollection.AddSingleton<ChannelPlaylistBuilder>();
 
         // The stored weeks: one file per channel, and the schedule itself rather than a cache

@@ -1,0 +1,254 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, 'Noto Sans', sans-serif; line-height: 1.35; }
+    a { color: #9b8bf7; } a:hover { color: #b6a9fa; }
+    .lt-check:hover { background: rgba(255,255,255,.07); }
+    .lt-card:hover { border-color: rgba(119,91,244,.4); }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 860px; display: flex; flex-direction: column; background: linear-gradient(180deg, #1d2635 0%, #111827 55%); color: #d1d5db; font-size: 15px; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 13px; padding: 18px 22px 0 22px;">
+    <div style="font-size: 21px; font-weight: 700; color: rgba(255,255,255,.9);">New channel</div>
+    <div style="flex-grow: 1;"></div>
+    <div style="font-size: 13px; color: rgba(255,255,255,.5); cursor: pointer;">Start from nothing instead &rsaquo;</div>
+  </div>
+
+  <div style="font-size: 12.5px; color: rgba(255,255,255,.5); padding: 8px 22px 0 22px;">
+    Tell it what you are in the mood for and it works out channels your library can actually fill.
+  </div>
+
+
+  <!-- Whether the good scoring is available, said plainly and without nagging. Smart Similar
+       is another plugin on this server; when it is there LiteTV asks it to rank candidates
+       and fuses the answers, and when it is not there is a much coarser genre match. -->
+  <div onClick="{{ toggleEngine }}" style="margin: 14px 22px 0 22px; display: flex; align-items: center; gap: 11px; padding: 9px 13px; border-radius: 8px; background: {{engineBg}}; border: 1px solid {{engineEdge}}; cursor: pointer;">
+    <div style="flex: 0 0 auto; display: flex;"><sc-if value="{{engineOk}}" hint-placeholder-val="{{ true }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2f9e8f" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16 9.5"/></svg></sc-if><sc-if value="{{engineMissing}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d99a3a" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></sc-if></div>
+    <div style="flex-grow: 1; min-width: 0;">
+      <div style="font-size: 12.5px; font-weight: 600; color: {{engineTitleColor}};">{{engineTitle}}</div>
+      <div style="font-size: 11.5px; color: rgba(255,255,255,.5); margin-top: 1px;">{{engineNote}}</div>
+    </div>
+    <sc-if value="{{engineMissing}}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 0 0 auto; padding: 5px 12px; border-radius: 6px; background: rgba(119,91,244,.16); border: 1px solid rgba(119,91,244,.35); color: #9b8bf7; font-size: 12px; font-weight: 600;">Install it</div>
+    </sc-if>
+  </div>
+
+  <div style="display: flex; gap: 0; margin: 16px 22px 0 22px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; overflow: hidden; align-self: flex-start;">
+    <div style="display: flex; align-items: center; gap: 9px; padding: 10px 18px; background: transparent; color: rgba(255,255,255,.55); font-size: 13.5px; font-weight: 600; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3.5 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.9l6.1-.8z"/></svg>
+      From titles I pick
+    </div>
+    <div style="display: flex; align-items: center; gap: 9px; padding: 10px 18px; background: #775bf4; color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(119,91,244,.3);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="6" rx="1.5"/></svg>
+      From a library or genre
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; min-height: 0; padding: 18px 22px 22px 22px; display: flex; gap: 26px; overflow: hidden;">
+
+    <!-- Checkboxes, because this half of the feature is picking out of a fixed list rather
+         than searching: the library knows what it holds, and it is quicker to tick than type. -->
+    <div style="flex: 0 0 300px; display: flex; flex-direction: column; gap: 16px; overflow: hidden;">
+
+      <div>
+        <div style="font-size: 12px; font-weight: 700; letter-spacing: .09em; color: rgba(255,255,255,.45); margin-bottom: 8px;">LIBRARIES</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <sc-for list="{{libraries}}" as="l" hint-placeholder-count="3">
+            <div class="lt-check" onClick="{{ l.toggle }}" style="display: flex; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 6px; cursor: pointer;">
+              <div style="flex: 0 0 auto; width: 17px; height: 17px; border-radius: 4px; border: 2px solid {{l.boxEdge}}; background: {{l.boxFill}}; display: flex; align-items: center; justify-content: center;">
+                <sc-if value="{{l.on}}" hint-placeholder-val="{{ true }}">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4"><path d="m5 13 4.5 4.5L19 7"/></svg>
+                </sc-if>
+              </div>
+              <div style="flex-grow: 1; font-size: 13.5px; color: {{l.color}};">{{l.name}}</div>
+              <div style="font-size: 11.5px; color: rgba(255,255,255,.35);">{{l.count}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="min-height: 0; display: flex; flex-direction: column;">
+        <div style="font-size: 12px; font-weight: 700; letter-spacing: .09em; color: rgba(255,255,255,.45); margin-bottom: 8px;">GENRES</div>
+        <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
+          <sc-for list="{{genres}}" as="g" hint-placeholder-count="7">
+            <div class="lt-check" onClick="{{ g.toggle }}" style="display: flex; align-items: center; gap: 10px; padding: 6px 9px; border-radius: 6px; cursor: pointer;">
+              <div style="flex: 0 0 auto; width: 17px; height: 17px; border-radius: 4px; border: 2px solid {{g.boxEdge}}; background: {{g.boxFill}}; display: flex; align-items: center; justify-content: center;">
+                <sc-if value="{{g.on}}" hint-placeholder-val="{{ true }}">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4"><path d="m5 13 4.5 4.5L19 7"/></svg>
+                </sc-if>
+              </div>
+              <div style="flex-grow: 1; font-size: 13.5px; color: {{g.color}};">{{g.name}}</div>
+              <div style="font-size: 11.5px; color: rgba(255,255,255,.35);">{{g.count}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,.87);">What it would build</div>
+        <div style="font-size: 12px; color: rgba(255,255,255,.45);">{{basis}}</div>
+      </div>
+
+      <sc-for list="{{proposals}}" as="p" hint-placeholder-count="3">
+        <div class="lt-card" style="border: 1px solid {{p.edge}}; border-radius: 8px; background: {{p.bg}}; padding: 14px 16px; display: flex; align-items: center; gap: 18px;">
+
+          <div style="flex: 1 1 0; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="font-size: 15px; font-weight: 700; color: rgba(255,255,255,.9);">{{p.name}}</div>
+              <sc-for list="{{p.reasons}}" as="r" hint-placeholder-count="2">
+                <div style="padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.06); font-size: 10.5px; color: rgba(255,255,255,.6);">{{r}}</div>
+              </sc-for>
+            </div>
+            <div style="font-size: 12px; color: rgba(255,255,255,.5); margin-top: 4px;">{{p.count}}</div>
+          </div>
+
+          <div style="flex: 0 0 330px; display: flex; flex-direction: column; gap: 5px;">
+            <sc-for list="{{p.evening}}" as="e" hint-placeholder-count="3">
+              <div style="display: flex; align-items: stretch; gap: 9px;">
+                <div style="flex: 0 0 38px; font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.6);">{{e.clock}}</div>
+                <div style="flex: 0 0 3px; border-radius: 2px; background: {{e.fill}};"></div>
+                <div style="flex-grow: 1; min-width: 0; font-size: 12px; color: {{e.color}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{e.label}}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex: 0 0 auto; display: flex; gap: 7px;">
+            <div style="padding: 8px 16px; border-radius: 6px; background: {{p.createBg}}; border: 1px solid {{p.createEdge}}; color: {{p.createColor}}; font-size: 12.5px; font-weight: 600; cursor: pointer;">Create</div>
+            <div style="padding: 8px 12px; border-radius: 6px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,.7); cursor: pointer;">Tweak</div>
+          </div>
+        </div>
+      </sc-for>
+
+      <div style="flex-grow: 1;"></div>
+
+      <div style="display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; color: rgba(255,255,255,.45);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex: 0 0 auto; margin-top: 1px;"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        Ticking more than one genre asks for titles in <em>all</em> of them, which is how &ldquo;Sci-Fi + Horror&rdquo; gets you creature features rather than both piles at once.
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { on: { Filme: true, 'Sci-Fi': true, Horror: true } };
+  }
+
+  renderVals() {
+    const ACCENT = '#775bf4';
+    const dim = 'rgba(255,255,255,.5)';
+    const bright = 'rgba(255,255,255,.82)';
+
+
+    const engine = this.state.engine || 'smart';
+    const smart = engine === 'smart';
+
+    const box = (name) => {
+      const on = !!this.state.on[name];
+      return {
+      toggleEngine: () => this.setState({ engine: smart ? 'basic' : 'smart' }),
+      engineMissing: !smart,
+      engineBg: smart ? 'rgba(47,158,143,.07)' : 'rgba(217,154,58,.08)',
+      engineEdge: smart ? 'rgba(47,158,143,.25)' : 'rgba(217,154,58,.3)',
+      engineTitleColor: smart ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.85)',
+      engineTitle: smart ? 'Smart Similar is doing the matching' : 'Smart Similar is not installed',
+      engineNote: smart
+        ? 'Its ranking, fused across your picks — genres, tags, cast and crew, year, studio.'
+        : 'Falling back to shared genres and a nearby decade. It works, but it is blunt: no tags, no cast, no crew.',
+      engineOk: smart,
+        on,
+        boxEdge: on ? '#4f46e5' : 'rgba(255,255,255,.25)',
+        boxFill: on ? '#4f46e5' : 'transparent',
+        color: on ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.65)',
+        toggle: () => this.setState({ on: { ...this.state.on, [name]: !on } })
+      };
+    };
+
+    const libraries = [
+      { name: 'Filme', count: '1 284' },
+      { name: 'Serien', count: '96' },
+      { name: 'Dokus', count: '211' }
+    ].map((l) => ({ ...l, ...box(l.name) }));
+
+    const genres = [
+      { name: 'Sci-Fi', count: '132' },
+      { name: 'Horror', count: '88' },
+      { name: 'Action', count: '241' },
+      { name: 'Komödie', count: '196' },
+      { name: 'Thriller', count: '174' },
+      { name: 'Western', count: '38' },
+      { name: 'Kinder', count: '64' }
+    ].map((g) => ({ ...g, ...box(g.name) }));
+
+    const proposals = [
+      {
+        name: 'Sci-Fi Horror',
+        count: '31 titles · 3 days of programming',
+        reasons: ['Filme', 'Sci-Fi + Horror'],
+        lead: true,
+        evening: [
+          { clock: '20:15', label: 'The Thing', fill: '#5b6ee1', color: bright },
+          { clock: '22:04', label: 'Vorschau: Event Horizon', fill: '#d99a3a', color: dim },
+          { clock: '22:15', label: 'Event Horizon', fill: '#5b6ee1', color: bright }
+        ]
+      },
+      {
+        name: 'Sci-Fi Nacht',
+        count: '132 titles · a fortnight of programming',
+        reasons: ['Filme', 'Sci-Fi'],
+        lead: false,
+        evening: [
+          { clock: '20:15', label: 'Arrival', fill: '#5b6ee1', color: bright },
+          { clock: '22:11', label: 'Vorschau: Interstellar', fill: '#d99a3a', color: dim },
+          { clock: '22:15', label: 'Interstellar', fill: '#5b6ee1', color: bright }
+        ]
+      },
+      {
+        name: 'Sci-Fi der 80er',
+        count: '24 titles · 2 days of programming',
+        reasons: ['Filme', 'Sci-Fi', '1980–1989'],
+        lead: false,
+        evening: [
+          { clock: '20:15', label: 'Blade Runner', fill: '#5b6ee1', color: bright },
+          { clock: '22:16', label: 'Melitta ’87', fill: '#2f9e8f', color: dim },
+          { clock: '22:20', label: 'The Terminator', fill: '#5b6ee1', color: bright }
+        ]
+      }
+    ].map((p) => ({
+      ...p,
+      edge: p.lead ? 'rgba(119,91,244,.35)' : 'rgba(255,255,255,.08)',
+      bg: p.lead ? 'linear-gradient(90deg, rgba(119,91,244,.1) 0%, rgba(255,255,255,.03) 55%)' : 'rgba(255,255,255,.03)',
+      createBg: p.lead ? ACCENT : 'rgba(255,255,255,.05)',
+      createEdge: p.lead ? ACCENT : 'rgba(255,255,255,.12)',
+      createColor: p.lead ? '#fff' : 'rgba(255,255,255,.75)'
+    }));
+
+    const ticked = Object.keys(this.state.on).filter((k) => this.state.on[k]);
+
+    return {
+      libraries,
+      genres,
+      proposals,
+      basis: ticked.length ? 'from ' + ticked.join(' + ') : 'tick something on the left'
+    };
+  }
+}
+</script>
+</body>
+</html>

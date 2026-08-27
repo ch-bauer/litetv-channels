@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>Jellyfin.Plugin.LiteTv</RootNamespace>
-    <AssemblyVersion>1.0.69.0</AssemblyVersion>
-    <FileVersion>1.0.69.0</FileVersion>
+    <AssemblyVersion>1.0.70.0</AssemblyVersion>
+    <FileVersion>1.0.70.0</FileVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
@@ -28,6 +28,34 @@
   <ItemGroup>
     <None Remove="Configuration\configPage.html" />
     <EmbeddedResource Include="Configuration\configPage.html" />
+    <!-- The page as it was before the app, kept reachable until the new one has been lived with. -->
+    <None Remove="Configuration\configPage.legacy.html" />
+    <EmbeddedResource Include="Configuration\configPage.legacy.html" />
+  </ItemGroup>
+
+  <!--
+    The configuration app's built bundle, embedded and served by WebController at LiteTv/Web.
+
+    It is built by Vite in web/, and web/dist is NOT in git - the release workflow builds it, and
+    that is deliberate: a checked-in bundle is a hand-built asset, and this project has already
+    been bitten by the release workflow overwriting one. Building locally without running the
+    Vite build simply produces a plugin with no app in it, and the page says so rather than
+    showing a blank screen.
+
+    The logical name is flat - `litetv.web.<filename>` - because the build emits a flat
+    directory. That keeps RecursiveDir out of it, and with it every question about which way
+    the path separators lean on which machine.
+  -->
+  <ItemGroup>
+    <!-- index.html is the dev server's entry and inject.js is the tool for looking at the app
+         inside a real dashboard while building it. Neither belongs in a released plugin: the
+         bundle route is anonymous, so shipping them would put a stray page and a development
+         hook on a public URL. -->
+    <WebBundleFile Include="$(MSBuildThisFileDirectory)..\..\web\dist\*.*"
+                   Exclude="$(MSBuildThisFileDirectory)..\..\web\dist\index.html;$(MSBuildThisFileDirectory)..\..\web\dist\inject.js" />
+    <EmbeddedResource Include="@(WebBundleFile)">
+      <LogicalName>litetv.web.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

@@ -11,6 +11,21 @@ namespace Jellyfin.Plugin.LiteTv.Core;
 public sealed record ScheduledEntry(Guid ItemId, string Name, string? SeriesName, Guid? SeriesId, long RuntimeTicks)
 {
     /// <summary>
+    /// Gets the address to play, for an entry the library has never heard of - a video from a
+    /// YouTube playlist. Null for everything else, where <see cref="ItemId"/> names the thing.
+    /// <para>
+    /// An entry has one or the other, never both: <see cref="ItemId"/> is <see cref="Guid.Empty"/>
+    /// exactly when this is set.
+    /// </para>
+    /// </summary>
+    public string? Url { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether this entry is an address rather than a library item.
+    /// </summary>
+    public bool IsAddress => !string.IsNullOrEmpty(Url);
+
+    /// <summary>
     /// This entry, or null when it fails the test. Reads better than repeating the entry three
     /// times at the call site, and the call sites here are all "use it only if...".
     /// </summary>

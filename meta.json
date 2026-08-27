@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Suggestions were quietly using the blunt scorer. Two faults, both in LiteTV's own call to the Smart Similar plugin, and neither of them visible: the answer was being read with a serialiser that cannot parse the ids Jellyfin actually writes - 32 hex characters with no dashes - so the whole scored pool was thrown away on its very first field and the fallback took over. And the call forwarded only the Authorization header, so a caller who had authenticated with X-Emby-Token reached Smart Similar as nobody at all and was answered 401. Both are fixed, with tests for the reading. The new-channel screen already said which engine had answered, which is how this was noticed at all.",
+  "changelog": "The configuration page is no longer a page. It is a web app - Vite, TypeScript and Svelte - built from the design boards and shipped inside the plugin, the way the Segment Editor plugin packages its editor. All nine screens were ported: the week and the day, content, breaks, look, settings, the server, and both halves of making a channel out of what the library already holds. Most of what was wrong with the old page was wrong because it was one very large HTML file wearing dashboard components, and those complaints are simply gone: the cramped shelf, the search bar, the boxes that sized themselves oddly, the scaling. The rest were real and are answered - a selected slot can be unselected, the shelf is a list you drag entries out of, Delete removes and the arrow keys move, the grid opens scrolled to the now line, taking a channel off this week happens at once instead of after a round trip, and a block is edited without the whole week in the way. Two things arrived alongside it: a channel now says how long it takes to play through in words, and a YouTube playlist can be a channel source. The page as it was is still installed beside the new one and there is a link to it at the foot, because a rewrite with no way back is one nobody can afford to try.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-23T06:00:00.000Z",
-  "version": "1.0.69.0",
+  "timestamp": "2026-08-27T10:00:00.000Z",
+  "version": "1.0.70.0",
   "status": "Active",
   "autoUpdate": false
 }

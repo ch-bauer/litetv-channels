@@ -64,14 +64,24 @@ public static class WeekReader
                     continue;
                 }
 
-                var entry = row.ItemId != Guid.Empty
-                    ? new ScheduledEntry(
-                        row.ItemId,
-                        row.Name,
-                        row.SeriesName,
-                        row.SeriesId,
-                        row.OffsetTicks + (row.DurationSeconds * TimeSpan.TicksPerSecond))
-                    : null;
+            // A programme is a library item, or - since playlists became content - an address
+            // with no library item behind it at all. Both are real programmes; only a row with
+            // neither is nothing.
+            var isAddressProgramme = row.ItemId == Guid.Empty
+                && kind == AiringKind.Program
+                && !string.IsNullOrWhiteSpace(row.Url);
+
+            var entry = row.ItemId != Guid.Empty || isAddressProgramme
+                ? new ScheduledEntry(
+                    row.ItemId,
+                    row.Name,
+                    row.SeriesName,
+                    row.SeriesId,
+                    row.OffsetTicks + (row.DurationSeconds * TimeSpan.TicksPerSecond))
+                {
+                    Url = isAddressProgramme ? row.Url : null
+                }
+                : null;
 
                 yield return new Airing(
                     kind,
@@ -82,8 +92,9 @@ public static class WeekReader
                     string.IsNullOrEmpty(row.BlockName) ? null : row.BlockName,
                     next)
                 {
-                    // A trailer or an advert is an address the client resolves; a programme is
-                    // a library item and names none.
+                    // A trailer or an advert is an address the client resolves. A programme
+                    // used to name none; one from a playlist does, and it travels on the entry
+                    // instead - so Airing.PlayUrl answers for both.
                     TrailerUrl = kind == AiringKind.Program || string.IsNullOrWhiteSpace(row.Url) ? null : row.Url
                 };
             }

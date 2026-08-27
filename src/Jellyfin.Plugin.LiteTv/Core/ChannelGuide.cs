@@ -113,6 +113,26 @@ public sealed class ChannelGuide
     }
 
     /// <summary>
+    /// Gets how long a channel takes to play everything it has, once, before it begins again.
+    /// <para>
+    /// A channel is an endless loop over its queue - <c>airtime % TotalTicks</c> - so it always
+    /// plays through and starts over. What nobody could see was <b>how long that takes</b>: a
+    /// channel built from one long series runs for months before it repeats, and a channel
+    /// built from four films repeats before the evening is out. Those are very different
+    /// things to have made, and until now the page could not tell them apart.
+    /// </para>
+    /// </summary>
+    /// <param name="channel">The channel.</param>
+    /// <returns>The length of one full cycle, and how many entries are in it.</returns>
+    public (TimeSpan Length, int Entries) Cycle(TvChannel channel)
+    {
+        var lineup = _builder.GetSchedule(channel).BaseLineup;
+        return lineup is null
+            ? (TimeSpan.Zero, 0)
+            : (TimeSpan.FromTicks(lineup.TotalTicks), lineup.Entries.Count);
+    }
+
+    /// <summary>
     /// Gets the program a channel is airing at one moment, looking past anything that is
     /// not a program. What the player needs is something to play; an interstitial or a dark
     /// stretch is not that, and the answer then is what comes next and when.

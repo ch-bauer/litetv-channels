@@ -1,0 +1,351 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, 'Noto Sans', sans-serif; line-height: 1.35; }
+    a { color: #9b8bf7; } a:hover { color: #b6a9fa; }
+    .lt-rail:hover { background: rgba(255,255,255,.08); }
+    .lt-bar:hover { filter: brightness(1.14); }
+    .lt-chip:hover { border-color: rgba(255,255,255,.2); }
+  </style>
+</helmet>
+
+<!--
+  Grounds are ElegantFin's (#111827 → #1d2635); every surface above them is white-alpha, the
+  way Jellyfin Enhanced does it, so the page keeps working when the theme underneath changes.
+  Accent #775bf4 is ElegantFin's --activeColor; in the built page it reads the theme's own.
+-->
+<div style="width: 1280px; height: 860px; display: flex; background: linear-gradient(180deg, #1d2635 0%, #111827 55%); color: #d1d5db; font-size: 15px; overflow: hidden;">
+
+  <!-- Jellyfin's dashboard drawer, for context -->
+  <div style="flex: 0 0 44px; background: rgba(30,40,54,.9); border-right: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; align-items: center; padding-top: 15px; gap: 20px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.7"><path d="M4 12h16M4 6h16M4 18h16"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.7"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#775bf4" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2.5"/><path d="m7 7 5-4 5 4"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8 2 2 0 1 1-2.8 2.8 1.6 1.6 0 0 0-2.7 1.1 2 2 0 1 1-4 0 1.6 1.6 0 0 0-2.7-1.1 2 2 0 1 1-2.8-2.8A1.6 1.6 0 0 0 4.6 15a2 2 0 1 1 0-4 1.6 1.6 0 0 0 1.1-2.7 2 2 0 1 1 2.8-2.8A1.6 1.6 0 0 0 11 4.6a2 2 0 1 1 4 0 1.6 1.6 0 0 0 2.7 1.1 2 2 0 1 1 2.8 2.8A1.6 1.6 0 0 0 19.4 11a2 2 0 1 1 0 4z"/></svg>
+  </div>
+
+  <!-- The plugin's rail: which channel.
+
+       Built for a lineup rather than a handful. A filter above, the list scrolls, rows are
+       one line each, and the count sits at the foot so "did that get added" is answerable
+       without counting. Order is yours - dragging reorders - so nothing is regrouped
+       underneath you by going on or off air; the dot carries that instead. -->
+  <div style="flex: 0 0 246px; border-right: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; min-height: 0;">
+
+    <div style="padding: 17px 16px 11px 16px; display: flex; align-items: center; gap: 9px;">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#775bf4" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2.5"/><path d="m7 7 5-4 5 4"/></svg>
+      <div style="font-size: 17px; font-weight: 700; color: rgba(255,255,255,.87);">LiteTV</div>
+      <div style="flex-grow: 1;"></div>
+      <div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; background: rgba(119,91,244,.16); border: 1px solid rgba(119,91,244,.3); cursor: pointer;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9b8bf7" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+    </div>
+
+    <div style="padding: 0 12px 10px 12px;">
+      <div style="display: flex; align-items: center; gap: 7px; background: rgba(255,255,255,.05); border: 1px solid {{filterEdge}}; border-radius: 6px; padding: 6px 9px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.9"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <div style="flex-grow: 1; font-size: 12.5px; color: {{filterColor}};">{{filterText}}</div>
+        <sc-if value="{{filtering}}" hint-placeholder-val="{{ false }}">
+          <svg onClick="{{ clearFilter }}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="2.2" style="cursor: pointer;"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </sc-if>
+      </div>
+    </div>
+
+    <!-- Scrolls. A lineup of thirty is the case this is drawn for. -->
+    <div style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 0 8px;">
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <sc-for list="{{channels}}" as="ch" hint-placeholder-count="14">
+          <div class="lt-rail" onClick="{{ ch.pick }}" style="display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 6px; cursor: pointer; background: {{ch.bg}}; box-shadow: {{ch.glow}};">
+            <div style="flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: {{ch.dot}};"></div>
+            <div style="flex-grow: 1; min-width: 0;">
+              <div style="font-size: 13px; font-weight: {{ch.weight}}; color: {{ch.nameColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ch.name}}</div>
+              <div style="font-size: 11px; color: rgba(255,255,255,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;">{{ch.now}}</div>
+            </div>
+            <sc-if value="{{ch.uncurated}}" hint-placeholder-val="{{ false }}">
+              <div style="flex: 0 0 auto; padding: 1px 6px; border-radius: 999px; background: rgba(217,154,58,.18); color: #e0b463; font-size: 9.5px; font-weight: 700;">no week</div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid rgba(255,255,255,.08); padding: 8px 14px; font-size: 11px; color: rgba(255,255,255,.4);">{{railCount}}</div>
+
+    <div style="border-top: 1px solid rgba(255,255,255,.08); padding: 8px; display: flex; flex-direction: column; gap: 2px;">
+      <div class="lt-rail" style="display: flex; align-items: center; gap: 10px; padding: 8px 11px; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,.6); font-size: 13px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="2.8"/><path d="M9.7 3h4.6l.5 2.6 2.3 1.3 2.4-1 2.3 4-2 1.7v2.6l2 1.7-2.3 4-2.4-1-2.3 1.3-.5 2.8H9.7l-.5-2.8-2.3-1.3-2.4 1-2.3-4 2-1.7v-2.6l-2-1.7 2.3-4 2.4 1 2.3-1.3z"/></svg>
+        Server settings
+      </div>
+      <div class="lt-rail" style="display: flex; align-items: center; gap: 10px; padding: 8px 11px; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,.6); font-size: 13px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        App updates
+        <div style="margin-left: auto; padding: 1px 7px; border-radius: 999px; background: rgba(119,91,244,.18); color: #9b8bf7; font-size: 10px; font-weight: 700;">40</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- The channel -->
+  <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column;">
+
+    <div style="display: flex; align-items: center; gap: 13px; padding: 16px 22px 0 22px;">
+      <div style="font-size: 21px; font-weight: 700; color: rgba(255,255,255,.9);">Action-Kanal</div>
+      <div style="display: flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(119,91,244,.14); border: 1px solid rgba(119,91,244,.22); color: #9b8bf7; font-size: 12px; font-weight: 600;">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: #775bf4; display: inline-block;"></span>
+        on air &middot; 20:15 Avatar
+      </div>
+      <div style="flex-grow: 1;"></div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,.45);">saved a moment ago</div>
+    </div>
+
+    <!-- Pill tabs with icons, as Jellyfin Enhanced does them: active is filled and glows.
+         Written out rather than looped so each keeps a real inline SVG. -->
+    <div style="display: flex; gap: 9px; padding: 13px 22px; border-bottom: 1px solid rgba(255,255,255,.08);">
+
+      <div onClick="{{ pickWeek }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: {{wkBg}}; border: 1px solid {{wkEdge}}; color: {{wkColor}}; box-shadow: {{wkGlow}};">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>
+        Week
+      </div>
+
+      <div onClick="{{ pickContent }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: {{coBg}}; border: 1px solid {{coEdge}}; color: {{coColor}}; box-shadow: {{coGlow}};">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        Content
+      </div>
+
+      <div onClick="{{ pickBreaks }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: {{brBg}}; border: 1px solid {{brEdge}}; color: {{brColor}}; box-shadow: {{brGlow}};">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 1.8"/></svg>
+        Breaks
+      </div>
+
+      <div onClick="{{ pickLook }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: {{loBg}}; border: 1px solid {{loEdge}}; color: {{loColor}}; box-shadow: {{loGlow}};">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17 5-4.5 4.5 4 3-2.5L21 18"/></svg>
+        Look
+      </div>
+
+      <div onClick="{{ pickSettings }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; background: {{seBg}}; border: 1px solid {{seEdge}}; color: {{seColor}}; box-shadow: {{seGlow}};">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.8"/><path d="M9.7 3h4.6l.5 2.6 2.3 1.3 2.4-1 2.3 4-2 1.7v2.6l2 1.7-2.3 4-2.4-1-2.3 1.3-.5 2.8H9.7l-.5-2.8-2.3-1.3-2.4 1-2.3-4 2-1.7v-2.6l-2-1.7 2.3-4 2.4 1 2.3-1.3z"/></svg>
+        Settings
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 11px; padding: 14px 22px 11px 22px;">
+      <div style="display: flex; border: 1px solid rgba(255,255,255,.12); border-radius: 6px; overflow: hidden;">
+        <div onClick="{{ showWeek }}" style="padding: 6px 15px; font-size: 13px; font-weight: 600; background: {{weekBg}}; color: {{weekFg}}; cursor: pointer;">Week</div>
+        <div onClick="{{ showDay }}" style="padding: 6px 15px; font-size: 13px; font-weight: 600; background: {{dayBg}}; color: {{dayFg}}; cursor: pointer;">Day</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.45); font-size: 12.5px;">
+        Zoom
+        <div style="width: 76px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.12); position: relative;">
+          <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 42%; background: #775bf4; border-radius: 2px;"></div>
+          <div style="position: absolute; left: 42%; top: -4px; width: 11px; height: 11px; border-radius: 50%; background: #775bf4;"></div>
+        </div>
+      </div>
+
+      <div style="flex-grow: 1;"></div>
+
+      <div style="display: flex; align-items: center; gap: 13px; font-size: 11.5px; color: rgba(255,255,255,.45);">
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #5b6ee1; display: inline-block;"></span>Programme</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #d99a3a; display: inline-block;"></span>Trailer</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 9px; height: 9px; border-radius: 3px; background: #2f9e8f; display: inline-block;"></span>Advert</div>
+      </div>
+
+      <div class="lt-chip" style="display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 6px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); font-size: 13px; font-weight: 600; color: rgba(255,255,255,.87); cursor: pointer;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 12a8 8 0 1 1 2.3 5.7"/><path d="M4 20v-5h5"/></svg>
+        Lay this week out
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; min-height: 0; margin: 0 22px 14px 22px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; display: flex; overflow: hidden; background: rgba(255,255,255,.03);">
+
+      <div style="flex: 0 0 44px; border-right: 1px solid rgba(255,255,255,.08); position: relative; padding-top: 25px;">
+        <sc-for list="{{hours}}" as="h" hint-placeholder-count="9">
+          <div style="position: absolute; right: 7px; top: {{h.top}}px; font-size: 10.5px; color: rgba(255,255,255,.35);">{{h.label}}</div>
+        </sc-for>
+      </div>
+
+      <div style="flex-grow: 1; display: flex; min-width: 0;">
+        <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+          <div style="flex: 1 1 0; min-width: 0; border-left: 1px solid rgba(255,255,255,.05);">
+            <div style="height: 25px; font-size: 11.5px; font-weight: 600; text-align: center; line-height: 25px; background: rgba(255,255,255,.03); color: {{d.headColor}};">{{d.label}}</div>
+            <div style="position: relative; height: 452px;">
+              <sc-for list="{{d.bars}}" as="b" hint-placeholder-count="6">
+                <div class="lt-bar" onClick="{{ b.pick }}" style="position: absolute; left: 3px; right: 3px; top: {{b.top}}px; height: {{b.height}}px; background: {{b.fill}}; border-radius: 4px; padding: 2px 5px; box-sizing: border-box; font-size: 10.5px; font-weight: 500; color: #fff; overflow: hidden; cursor: pointer; box-shadow: {{b.ring}};">{{b.label}}</div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-if value="{{hasSelection}}" hint-placeholder-val="{{ true }}">
+      <div style="margin: 0 22px 14px 22px; border: 1px solid rgba(119,91,244,.22); border-radius: 8px; padding: 12px 15px; display: flex; align-items: center; gap: 14px; background: linear-gradient(90deg, rgba(119,91,244,.14) 0%, rgba(119,91,244,.02) 100%);">
+        <div style="width: 3px; align-self: stretch; border-radius: 2px; background: #5b6ee1;"></div>
+        <div style="flex-grow: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 700; color: rgba(255,255,255,.9);">Avatar</div>
+          <div style="font-size: 12.5px; color: rgba(255,255,255,.5);">Programme &middot; Monday 20:15&ndash;22:21 &middot; 126 min</div>
+        </div>
+        <div class="lt-chip" style="padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); font-size: 12.5px; font-weight: 600; cursor: pointer;">Same time tomorrow</div>
+        <div class="lt-chip" style="padding: 6px 12px; border-radius: 6px; background: rgba(169,29,29,.18); border: 1px solid rgba(217,84,84,.35); color: #e88; font-size: 12.5px; font-weight: 600; cursor: pointer;">Take it off</div>
+      </div>
+    </sc-if>
+
+    <div style="border-top: 1px solid rgba(255,255,255,.08); padding: 12px 22px 15px 22px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="font-size: 12.5px; font-weight: 700; color: rgba(255,255,255,.87);">Shelf</div>
+        <div style="flex: 0 1 250px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 6px; padding: 6px 10px; font-size: 13px; color: rgba(255,255,255,.4);">Search films and episodes&hellip;</div>
+        <sc-for list="{{shelf}}" as="s" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: {{s.fill}}; font-size: 12.5px; font-weight: 500; color: #fff; cursor: grab;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" opacity="0.7"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg>
+            {{s.label}}
+          </div>
+        </sc-for>
+        <div style="flex-grow: 1;"></div>
+        <div style="font-size: 11.5px; color: rgba(255,255,255,.4);">drag onto the week &middot; Alt for second-by-second</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { channel: 0, tab: 0, view: 'week', selected: 'avatar', filter: '' };
+  }
+
+  renderVals() {
+    const ACCENT = '#775bf4';
+    const FILL = { programme: '#5b6ee1', trailer: '#d99a3a', advert: '#2f9e8f' };
+
+    // A lineup, not a handful: this is what the rail has to stay readable at.
+    const lineup = [
+      { name: 'Action-Kanal', now: '20:15 Avatar', live: true },
+      { name: 'Sci-Fi Nacht', now: 'break · Vorschau: Dune', live: true },
+      { name: 'Kinderprogramm', now: 'off air until 06:00', live: false },
+      { name: 'Marathon: Alien', now: '21:40 Aliens', live: true },
+      { name: 'Heimatfilme', now: 'no week laid out', live: false, uncurated: true },
+      { name: 'Tatort-Kanal', now: '20:15 Tatort: Borowski', live: true },
+      { name: 'Western', now: '21:02 Spiel mir das Lied', live: true },
+      { name: 'Komödie', now: 'break · Vorschau: Otto', live: true },
+      { name: '80er Nacht', now: '22:30 Die Hard', live: true },
+      { name: 'Dokus', now: '20:00 Planet Erde', live: true },
+      { name: 'Serien am Nachmittag', now: 'off air until 14:00', live: false },
+      { name: 'Weihnachten', now: 'off air · seasonal', live: false },
+      { name: 'Horror nach Mitternacht', now: 'off air until 00:00', live: false },
+      { name: 'Ridley Scott', now: '20:15 Gladiator', live: true },
+      { name: 'Kurzfilme', now: '21:14 La Jetée', live: true },
+      { name: 'Musikvideos', now: 'no week laid out', live: false, uncurated: true }
+    ];
+
+    const filter = this.state.filter || '';
+    const matching = filter
+      ? lineup.filter((c) => c.name.toLowerCase().indexOf(filter.toLowerCase()) >= 0)
+      : lineup;
+
+    const channels = matching.map((c) => {
+      const i = lineup.indexOf(c);
+      const on = i === this.state.channel;
+      return {
+        ...c,
+        uncurated: !!c.uncurated,
+        weight: on ? 600 : 400,
+        nameColor: on ? 'rgba(255,255,255,.92)' : '#d1d5db',
+        bg: on ? 'rgba(119,91,244,.16)' : 'transparent',
+        glow: on ? 'inset 2px 0 0 0 ' + ACCENT : 'none',
+        dot: c.live ? '#2f9e8f' : 'rgba(255,255,255,.18)',
+        pick: () => this.setState({ channel: i })
+      };
+    });
+
+    const liveCount = lineup.filter((c) => c.live).length;
+
+    const TAB_KEYS = ['wk', 'co', 'br', 'lo', 'se'];
+    const tabStyle = {};
+    TAB_KEYS.forEach((key, i) => {
+      const on = i === this.state.tab;
+      tabStyle[key + 'Bg'] = on ? ACCENT : 'rgba(255,255,255,.03)';
+      tabStyle[key + 'Edge'] = on ? ACCENT : 'rgba(255,255,255,.08)';
+      tabStyle[key + 'Color'] = on ? '#fff' : 'rgba(255,255,255,.6)';
+      tabStyle[key + 'Glow'] = on ? '0 4px 12px rgba(119,91,244,.3)' : 'none';
+    });
+
+    const FROM = 6, SPAN = 18, PX = 452;
+    const y = (h) => Math.round(((h - FROM) / SPAN) * PX);
+
+    const hours = [];
+    for (let h = 6; h <= 24; h += 2) {
+      hours.push({ label: (h < 10 ? '0' : '') + (h === 24 ? '00' : h) + ':00', top: y(h) + 19 });
+    }
+
+    const at = (start, len, label, kind) => ({ start, len, label, kind });
+    const week = [
+      { label: 'Mon', bars: [at(8, 3.5, 'Serien-Vormittag', 'programme'), at(14, 2, 'Nachmittag', 'programme'), at(20.25, 2.1, 'Avatar', 'programme'), at(22.35, .1, '', 'advert'), at(22.45, .1, '', 'trailer'), at(22.55, 1.4, 'Blade Runner', 'programme')] },
+      { label: 'Tue', bars: [at(8, 3.5, 'Serien-Vormittag', 'programme'), at(14, 2.5, 'Nachmittag', 'programme'), at(20.25, 1.9, 'Predator', 'programme'), at(22.15, .15, '', 'trailer'), at(22.3, 1.6, 'Aliens', 'programme')] },
+      { label: 'Wed', bars: [at(8, 3.5, 'Serien-Vormittag', 'programme'), at(14, 2, 'Nachmittag', 'programme'), at(20.25, 2.3, 'Heat', 'programme'), at(22.55, 1.2, 'Kurzfilm', 'programme')] },
+      { label: 'Thu', bars: [at(8, 3.5, 'Serien-Vormittag', 'programme'), at(13, 3, 'Doppelfolge', 'programme'), at(20.25, 2.2, 'Die Hard', 'programme'), at(22.45, .12, '', 'advert'), at(22.6, 1.3, 'Speed', 'programme')] },
+      { label: 'Fri', bars: [at(8, 3.5, 'Serien-Vormittag', 'programme'), at(14, 2, 'Nachmittag', 'programme'), at(20.25, 2.4, 'Terminator 2', 'programme'), at(22.7, .12, '', 'trailer'), at(22.85, 1.1, 'Nachtfilm', 'programme')] },
+      { label: 'Sat', bars: [at(9, 4, 'Samstagskino', 'programme'), at(14, 3, 'Doppelprogramm', 'programme'), at(20.25, 2.6, 'Der Pate', 'programme'), at(22.9, 1.1, 'Spätfilm', 'programme')] },
+      { label: 'Sun', bars: [at(9, 4, 'Sonntagsserie', 'programme'), at(14, 2.5, 'Nachmittag', 'programme'), at(20.25, 2, 'Casablanca', 'programme'), at(22.35, .12, '', 'trailer'), at(22.5, 1.4, 'Nachtfilm', 'programme')] }
+    ];
+
+    const days = week.map((d, di) => ({
+      label: d.label,
+      headColor: di === 0 ? '#9b8bf7' : 'rgba(255,255,255,.6)',
+      bars: d.bars.map((b) => {
+        const isSel = di === 0 && b.label === 'Avatar' && this.state.selected === 'avatar';
+        return {
+          label: b.label,
+          top: y(b.start),
+          height: Math.max(5, y(b.start + b.len) - y(b.start) - 2),
+          fill: FILL[b.kind],
+          ring: isSel ? '0 0 0 2px #fff' : 'none',
+          pick: () => this.setState({ selected: isSel ? null : 'x' })
+        };
+      })
+    }));
+
+    const shelf = [
+      { label: 'Melitta ’87 · 0:28', fill: FILL.advert },
+      { label: 'Kinder Pingui ’89 · 0:31', fill: FILL.advert },
+      { label: 'An address…', fill: FILL.trailer }
+    ];
+
+    return {
+      channels, hours, days, shelf,
+      railCount: filter
+        ? matching.length + ' of ' + lineup.length + ' channels'
+        : lineup.length + ' channels · ' + liveCount + ' on air',
+      filtering: !!filter,
+      filterText: filter || 'Filter channels…',
+      filterColor: filter ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.4)',
+      filterEdge: filter ? 'rgba(119,91,244,.45)' : 'rgba(255,255,255,.12)',
+      clearFilter: () => this.setState({ filter: '' }),
+      ...tabStyle,
+      pickWeek: () => this.setState({ tab: 0 }),
+      pickContent: () => this.setState({ tab: 1 }),
+      pickBreaks: () => this.setState({ tab: 2 }),
+      pickLook: () => this.setState({ tab: 3 }),
+      pickSettings: () => this.setState({ tab: 4 }),
+      showWeek: () => this.setState({ view: 'week' }),
+      showDay: () => this.setState({ view: 'day' }),
+      weekBg: this.state.view === 'week' ? ACCENT : 'transparent',
+      weekFg: this.state.view === 'week' ? '#fff' : 'rgba(255,255,255,.55)',
+      dayBg: this.state.view === 'day' ? ACCENT : 'transparent',
+      dayFg: this.state.view === 'day' ? '#fff' : 'rgba(255,255,255,.55)',
+      hasSelection: this.state.selected === 'avatar'
+    };
+  }
+}
+</script>
+</body>
+</html>

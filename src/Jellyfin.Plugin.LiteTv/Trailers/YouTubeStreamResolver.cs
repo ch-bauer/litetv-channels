@@ -230,6 +230,46 @@ public sealed class YouTubeStreamResolver
     private readonly ConcurrentDictionary<string, int> _lengths = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// What the last resolution actually produced. There is no other way to tell a channel
+    /// playing a 1080p ladder from one quietly serving 360p to every television in the house:
+    /// both simply play. The page shows it, and shows whether a proof-of-origin token was held
+    /// at the time, because that is nearly always the difference.
+    /// </summary>
+    private static Resolution? _last;
+
+    /// <summary>
+    /// The last stream this server resolved, or null when it has not resolved one since starting.
+    /// </summary>
+    public static Resolution? Last => _last;
+
+    /// <summary>
+    /// What one resolution came to.
+    /// </summary>
+    /// <param name="VideoId">The video.</param>
+    /// <param name="Quality">The height in pixels, or 0 when nothing said.</param>
+    /// <param name="Client">Which client answered.</param>
+    /// <param name="TokenHeld">Whether a proof-of-origin token was held at the time.</param>
+    /// <param name="WhenUtc">When it happened.</param>
+    public sealed record Resolution(string VideoId, int Quality, string Client, bool TokenHeld, DateTime WhenUtc)
+    {
+        /// <summary>
+        /// Gets a value indicating whether this came out below what is worth serving - the
+        /// point of saying any of this out loud.
+        /// </summary>
+        public bool Low => Quality > 0 && Quality < GoodEnough;
+    }
+
+    private static void Remember(string id, ResolvedStream stream)
+    {
+        _last = new Resolution(
+            id,
+            stream.Quality,
+            stream.Client,
+            ProofOfOrigin.Held is not null,
+            DateTime.UtcNow);
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="YouTubeStreamResolver"/> class.
     /// </summary>
     /// <param name="httpClientFactory">The HTTP client factory.</param>
@@ -300,6 +340,10 @@ public sealed class YouTubeStreamResolver
             return string.IsNullOrEmpty(url) ? null : new ResolvedStream(url, null);
         }
 
+        // The generation is what makes a token retroactive. A cached answer resolved before a
+        // television minted one is not merely older, it is WORSE - a capped or 360p stream - so
+        // minting bumps the generation and every cached resolution stops counting at that
+        // instant. Nothing has to be hunted down and evicted; the next ask re-resolves.
         if (_cache.TryGetValue(id, out var cached)
             && cached.ExpiresUtc > DateTime.UtcNow
             && cached.Generation == ProofOfOrigin.Generation)
@@ -311,6 +355,7 @@ public sealed class YouTubeStreamResolver
         if (resolved is not null)
         {
             _cache[id] = new CachedStream(resolved, DateTime.UtcNow.Add(CacheFor), ProofOfOrigin.Generation);
+            Remember(id, resolved);
         }
 
         return resolved;

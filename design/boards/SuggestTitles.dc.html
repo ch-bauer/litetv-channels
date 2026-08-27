@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, 'Noto Sans', sans-serif; line-height: 1.35; }
+    a { color: #9b8bf7; } a:hover { color: #b6a9fa; }
+    .lt-card:hover { border-color: rgba(119,91,244,.4); }
+    .lt-seed:hover { background: rgba(255,255,255,.1); }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 860px; display: flex; flex-direction: column; background: linear-gradient(180deg, #1d2635 0%, #111827 55%); color: #d1d5db; font-size: 15px; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 13px; padding: 18px 22px 0 22px;">
+    <div style="font-size: 21px; font-weight: 700; color: rgba(255,255,255,.9);">New channel</div>
+    <div style="flex-grow: 1;"></div>
+    <div style="font-size: 13px; color: rgba(255,255,255,.5); cursor: pointer;">Start from nothing instead &rsaquo;</div>
+  </div>
+
+  <div style="font-size: 12.5px; color: rgba(255,255,255,.5); padding: 8px 22px 0 22px;">
+    Name a few things you like. Smart Similar scores your library against all of them, and what scores well against every pick becomes a channel.
+  </div>
+
+
+  <!-- Whether the good scoring is available, said plainly and without nagging. Smart Similar
+       is another plugin on this server; when it is there LiteTV asks it to rank candidates
+       and fuses the answers, and when it is not there is a much coarser genre match. -->
+  <div onClick="{{ toggleEngine }}" style="margin: 14px 22px 0 22px; display: flex; align-items: center; gap: 11px; padding: 9px 13px; border-radius: 8px; background: {{engineBg}}; border: 1px solid {{engineEdge}}; cursor: pointer;">
+    <div style="flex: 0 0 auto; display: flex;"><sc-if value="{{engineOk}}" hint-placeholder-val="{{ true }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2f9e8f" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16 9.5"/></svg></sc-if><sc-if value="{{engineMissing}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d99a3a" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></sc-if></div>
+    <div style="flex-grow: 1; min-width: 0;">
+      <div style="font-size: 12.5px; font-weight: 600; color: {{engineTitleColor}};">{{engineTitle}}</div>
+      <div style="font-size: 11.5px; color: rgba(255,255,255,.5); margin-top: 1px;">{{engineNote}}</div>
+    </div>
+    <sc-if value="{{engineMissing}}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 0 0 auto; padding: 5px 12px; border-radius: 6px; background: rgba(119,91,244,.16); border: 1px solid rgba(119,91,244,.35); color: #9b8bf7; font-size: 12px; font-weight: 600;">Install it</div>
+    </sc-if>
+  </div>
+
+  <div style="display: flex; gap: 0; margin: 16px 22px 0 22px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; overflow: hidden; align-self: flex-start;">
+    <div style="display: flex; align-items: center; gap: 9px; padding: 10px 18px; background: #775bf4; color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(119,91,244,.3);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3.5 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.9l6.1-.8z"/></svg>
+      From titles I pick
+    </div>
+    <div style="display: flex; align-items: center; gap: 9px; padding: 10px 18px; background: transparent; color: rgba(255,255,255,.55); font-size: 13.5px; font-weight: 600; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="6" rx="1.5"/></svg>
+      From a library or genre
+    </div>
+  </div>
+
+  <div style="padding: 18px 22px 0 22px; display: flex; gap: 26px; align-items: flex-start;">
+    <div style="flex: 1 1 0; min-width: 0;">
+      <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,.87); margin-bottom: 9px;">Things you like</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+        <sc-for list="{{seeds}}" as="s" hint-placeholder-count="3">
+          <div class="lt-seed" onClick="{{ s.drop }}" style="display: flex; align-items: center; gap: 9px; padding: 5px 8px 5px 5px; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); cursor: pointer;">
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: {{s.art}};"></div>
+            <div style="font-size: 12.5px; color: rgba(255,255,255,.85);">{{s.name}}</div>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </div>
+        </sc-for>
+        <div style="flex: 0 1 230px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 7px 14px; font-size: 13px; color: rgba(255,255,255,.4);">Add a film, series or collection&hellip;</div>
+      </div>
+    </div>
+
+    <!-- What the scoring found they share, and how strongly. The weights are the real ones. -->
+    <div style="flex: 0 0 390px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.03); padding: 12px 14px;">
+      <div style="font-size: 12px; font-weight: 700; color: rgba(255,255,255,.8); margin-bottom: 9px;">What they have in common</div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <sc-for list="{{shared}}" as="sh" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="flex: 0 0 84px; font-size: 11.5px; color: rgba(255,255,255,.5);">{{sh.signal}}</div>
+            <div style="flex: 0 0 74px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.09); position: relative;">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: {{sh.bar}}; border-radius: 2px; background: {{sh.fill}};"></div>
+            </div>
+            <div style="flex-grow: 1; min-width: 0; font-size: 11.5px; color: rgba(255,255,255,.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{sh.value}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; min-height: 0; padding: 18px 22px 22px 22px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+
+    <div style="display: flex; align-items: baseline; gap: 10px;">
+      <div style="font-size: 13px; font-weight: 700; color: rgba(255,255,255,.87);">What it would build</div>
+      <div style="font-size: 12px; color: rgba(255,255,255,.45);">{{basis}}</div>
+    </div>
+
+    <div style="display: flex; gap: 14px; align-items: stretch;">
+      <sc-for list="{{proposals}}" as="p" hint-placeholder-count="3">
+        <div class="lt-card" style="flex: 1 1 0; min-width: 0; border: 1px solid {{p.edge}}; border-radius: 8px; background: {{p.bg}}; padding: 15px 16px; display: flex; flex-direction: column; gap: 11px;">
+
+          <div>
+            <div style="display: flex; align-items: baseline; gap: 8px;">
+              <div style="font-size: 15px; font-weight: 700; color: rgba(255,255,255,.9);">{{p.name}}</div>
+              <div style="font-size: 11.5px; font-weight: 700; color: {{p.matchColor}};">{{p.match}}</div>
+            </div>
+            <div style="font-size: 12px; color: rgba(255,255,255,.5); margin-top: 3px;">{{p.count}}</div>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+            <sc-for list="{{p.reasons}}" as="r" hint-placeholder-count="3">
+              <div style="padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.06); font-size: 10.5px; color: rgba(255,255,255,.6);">{{r}}</div>
+            </sc-for>
+          </div>
+
+          <div style="border-top: 1px solid rgba(255,255,255,.07); padding-top: 10px;">
+            <div style="font-size: 11px; font-weight: 600; letter-spacing: .06em; color: rgba(255,255,255,.4); margin-bottom: 7px;">A TYPICAL EVENING</div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <sc-for list="{{p.evening}}" as="e" hint-placeholder-count="4">
+                <div style="display: flex; align-items: stretch; gap: 9px;">
+                  <div style="flex: 0 0 38px; font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.65);">{{e.clock}}</div>
+                  <div style="flex: 0 0 3px; border-radius: 2px; background: {{e.fill}};"></div>
+                  <div style="flex-grow: 1; min-width: 0; font-size: 12px; color: {{e.color}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{e.label}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="flex-grow: 1;"></div>
+
+          <div style="display: flex; gap: 7px;">
+            <div style="flex: 1 1 0; text-align: center; padding: 8px 0; border-radius: 6px; background: {{p.createBg}}; border: 1px solid {{p.createEdge}}; color: {{p.createColor}}; font-size: 12.5px; font-weight: 600; cursor: pointer;">Create</div>
+            <div style="flex: 0 0 auto; padding: 8px 12px; border-radius: 6px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,.7); cursor: pointer;">Tweak</div>
+            <div style="flex: 0 0 auto; padding: 8px 11px; border-radius: 6px; background: transparent; border: 1px solid rgba(255,255,255,.1); font-size: 12.5px; color: rgba(255,255,255,.4); cursor: pointer;">Not that</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; color: rgba(255,255,255,.45); margin-top: 2px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="flex: 0 0 auto; margin-top: 1px;"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+      Creating one lays its week out straight away, so there is something on air to look at. Nothing reaches the television until you switch it on.
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { dropped: {} };
+  }
+
+  renderVals() {
+    const dim = 'rgba(255,255,255,.5)';
+    const bright = 'rgba(255,255,255,.82)';
+
+
+    const engine = this.state.engine || 'smart';
+    const smart = engine === 'smart';
+
+    const seeds = [
+      { name: 'Blade Runner', art: 'linear-gradient(140deg,#2b3d55,#151d2a)' },
+      { name: 'Alien', art: 'linear-gradient(140deg,#2f3a2b,#151d2a)' },
+      { name: 'The Thing', art: 'linear-gradient(140deg,#4a3a55,#151d2a)' }
+    ].filter((s) => !this.state.dropped[s.name])
+     .map((s) => ({ ...s, drop: () => this.setState({ dropped: { ...this.state.dropped, [s.name]: true } }) }));
+
+    // The signals and their weights are the real ones from the scoring: genres 35, tags 20,
+    // people 20, year 10, studio 5. The bar is how much of that weight the seeds share.
+    const shared = [
+      { signal: 'Genres', weight: 35, got: 33, value: 'Sci-Fi, Horror' },
+      { signal: 'Tags', weight: 20, got: 12, value: 'dystopia, isolation, practical effects' },
+      { signal: 'Year', weight: 10, got: 9, value: '1979–1982' },
+      { signal: 'People', weight: 20, got: 4, value: 'no shared director' }
+    ].map((r) => ({
+      ...r,
+      bar: Math.round((r.got / r.weight) * 100) + '%',
+      fill: r.got / r.weight > 0.6 ? '#775bf4' : r.got / r.weight > 0.3 ? '#d99a3a' : 'rgba(255,255,255,.25)'
+    }));
+
+    const proposals = [
+      {
+        name: 'Sci-Fi Noir',
+        match: '82% match',
+        count: '47 titles · 5 days of programming',
+        reasons: ['Sci-Fi + Horror', '1979–1989', 'shared tags'],
+        lead: true,
+        evening: [
+          { clock: '20:15', label: 'Blade Runner', fill: '#5b6ee1', color: bright },
+          { clock: '22:16', label: 'Vorschau: Gattaca', fill: '#d99a3a', color: dim },
+          { clock: '22:20', label: 'Gattaca', fill: '#5b6ee1', color: bright },
+          { clock: '00:07', label: 'Dark City', fill: '#5b6ee1', color: bright }
+        ]
+      },
+      {
+        name: 'Creature Feature',
+        match: '74% match',
+        count: '23 titles · 2 days of programming',
+        reasons: ['Horror', 'practical effects', 'no CGI'],
+        lead: false,
+        evening: [
+          { clock: '20:15', label: 'The Thing', fill: '#5b6ee1', color: bright },
+          { clock: '22:04', label: 'Melitta ’87', fill: '#2f9e8f', color: dim },
+          { clock: '22:06', label: 'Vorschau: The Fly', fill: '#d99a3a', color: dim },
+          { clock: '22:15', label: 'The Fly', fill: '#5b6ee1', color: bright }
+        ]
+      },
+      {
+        name: 'Ridley Scott',
+        match: '61% match',
+        count: '11 titles · everything he directed',
+        reasons: ['one director', 'from Alien'],
+        lead: false,
+        evening: [
+          { clock: '20:15', label: 'Alien', fill: '#5b6ee1', color: bright },
+          { clock: '22:12', label: 'Vorschau: Gladiator', fill: '#d99a3a', color: dim },
+          { clock: '22:15', label: 'Gladiator', fill: '#5b6ee1', color: bright },
+          { clock: '00:50', label: 'Black Hawk Down', fill: '#5b6ee1', color: bright }
+        ]
+      }
+    ].map((p) => ({
+      ...p,
+      edge: p.lead ? 'rgba(119,91,244,.35)' : 'rgba(255,255,255,.08)',
+      bg: p.lead ? 'linear-gradient(180deg, rgba(119,91,244,.1) 0%, rgba(255,255,255,.03) 60%)' : 'rgba(255,255,255,.03)',
+      createBg: p.lead ? '#775bf4' : 'rgba(255,255,255,.05)',
+      createEdge: p.lead ? '#775bf4' : 'rgba(255,255,255,.12)',
+      createColor: p.lead ? '#fff' : 'rgba(255,255,255,.75)',
+      matchColor: p.lead ? '#9b8bf7' : 'rgba(255,255,255,.4)'
+    }));
+
+    return {
+      toggleEngine: () => this.setState({ engine: smart ? 'basic' : 'smart' }),
+      engineMissing: !smart,
+      engineBg: smart ? 'rgba(47,158,143,.07)' : 'rgba(217,154,58,.08)',
+      engineEdge: smart ? 'rgba(47,158,143,.25)' : 'rgba(217,154,58,.3)',
+      engineTitleColor: smart ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.85)',
+      engineTitle: smart ? 'Smart Similar is doing the matching' : 'Smart Similar is not installed',
+      engineNote: smart
+        ? 'Its ranking, fused across your picks — genres, tags, cast and crew, year, studio.'
+        : 'Falling back to shared genres and a nearby decade. It works, but it is blunt: no tags, no cast, no crew.',
+      engineOk: smart,
+      seeds,
+      shared,
+      proposals,
+      basis: 'scored against all three, best average first'
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -97,6 +97,19 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 EnableInMainMenu = true,
                 DisplayName = "LiteTV",
                 MenuIcon = "live_tv"
+            },
+
+            // The page as it was before the configuration app, still installed and still
+            // working, but not in anyone's menu: it is reached by a link at the foot of the new
+            // page. It stays until the new one has been used for a while - a rewrite that leaves
+            // no way back is a rewrite nobody can afford to try.
+            new PluginPageInfo
+            {
+                Name = "LiteTV (previous page)",
+                EmbeddedResourcePath = string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    "{0}.Configuration.configPage.legacy.html",
+                    GetType().Namespace)
             }
         };
     }

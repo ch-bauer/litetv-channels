@@ -1,0 +1,173 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "title": "Week — the shell",
+      "page": "page-1"
+    },
+    {
+      "file": "Day.dc.html",
+      "x": 1400,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "title": "Day view",
+      "page": "page-1"
+    },
+    {
+      "file": "Content.dc.html",
+      "x": 2800,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "title": "Content",
+      "page": "page-1"
+    },
+    {
+      "file": "Breaks.dc.html",
+      "x": 0,
+      "y": 1000,
+      "w": 1280,
+      "h": 860,
+      "title": "Breaks — no length to type",
+      "page": "page-1"
+    },
+    {
+      "file": "Look.dc.html",
+      "x": 1400,
+      "y": 1000,
+      "w": 1280,
+      "h": 860,
+      "title": "Look",
+      "page": "page-1"
+    },
+    {
+      "file": "Settings.dc.html",
+      "x": 2800,
+      "y": 1000,
+      "w": 1280,
+      "h": 860,
+      "title": "Settings — how help works",
+      "page": "page-1"
+    },
+    {
+      "file": "SuggestTitles.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "title": "Suggestions — from titles",
+      "page": "page-2"
+    },
+    {
+      "file": "SuggestLibrary.dc.html",
+      "x": 1400,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "title": "Suggestions — from a library",
+      "page": "page-2"
+    },
+    {
+      "file": "Server.dc.html",
+      "x": 2800,
+      "y": 0,
+      "w": 1280,
+      "h": 860,
+      "title": "Server & app updates",
+      "page": "page-2"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "read-me",
+      "x": 0,
+      "y": -230,
+      "w": 700,
+      "page": "page-1",
+      "text": "LiteTV config page — the whole thing, nine screens over two pages.\n\nBuilt on your live theme: ElegantFin's own colours (#111827 ground, #775bf4 accent, Inter), with surfaces as white-alpha the way Jellyfin Enhanced does it — so it stays right if the theme changes. The tab pills with icons and the left-rule help text are lifted from Jellyfin Enhanced.\n\nMost of it is clickable: the channel rail, the tab pills, Week/Day, the day picker, the (?) buttons, the order switch on Content, the shape filters on Look, the stage toggle on Breaks, the checkboxes and the mode switch on Suggestions.\n\nSecond page: making a channel, and the server."
+    },
+    {
+      "id": "note-week",
+      "x": 0,
+      "y": 900,
+      "w": 400,
+      "page": "page-1",
+      "text": "The week answers \"what shape is my week\". Bars select; the inspector appears under the grid."
+    },
+    {
+      "id": "note-day",
+      "x": 1400,
+      "y": 900,
+      "w": 400,
+      "page": "page-1",
+      "text": "The day answers \"what exactly happens at 20:15\". 18:00–midnight, so a 30-second advert is a row you can grab."
+    },
+    {
+      "id": "note-content",
+      "x": 2800,
+      "y": 900,
+      "w": 400,
+      "page": "page-1",
+      "text": "Sources in play order, then the blocks — drawn as shapes on a week rather than three number fields. The right column shows how the settings would actually deal the queue."
+    },
+    {
+      "id": "note-breaks",
+      "x": 0,
+      "y": 1900,
+      "w": 440,
+      "page": "page-1",
+      "text": "No seconds box. Press \"Show what happens while it works it out\" to step through empty → asking → answered. The numbers are the real measured ones: the Avatar trailer is 2:28 long, has an 11.5 s outro, plays for 2:17."
+    },
+    {
+      "id": "note-look",
+      "x": 1400,
+      "y": 1900,
+      "w": 400,
+      "page": "page-1",
+      "text": "Three pictures, each from an upload, the gallery, or a borrowed title — with a preview of how the television will actually draw the channel."
+    },
+    {
+      "id": "note-settings",
+      "x": 2800,
+      "y": 1900,
+      "w": 400,
+      "page": "page-1",
+      "text": "Every setting: plain label, one line, (?) for the real explanation. The right column warns these only shape a NEW week."
+    },
+    {
+      "id": "note-suggest",
+      "x": 0,
+      "y": 900,
+      "w": 700,
+      "page": "page-2",
+      "text": "Two ways to start a channel, behind one switch — never both on screen, because they ask for different things.\n\nLeft: pick two or three things you like and it works out what they have in common. Right: tick libraries and genres. Both end in the same place — a proposed channel with a name, a count, and a typical evening you can read before you commit."
+    },
+    {
+      "id": "note-server",
+      "x": 2800,
+      "y": 900,
+      "w": 400,
+      "page": "page-2",
+      "text": "Everything that is not per-channel, in two: playback and trailers, and the builds this server hands the television. Both (?) marks open."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  },
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Editing a channel"
+    },
+    {
+      "id": "page-2",
+      "name": "Making one, and the server"
+    }
+  ]
+}

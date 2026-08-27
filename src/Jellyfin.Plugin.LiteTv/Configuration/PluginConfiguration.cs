@@ -33,6 +33,22 @@ public class PluginConfiguration : BasePluginConfiguration
     public string ChannelUserPassword { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the language the configuration page is written in: <c>auto</c>, <c>en</c>
+    /// or <c>de</c>.
+    /// <para>
+    /// <c>auto</c> follows the dashboard's own language, which is what almost everyone wants
+    /// and is therefore the default. It is a setting rather than only a guess because the
+    /// dashboard's language is a per-account choice, and the owner of this server reads German
+    /// while the dashboard may well be in English.
+    /// </para>
+    /// <para>
+    /// This is the <b>page's</b> language and nothing else. What a channel is called, and what
+    /// the guide says on the television, come from the library and the channel's own name.
+    /// </para>
+    /// </summary>
+    public string PageLanguage { get; set; } = "auto";
+
+    /// <summary>
     /// Gets or sets a value indicating whether the parts of a trailer that are not the trailer
     /// are skipped, using SponsorBlock's public database.
     /// <para>
@@ -503,21 +519,45 @@ public class ChannelSource
     /// (config-page convenience only; the library remains authoritative).
     /// </summary>
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the address, for a source that is not in the library at all - a YouTube
+    /// playlist, or a single video. Empty for every other kind, where <see cref="ItemId"/>
+    /// is what names the thing.
+    /// <para>
+    /// A playlist is expanded when the queue is built and never stored, which is the same rule
+    /// the stored week follows: a playlist that gains a video reaches the channel the next time
+    /// the week is laid out, rather than silently changing what a written-down schedule says.
+    /// </para>
+    /// </summary>
+    public string Url { get; set; } = string.Empty;
 }
 
 /// <summary>
-/// The kind of library item a <see cref="ChannelSource"/> references.
+/// What a <see cref="ChannelSource"/> references.
+/// <para>
+/// Every member is numbered outright. These values are written into stored configuration, so
+/// inserting a member above another silently renumbers it - which would turn every existing
+/// collection into something else without a word.
+/// </para>
 /// </summary>
 public enum ChannelSourceType
 {
     /// <summary>A single movie.</summary>
-    Movie,
+    Movie = 0,
 
     /// <summary>A TV series, expanded to its episodes in aired order.</summary>
-    Series,
+    Series = 1,
 
     /// <summary>A collection (box set), expanded to its children.</summary>
-    Collection
+    Collection = 2,
+
+    /// <summary>
+    /// A YouTube playlist or single video, named by <see cref="ChannelSource.Url"/> rather
+    /// than by a library id. This is what lets a channel play something the library has never
+    /// heard of.
+    /// </summary>
+    YouTube = 3
 }
 
 /// <summary>

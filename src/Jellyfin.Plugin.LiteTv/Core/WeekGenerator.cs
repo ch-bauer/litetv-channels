@@ -100,7 +100,10 @@ public static class WeekGenerator
                     : isAdvert ? StoredAiringKind.Advert : StoredAiringKind.Trailer,
                 ItemId = airing.Entry?.ItemId ?? Guid.Empty,
                 Name = airing.Entry?.Name ?? string.Empty,
-                Url = airing.TrailerUrl ?? string.Empty,
+                // PlayUrl, not TrailerUrl: a programme can now BE an address - a video from a
+                // YouTube playlist - and storing only the trailer's would write that programme
+                // into the week with nothing to play.
+                Url = airing.PlayUrl ?? string.Empty,
                 OffsetTicks = isProgramme ? airing.OffsetTicks : 0,
                 SeriesName = airing.Entry?.SeriesName,
                 SeriesId = airing.Entry?.SeriesId,
