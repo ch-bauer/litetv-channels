@@ -7,6 +7,7 @@
     */
     import Card from '../ui/Card.svelte';
     import { api } from '../jellyfin';
+    import { store } from '../config.svelte';
     import type { PlayOrder, TvChannel } from '../types';
 
     let { channel }: { channel: TvChannel } = $props();
@@ -27,9 +28,32 @@
     */
     $effect(() => {
         const id = channel.Id;
+        // Re-asked after every Save, because the answer is about the saved channel: adding four
+        // films and watching the line go on saying "Nothing to play yet" is what the owner saw.
+        void store.savedAt;
         api().getJSON<{ Words: string }>(api().getUrl('LiteTv/Channels/' + id + '/Cycle'))
             .then((answer) => { cycle = answer.Words; })
             .catch(() => { cycle = null; });
+    });
+
+    /*
+        The server counts what it HOLDS. So a line that says nothing is playable has to say
+        whether that is a fact about the channel or a fact about the Save button - the two look
+        identical, and one of them is not a fault at all.
+    */
+    const cycleLine = $derived.by(() => {
+        if (!cycle) { return null; }
+        const nothing = cycle.startsWith('Nothing to play');
+        if (nothing && channel.Sources.length > 0) {
+            return store.dirty
+                ? 'Nothing saved to play yet - this content has not been saved. Save, and the '
+                    + 'channel says how long it takes to play through.'
+                : 'Nothing here can be played: the library gave no runtime for any of it.';
+        }
+        if (store.dirty) {
+            return cycle + ' Counted from what is saved, so it does not include your changes yet.';
+        }
+        return cycle;
     });
 
     /** Interleaving off means each source plays right through before the next begins. */
@@ -98,8 +122,8 @@ With two, it plays two before moving on - which is what makes a channel that air
                     A few at a time
                 </button>
             </div>
-            {#if cycle}
-                <p class="cycle">{cycle}</p>
+            {#if cycleLine}
+                <p class="cycle">{cycleLine}</p>
             {/if}
         </div>
 

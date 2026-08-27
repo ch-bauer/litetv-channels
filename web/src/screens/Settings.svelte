@@ -100,9 +100,7 @@
 
     .label { font-size: 14px; font-weight: 600; color: var(--lt-text-title); }
 
-    .label-row { display: flex; align-items: center; gap: 9px; }
-
-    .text, .number {
+    .text {
         background: var(--lt-field);
         border: 1px solid var(--lt-line-strong);
         border-radius: var(--lt-radius-small);
@@ -114,10 +112,6 @@
 
     .text { max-width: 340px; }
 
-    .value-row { display: flex; align-items: center; gap: 10px; }
-
-    .unit { font-size: 13px; color: var(--lt-text-muted); }
-
     .note {
         font-size: 12.5px;
         color: var(--lt-text-muted);
@@ -125,38 +119,6 @@
         border-left: 2px solid var(--lt-line);
         margin: 0;
     }
-
-    .deeper {
-        margin: 2px 0 0;
-        padding: 11px 15px;
-        border-radius: var(--lt-radius-small);
-        background: var(--lt-accent-soft);
-        border-left: 2px solid var(--lt-accent);
-        font-size: 13px;
-        line-height: 1.5;
-        color: rgba(255, 255, 255, .72);
-        max-width: 580px;
-        white-space: pre-line;
-    }
-
-    .help {
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        border: 1px solid var(--lt-line-strong);
-        background: none;
-        color: var(--lt-text-dim);
-        font-size: 11px;
-        font-weight: 700;
-        font-family: inherit;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        padding: 0;
-    }
-
-    .help.on { border-color: var(--lt-accent); color: var(--lt-accent); }
 
     .onair {
         display: flex;

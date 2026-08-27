@@ -1,11 +1,12 @@
 <script lang="ts">
     /*
-        The blocks, drawn as what they are: shapes on a week.
+        The blocks, as a list.
 
-        The owner's complaint was that editing a block needed the whole week view with its times.
-        It does not - a block is a stretch of hours repeated on some days, and this grid gives a
-        whole day in 150px, which is enough to see the shape and pick one. The fields for the
-        block you have picked sit underneath, where they belong.
+        Twice now the owner has said the week view is not wanted here: first that editing a block
+        needed the whole week with its times, and then - after it had been shrunk to a 150px
+        mini-week - that the section STILL shows its own week view. So it is a list. A block is a
+        name, some days and a stretch of hours; a row says exactly that, and the fields for the
+        row you have picked sit underneath.
     */
     import { measure } from '../runtime';
     import SourceList from './SourceList.svelte';
@@ -16,24 +17,29 @@
 
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const HEADS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const TICKS = [
-        { label: '00', top: 0 }, { label: '06', top: 37 }, { label: '12', top: 74 },
-        { label: '18', top: 111 }, { label: '24', top: 142 },
-    ];
-    const DAY_HEIGHT = 150;
-
     let picked = $state(0);
 
     const blocks = $derived(channel.Blocks ?? []);
     const current = $derived<ProgramBlock | null>(blocks[picked] ?? null);
 
-    function shapeOf(block: ProgramBlock): { top: number; height: number } {
-        const perMinute = DAY_HEIGHT / (24 * 60);
-        const top = Math.round(block.StartMinutes * perMinute);
-        // A block running past midnight is drawn to the end of the day rather than off it;
-        // what it does after midnight is the schedule's business, not this picture's.
-        const span = Math.min(block.DurationMinutes, 24 * 60 - block.StartMinutes);
-        return { top, height: Math.max(3, Math.round(span * perMinute)) };
+    /** How long a block runs, in the coarsest unit that is still true. */
+    function spanWords(minutes: number): string {
+        if (minutes % 60 === 0) {
+            const hours = minutes / 60;
+            return hours + (hours === 1 ? ' hour' : ' hours');
+        }
+        if (minutes < 60) { return minutes + ' min'; }
+        return Math.floor(minutes / 60) + ' h ' + (minutes % 60) + ' min';
+    }
+
+    /** Which days, said the way a person would say it. */
+    function daysWords(block: ProgramBlock): string {
+        const on = DAYS.filter((d) => (block.Days ?? []).includes(d));
+        if (on.length === 7) { return 'every day'; }
+        if (on.length === 0) { return 'no days - this block never runs'; }
+        if (on.length === 5 && !on.includes('Saturday') && !on.includes('Sunday')) { return 'weekdays'; }
+        if (on.length === 2 && on.includes('Saturday') && on.includes('Sunday')) { return 'weekends'; }
+        return on.map((d) => HEADS[DAYS.indexOf(d)]).join(' ');
     }
 
     function onDay(block: ProgramBlock, day: string): boolean {
@@ -111,35 +117,26 @@
     }
 </script>
 
-<div class="grid">
-    <div class="heads">
-        <div class="gutter"></div>
-        {#each HEADS as head (head)}<div class="head">{head}</div>{/each}
-    </div>
-
-    <div class="body">
-        <div class="gutter ticks">
-            {#each TICKS as tick (tick.label)}<span style="top: {tick.top}px">{tick.label}</span>{/each}
-        </div>
-
-        {#each DAYS as day (day)}
-            <div class="day">
-                {#each blocks as block, index (index)}
-                    {#if onDay(block, day)}
-                        {@const shape = shapeOf(block)}
-                        <button
-                            type="button"
-                            class="block"
-                            class:picked={index === picked}
-                            style="top: {shape.top}px; height: {shape.height}px; background: {fillOf(index)};"
-                            title="{block.Name} - {clock(block.StartMinutes)} for {Math.round(block.DurationMinutes / 60)} h"
-                            onclick={() => (picked = index)}
-                        >{block.Name}</button>
-                    {/if}
-                {/each}
-            </div>
-        {/each}
-    </div>
+<div class="blocks">
+    {#each blocks as block, index (index)}
+        <button
+            type="button"
+            class="block-row"
+            class:picked={index === picked}
+            onclick={() => (picked = index)}
+        >
+            <span class="swatch" style="background: {fillOf(index)}"></span>
+            <span class="block-name" title={block.Name}>{block.Name}</span>
+            <span class="when">
+                {clock(block.StartMinutes)}&ndash;{clock((block.StartMinutes + block.DurationMinutes) % (24 * 60))}
+            </span>
+            <span class="how-long">{spanWords(block.DurationMinutes)}</span>
+            <span class="on-days">{daysWords(block)}</span>
+            {#if !block.Enabled}<span class="off">off</span>{/if}
+        </button>
+    {:else}
+        <p class="no-blocks">No blocks &mdash; the whole week plays the list above.</p>
+    {/each}
 </div>
 
 <div class="editor">
@@ -192,61 +189,60 @@
 </div>
 
 <style>
-    .grid {
+    .blocks {
+        display: flex;
+        flex-direction: column;
         border: 1px solid var(--lt-line);
         border-radius: var(--lt-radius);
         background: var(--lt-card);
-        padding: 11px 13px;
-    }
-
-    .heads, .body { display: flex; gap: 6px; }
-    .heads { margin-bottom: 5px; }
-
-    .gutter { flex: 0 0 34px; position: relative; }
-
-    .head {
-        flex: 1 1 0;
-        text-align: center;
-        font-size: 10.5px;
-        font-weight: 600;
-        color: var(--lt-text-dim);
-    }
-
-    .ticks { height: 150px; }
-
-    .ticks span {
-        position: absolute;
-        right: 4px;
-        font-size: 9.5px;
-        color: var(--lt-text-faint);
-    }
-
-    .day {
-        flex: 1 1 0;
-        position: relative;
-        height: 150px;
-        border-radius: 3px;
-        background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, .05) 0 1px, transparent 1px 25px);
-    }
-
-    .block {
-        position: absolute;
-        left: 1px;
-        right: 1px;
-        border: none;
-        border-radius: 3px;
-        font-size: 9.5px;
-        font-family: inherit;
-        color: #fff;
-        padding: 2px 4px;
         overflow: hidden;
+    }
+
+    .block-row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px 12px;
+        background: none;
+        border: none;
+        border-bottom: 1px solid var(--lt-line-soft);
+        font-family: inherit;
+        font-size: 12.5px;
+        color: var(--lt-text-muted);
         text-align: left;
         cursor: pointer;
+        min-width: 0;
     }
 
-    .block:hover { filter: brightness(1.12); }
-    /* Inside the block, for the reason spelled out in week/Grid.svelte. */
-    .block.picked { box-shadow: inset 0 0 0 2px #fff; z-index: 1; }
+    .block-row:last-child { border-bottom: none; }
+    .block-row:hover { background: var(--lt-hover); }
+    .block-row.picked { background: var(--lt-accent-soft); box-shadow: inset 2px 0 0 var(--lt-accent); }
+
+    .swatch { flex: 0 0 4px; align-self: stretch; border-radius: 2px; }
+
+    .block-name {
+        flex: 1 1 0;
+        min-width: 0;
+        font-weight: 600;
+        color: var(--lt-text-title);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .when { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--lt-text); }
+    .how-long { flex: 0 0 auto; }
+    .on-days { flex: 0 0 auto; color: var(--lt-text-dim); }
+
+    .off {
+        flex: 0 0 auto;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: var(--lt-collection);
+    }
+
+    .no-blocks { margin: 0; padding: 12px; font-size: 12.5px; color: var(--lt-text-dim); }
 
     .editor { margin-top: 10px; }
 

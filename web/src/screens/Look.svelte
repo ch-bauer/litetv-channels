@@ -6,6 +6,18 @@
         What the old page lost and the board keeps: a **Change** button per picture, a **preview
         of the television**, and **Borrow from a title** as its own card on the right rather than
         folded into the gallery.
+
+        Five things the owner found wrong here, all fixed together:
+
+         - the channel name was drawn over every picture, including the ones it has no business
+           being on - only the television draws it, so only the television preview does;
+         - there was no way to look for a picture that is not already in this channel's lineup;
+         - the previews cropped, so the picture being judged was not the picture;
+         - the upload button wore a glyph that is not an upload;
+         - and the television preview was invented rather than drawn to the app's own rules.
+           It now follows what the fork actually does: banner first in the channel list,
+           backdrop first behind the channel screen, both heavily dimmed because channel
+           artwork is whatever is on air and a banner is the brightest thing Jellyfin holds.
     */
     import Card from '../lib/ui/Card.svelte';
     import Note from '../lib/ui/Note.svelte';
@@ -34,6 +46,20 @@
     let borrowHits = $state<SearchHit[]>([]);
     let uploading = $state(false);
 
+    /*
+        Looking for a picture beyond this channel's own lineup. The gallery could only ever
+        offer the titles the channel already plays, which is no use to a channel built from a
+        genre - and there was nothing to type into, which is what "image search does not work"
+        was: there was no search.
+    */
+    let tileTerm = $state('');
+    let tileSearching = $state(false);
+    let searchedFrom = $state<string | null>(null);
+    let tileTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /** Pictures the browser could not load, so a dead tile does not sit there as a grey box. */
+    let dead = $state<Record<string, boolean>>({});
+
     const artwork = $derived(channel.Artwork as Record<string, string | null | undefined>);
 
     function current(slot: Slot): string | null {
@@ -51,26 +77,63 @@
         return 'whatever is on air';
     }
 
+    /** Which image a shape filter is actually asking Jellyfin for. */
+    function kindOfShape(): string {
+        return shape === 'tall' ? 'Primary' : shape === 'wide' ? 'Backdrop' : 'Thumb';
+    }
+
+    function tileHeight(): number {
+        return shape === 'tall' ? 128 : shape === 'square' ? 84 : 62;
+    }
+
+    function tilesFor(ids: string[]): { url: string; height: number }[] {
+        const kind = kindOfShape();
+        return ids.map((id) => ({
+            url: absolute('/Items/' + id + '/Images/' + kind + '?maxHeight=240&quality=85'),
+            height: tileHeight(),
+        }));
+    }
+
     /** The library's own pictures, from the titles this channel plays. */
     async function loadTiles(): Promise<void> {
         loadingTiles = true;
         try {
             const ids = channel.Sources.map((s) => s.ItemId).slice(0, 24);
-            if (ids.length === 0) { tiles = []; return; }
-            const kind = shape === 'tall' ? 'Primary' : shape === 'wide' ? 'Backdrop' : 'Thumb';
-            tiles = ids.map((id) => ({
-                url: absolute('/Items/' + id + '/Images/' + kind + '?maxHeight=240&quality=85'),
-                height: shape === 'tall' ? 128 : shape === 'square' ? 84 : 62,
-            }));
+            searchedFrom = null;
+            tiles = ids.length === 0 ? [] : tilesFor(ids);
         } finally {
             loadingTiles = false;
         }
     }
 
+    /** Pictures from anything in the library, not only what this channel plays. */
+    async function searchTiles(): Promise<void> {
+        const asked = tileTerm.trim();
+        if (asked.length === 0) { void loadTiles(); return; }
+        tileSearching = true;
+        try {
+            const hits = await search(asked, 24);
+            if (asked !== tileTerm.trim()) { return; }
+            searchedFrom = asked;
+            tiles = tilesFor(hits.map((h) => h.id));
+        } catch {
+            tiles = [];
+        } finally {
+            tileSearching = false;
+        }
+    }
+
+    function onTileSearch(): void {
+        clearTimeout(tileTimer);
+        tileTimer = setTimeout(searchTiles, 250);
+    }
+
     $effect(() => {
         void shape;
         void channel.Id;
-        void loadTiles();
+        // A shape change re-asks whichever question is on screen - the channel's own lineup, or
+        // the search. Dropping back to the lineup silently would look like the search failing.
+        if (tileTerm.trim().length > 0) { void searchTiles(); } else { void loadTiles(); }
     });
 
     async function useTile(url: string): Promise<void> {
@@ -140,6 +203,28 @@
         borrowHits = [];
     }
 
+    /*
+        Which picture each screen ends up drawing, following the app's own order rather than
+        guessing: within a slot it is the chosen picture of that kind, then the other wide kind,
+        then nothing - at which point the app falls back to what is on air, which no preview
+        here can honestly show.
+    */
+    const listPicture = $derived(current('Banner') ?? current('Backdrop') ?? current('Poster'));
+    const screenPicture = $derived(current('Backdrop') ?? current('Banner'));
+
+    const listWords = $derived(
+        current('Banner') ? 'Your banner.'
+            : current('Backdrop') ? 'No banner set, so the backdrop stands in.'
+                : current('Poster') ? 'Only a poster is set, so the upright picture is stretched into the card.'
+                    : 'Nothing set - the card wears whatever is on air.',
+    );
+
+    const screenWords = $derived(
+        current('Backdrop') ? 'Your backdrop.'
+            : current('Banner') ? 'No backdrop set, so the banner is blown up to fill the screen.'
+                : 'Nothing set - the screen wears whatever is on air.',
+    );
+
     function stopBorrowing(): void {
         artwork['ImageItemId'] = null;
         artwork['ImageItemName'] = null;
@@ -166,11 +251,17 @@
                         <span class="ratio">{entry.ratio}</span>
                     </div>
 
+                    <!--
+                        No channel name over it. The name belongs to the television, which draws
+                        it once, over the artwork it chooses - drawing it on all three previews
+                        put it where it will never appear and hid the picture being judged.
+                    -->
                     <div class="frame" style="height: {entry.height}px">
                         {#if current(entry.slot)}
                             <img src={current(entry.slot)} alt="" />
+                        {:else}
+                            <span class="frame-empty">nothing set</span>
                         {/if}
-                        <span class="caption">{channel.Name}</span>
                     </div>
 
                     <div class="source">{sourceOf(entry.slot)}</div>
@@ -192,8 +283,9 @@
                                     e.currentTarget.value = '';
                                 }}
                             />
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
-                                <path d="M8 3v13a2 2 0 0 0 2 2h11" /><path d="M16 8H5a2 2 0 0 0-2 2v11" />
+                            <!-- An arrow going up out of a tray, which is what uploading looks like. -->
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
                             </svg>
                         </label>
 
@@ -223,8 +315,27 @@
                 </span>
             </div>
 
+            <div class="tile-search">
+                <input
+                    type="search"
+                    bind:value={tileTerm}
+                    oninput={onTileSearch}
+                    placeholder="Look for pictures from any title..."
+                    aria-label="Look for pictures from any title in the library"
+                />
+                {#if tileSearching}<span class="tile-note">looking...</span>{/if}
+                {#if searchedFrom}
+                    <span class="tile-note">
+                        pictures from titles matching &ldquo;{searchedFrom}&rdquo;
+                        <button type="button" class="link" onclick={() => { tileTerm = ''; void loadTiles(); }}>
+                            back to this channel
+                        </button>
+                    </span>
+                {/if}
+            </div>
+
             <div class="tiles">
-                {#each tiles as tile (tile.url)}
+                {#each tiles.filter((t) => !dead[t.url]) as tile (tile.url)}
                     <button
                         type="button"
                         class="tile"
@@ -233,11 +344,19 @@
                         disabled={picking === null || uploading}
                         onclick={() => useTile(tile.url)}
                     >
-                        <img src={tile.url} alt="" loading="lazy" />
+                        <!--
+                            A title with no picture of this shape answers 404, and the tile was a
+                            grey box that could be chosen. It takes itself off the wall instead.
+                        -->
+                        <img src={tile.url} alt="" loading="lazy" onerror={() => (dead[tile.url] = true)} />
                     </button>
                 {:else}
                     <p class="none">
-                        {loadingTiles ? 'Looking…' : 'This channel has no content to take pictures from yet.'}
+                        {loadingTiles || tileSearching
+                            ? 'Looking...'
+                            : searchedFrom
+                                ? 'Nothing matching that has a ' + kindOfShape().toLowerCase() + ' picture.'
+                                : 'This channel has no content to take pictures from yet - search above for any title.'}
                     </p>
                 {/each}
             </div>
@@ -247,23 +366,57 @@
     <div class="right">
         <Card>
             <h3>On the television</h3>
+
+            <!--
+                Two screens, because the app has two, and they choose differently:
+                the channel list draws a wide card with the name over it, banner first;
+                the channel's own screen draws a full frame behind it, backdrop first.
+                Both are dimmed hard - channel artwork is whatever is on air, and a banner is
+                the brightest thing Jellyfin holds.
+            -->
+            <div class="tv-label">In the channel list</div>
             <div class="tv">
-                <div class="tv-hero">
-                    {#if current('Backdrop')}<img src={current('Backdrop')} alt="" />{/if}
+                <div class="tv-card-wide">
+                    {#if listPicture}<img src={listPicture} alt="" />{/if}
+                    <div class="tv-dim"></div>
                     <div class="tv-text">
                         <div class="tv-name">{channel.Name}</div>
                         <div class="tv-now">what is on now</div>
                     </div>
                 </div>
-                <div class="tv-row">
-                    {#each SLOTS as entry (entry.slot)}
-                        <div class="tv-card">
-                            {#if current(entry.slot)}<img src={current(entry.slot)} alt="" />{/if}
-                        </div>
-                    {/each}
+            </div>
+            <p class="hint tight">{listWords}</p>
+
+            <div class="tv-label">The channel&rsquo;s own screen</div>
+            <div class="tv">
+                <div class="tv-hero">
+                    {#if screenPicture}<img src={screenPicture} alt="" />{/if}
+                    <div class="tv-dim"></div>
+                    <div class="tv-text">
+                        <div class="tv-name">{channel.Name}</div>
+                        <div class="tv-now">20:15 &ndash; 22:00 &middot; 40 min left</div>
+                        <span class="tv-button">Watch live</span>
+                    </div>
                 </div>
             </div>
-            <p class="hint">The wide one is the row card; the tall one is for lists that show covers.</p>
+            <p class="hint tight">{screenWords}</p>
+
+            <div class="tv-label">Beside the name, where a cover is shown</div>
+            <div class="tv poster-strip">
+                <div class="tv-poster">
+                    {#if current('Poster')}<img src={current('Poster')} alt="" />{/if}
+                </div>
+                <p class="hint tight">
+                    {current('Poster')
+                        ? 'The poster you set.'
+                        : 'Nothing set - the app takes an upright picture from the lineup.'}
+                </p>
+            </div>
+
+            <p class="hint">
+                Cropped here exactly as the television crops: this is the one place a picture
+                being cut off is the truth rather than a fault in the preview.
+            </p>
         </Card>
 
         <Card>
@@ -347,24 +500,29 @@
         position: relative;
         overflow: hidden;
         display: flex;
-        align-items: flex-end;
-        padding: 9px;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
     }
 
+    /*
+        The whole picture, never a crop. This frame is where a picture is JUDGED, and a preview
+        that cuts the sides off is showing something other than the file being chosen. The
+        television's own cropping is shown on the right, where it is the point.
+    */
     .frame img {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        object-fit: contain;
     }
 
-    .caption {
+    .frame-empty {
         position: relative;
-        font-size: 12px;
-        font-weight: 700;
-        color: #fff;
-        text-shadow: 0 1px 4px rgba(0, 0, 0, .7);
+        margin: auto;
+        font-size: 11px;
+        color: rgba(255, 255, 255, .45);
     }
 
     .source { font-size: 11.5px; color: var(--lt-text-dim); }
@@ -440,12 +598,45 @@
 
     .tile:disabled { cursor: default; opacity: .75; }
     .tile.armed:hover { outline: 2px solid var(--lt-accent); }
-    .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* Contained here too: a gallery of cropped pictures is a gallery of the wrong pictures. */
+    .tile img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
-    .tv { border-radius: var(--lt-radius-small); overflow: hidden; border: 1px solid var(--lt-line); margin-top: 10px; }
+    .tile-search { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 
-    .tv-hero {
-        height: 120px;
+    .tile-search input {
+        flex: 1 1 200px;
+        min-width: 0;
+        background: var(--lt-field);
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+        padding: 7px 10px;
+        font-size: 12.5px;
+        font-family: inherit;
+        color: var(--lt-text);
+    }
+
+    .link {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: #9b8bf7;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+
+    .tv { border-radius: var(--lt-radius-small); overflow: hidden; border: 1px solid var(--lt-line); margin-top: 6px; }
+
+    .tv-label {
+        margin-top: 13px;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--lt-text-dim);
+    }
+
+    .tv-hero, .tv-card-wide {
         background: linear-gradient(140deg, #33455e, #151d2a);
         position: relative;
         display: flex;
@@ -453,22 +644,62 @@
         padding: 11px;
     }
 
-    .tv-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .tv-hero { height: 120px; }
+    /* The overview row's card: wide, with the name over it. */
+    .tv-card-wide { height: 64px; }
+
+    .tv-hero img, .tv-card-wide img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /*
+        The app lays an even wash under its gradient, and the overview row uses a heavier one
+        still, because channel artwork is whatever is on air. Without it, a preview flatters
+        a picture that will be unreadable on the television.
+    */
+    .tv-dim {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(0, 0, 0, .72) 0%, rgba(0, 0, 0, .35) 70%, rgba(0, 0, 0, .2) 100%);
+    }
+
     .tv-text { position: relative; }
     .tv-name { font-size: 14px; font-weight: 700; color: #fff; }
     .tv-now { font-size: 11px; color: rgba(255, 255, 255, .7); margin-top: 2px; }
 
-    .tv-row { display: flex; gap: 6px; padding: 9px; background: rgba(0, 0, 0, .25); }
+    .tv-button {
+        display: inline-block;
+        margin-top: 7px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .92);
+        color: #111827;
+        font-size: 10.5px;
+        font-weight: 700;
+    }
 
-    .tv-card {
-        flex: 1 1 0;
-        height: 34px;
+    .poster-strip {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px;
+        border: 1px solid var(--lt-line);
+        background: rgba(0, 0, 0, .2);
+    }
+
+    .tv-poster {
+        flex: 0 0 46px;
+        height: 69px;
         border-radius: 4px;
         overflow: hidden;
         background: linear-gradient(140deg, #2b3d55, #151d2a);
     }
 
-    .tv-card img { width: 100%; height: 100%; object-fit: cover; }
+    .tv-poster img { width: 100%; height: 100%; object-fit: cover; }
 
     .hint { font-size: 12px; color: var(--lt-text-dim); margin: 9px 0 0; line-height: 1.5; }
     .hint.tight { margin: 6px 0 10px; color: var(--lt-text-muted); font-size: 12.5px; }

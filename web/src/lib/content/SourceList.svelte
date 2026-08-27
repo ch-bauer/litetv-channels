@@ -90,6 +90,8 @@
         row?.focus();
     }
 
+    const chosen = $derived(selected === null ? null : sources[selected] ?? null);
+
     function onDrop(target: number): void {
         if (dragging !== null) { move(dragging, target); }
         dragging = null;
@@ -97,6 +99,11 @@
     }
 </script>
 
+<!--
+    What selecting a row is FOR was invisible: it armed the keyboard and nothing said so, which
+    is why the owner asked what selecting an item even does. The bar under the list answers it,
+    and the same actions are there as buttons for anyone who would rather not learn a shortcut.
+-->
 <div class="list" role="listbox" aria-label="What this channel plays" tabindex="-1">
     {#each sources as source, index (source.ItemId + ':' + index)}
         <div
@@ -151,7 +158,61 @@
     {/each}
 </div>
 
+{#if chosen}
+    <div class="chosen">
+        <span class="chosen-name" title={chosen.Name}>{chosen.Name}</span>
+        <span class="chosen-what">is selected &mdash;</span>
+        <button type="button" onclick={() => selected !== null && move(selected, selected - 1)} disabled={selected === 0}>
+            Move up
+        </button>
+        <button
+            type="button"
+            onclick={() => selected !== null && move(selected, selected + 1)}
+            disabled={selected === sources.length - 1}
+        >Move down</button>
+        <button type="button" class="danger" onclick={() => selected !== null && remove(selected)}>Remove</button>
+        <span class="chosen-keys">or Alt&#8593;/Alt&#8595; to move, Delete to remove, Escape to let go</span>
+    </div>
+{/if}
+
 <style>
+    .chosen {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+        padding: 8px 13px;
+        border-top: 1px solid var(--lt-line);
+        background: var(--lt-accent-soft);
+        font-size: 12px;
+        color: var(--lt-text-muted);
+    }
+
+    .chosen-name {
+        font-weight: 600;
+        color: var(--lt-text-title);
+        max-width: 240px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .chosen button {
+        background: none;
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+        color: var(--lt-text);
+        font-family: inherit;
+        font-size: 11.5px;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+
+    .chosen button:disabled { opacity: .45; cursor: default; }
+    .chosen button.danger { color: #e08585; border-color: rgba(224, 133, 133, .3); }
+
+    .chosen-keys { color: var(--lt-text-faint); font-size: 11px; }
+
     .row {
         display: flex;
         align-items: center;

@@ -27,6 +27,16 @@
     let hits = $state<SearchHit[]>([]);
     let seeds = $state<SearchHit[]>([]);
     let answer = $state<ScoredSuggestions | null>(null);
+
+    /*
+        The similarity cut-off: show only what scores at least this.
+
+        A wide continuous control rather than three preset bands - what counts as "similar
+        enough" depends on the seeds, and a shortlist would be an answer disguised as a question.
+        It runs the whole range the scorer can produce, and the reading beside it says what the
+        number is doing to this pool rather than what it means in the abstract.
+    */
+    let cutoff = $state(0);
     let scoring = $state(false);
     let scoreError = $state<string | null>(null);
     let chosen = $state<Record<string, boolean>>({});
@@ -42,6 +52,30 @@
         term = '';
         hits = [];
         void rescore();
+    }
+
+    const kept = $derived(answer ? answer.Results.filter((r) => r.Score >= cutoff) : []);
+
+    const cutoffWords = $derived.by(() => {
+        if (!answer) { return ''; }
+        const all = answer.Results.length;
+        if (all === 0) { return 'nothing scored'; }
+        const best = Math.round(Math.max(...answer.Results.map((r) => r.Score)));
+        if (cutoff === 0) { return 'everything scored - ' + all + ' titles, best ' + best; }
+        return kept.length + ' of ' + all + ' kept, best ' + best;
+    });
+
+    /*
+        Raising the cut-off unticks what it hides. Otherwise the channel would quietly be made
+        from titles the screen is no longer showing - which is the same class of fault as a
+        control the server does not read.
+    */
+    function setCutoff(value: number): void {
+        cutoff = value;
+        if (!answer) { return; }
+        for (const result of answer.Results) {
+            if (result.Score < cutoff) { chosen[result.Id] = false; }
+        }
     }
 
     async function rescore(): Promise<void> {
@@ -142,8 +176,10 @@
     const proposed = $derived.by<ChannelSource[]>(() => {
         if (half === 'titles') {
             if (!answer) { return []; }
+            // Only what is both ticked AND above the cut-off: hiding something must not leave
+            // it in the channel.
             return answer.Results
-                .filter((r) => chosen[r.Id])
+                .filter((r) => chosen[r.Id] && r.Score >= cutoff)
                 .map((r) => ({
                     Type: r.Kind === 'Series' ? 'Series' : 'Movie',
                     ItemId: r.Id,
@@ -200,6 +236,7 @@
             answer = null;
             chosen = {};
             scoreError = null;
+            cutoff = 0;
         } else {
             pickedGenres = [];
             folderId = null;
@@ -262,13 +299,30 @@
                     <div class="engine" class:bad={!words.good}>{words.text}</div>
                 {/if}
 
+                {#if answer && answer.Results.length > 0}
+                    <div class="cutoff">
+                        <span class="cutoff-label">Only show titles scoring at least</span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={cutoff}
+                            oninput={(e) => setCutoff(Number(e.currentTarget.value))}
+                            aria-label="Similarity cut-off"
+                        />
+                        <span class="cutoff-value">{cutoff}</span>
+                        <span class="cutoff-words">{cutoffWords}</span>
+                    </div>
+                {/if}
+
                 {#if scoreError}
                     <p class="bad">{scoreError}</p>
                 {:else if scoring}
                     <p class="none">Scoring…</p>
                 {:else if answer}
                     <div class="results">
-                        {#each answer.Results as result (result.Id)}
+                        {#each kept as result (result.Id)}
                             <label class="result">
                                 <input
                                     type="checkbox"
@@ -280,6 +334,11 @@
                                 <span class="ryear">{result.Year ?? ''}</span>
                                 <span class="rwhy">{result.SharedGenres.slice(0, 3).join(', ')}</span>
                             </label>
+                        {:else}
+                            <p class="none">
+                                Nothing scores {cutoff} or more. The slider is above; the best
+                                here is {Math.round(Math.max(0, ...answer.Results.map((r) => r.Score)))}.
+                            </p>
                         {/each}
                     </div>
                 {/if}
@@ -457,6 +516,29 @@
     }
 
     .engine.bad { background: rgba(217, 154, 58, .1); border-left-color: var(--lt-collection); }
+
+    .cutoff {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        flex-wrap: wrap;
+        font-size: 12.5px;
+        color: var(--lt-text-muted);
+    }
+
+    .cutoff input { flex: 1 1 180px; min-width: 120px; accent-color: var(--lt-accent); }
+
+    .cutoff-label { flex: 0 0 auto; }
+
+    .cutoff-value {
+        flex: 0 0 auto;
+        min-width: 26px;
+        font-weight: 700;
+        color: var(--lt-text-title);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .cutoff-words { flex: 0 0 auto; color: var(--lt-text-dim); font-size: 11.5px; }
 
     .results { display: flex; flex-direction: column; border: 1px solid var(--lt-line); border-radius: var(--lt-radius); overflow: hidden; }
 
