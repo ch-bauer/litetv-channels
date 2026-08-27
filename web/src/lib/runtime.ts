@@ -31,7 +31,18 @@ interface Timed {
     RunTimeTicks?: number;
 }
 
+/** Whether an id names nothing - dash-less or not; see the note in deal.ts. */
+function isEmptyId(id: string | null | undefined): boolean {
+    return !id || id.replace(/-/g, '').replace(/0/g, '').length === 0;
+}
+
 async function minutesOf(source: ChannelSource, episodesPerBlock: number): Promise<{ minutes: number; known: boolean }> {
+    // Nothing of the library's behind it - a YouTube playlist. Asking about the all-zero id is
+    // a 400 from Jellyfin, not an empty answer: see the note in deal.ts.
+    if (isEmptyId(source.ItemId)) {
+        return { minutes: 0, known: false };
+    }
+
     if (source.Type === 'Movie') {
         const item = await api().getJSON<Timed>(api().getUrl('Items/' + source.ItemId));
         const minutes = Math.round((item.RunTimeTicks ?? 0) / TICKS_PER_MINUTE);

@@ -16,6 +16,15 @@
 import { api } from './jellyfin';
 import type { ChannelSource, PlayOrder } from './types';
 
+/**
+ * Whether an id names nothing. Jellyfin writes guids without dashes in a plugin configuration
+ * and with them elsewhere, so this compares the digits rather than the spelling - a literal
+ * comparison is how "no artwork chosen" once read as "artwork chosen".
+ */
+function isEmptyId(id: string | null | undefined): boolean {
+    return !id || id.replace(/-/g, '').replace(/0/g, '').length === 0;
+}
+
 export interface DealtItem {
     id: string;
     label: string;
@@ -45,6 +54,19 @@ function episodeLabel(item: LibraryItem): string {
  * expanding a 111-episode series in full to show six lines would be absurd.
  */
 async function expand(source: ChannelSource, cap: number): Promise<DealtItem[]> {
+    /*
+        A source with no library item behind it - a YouTube playlist - carries the all-zero id.
+        Asking Jellyfin for `parentId=000...` is not an empty answer: `GetParentItem` hands it
+        straight to `GetItemById`, which THROWS on an empty guid, and the request comes back 400
+        with a stack trace in the server's log. It is the same trap the plugin's own lookups had.
+
+        The playlist is expanded when the week is laid out, by the server, from the address - so
+        the honest preview here is the source itself, named as it is on the list.
+    */
+    if (isEmptyId(source.ItemId)) {
+        return [{ id: source.Url ?? source.Name, label: source.Name, sourceIndex: 0 }];
+    }
+
     if (source.Type === 'Movie') {
         return [{ id: source.ItemId, label: source.Name, sourceIndex: 0 }];
     }
