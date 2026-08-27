@@ -153,7 +153,7 @@ public class ChannelPlaylistBuilder
     /// <returns>The trailers, longest last; empty when the library has none.</returns>
     public IReadOnlyList<ScheduledEntry> TrailersFor(Guid itemId)
     {
-        var item = _libraryManager.GetItemById(itemId);
+        var item = _libraryManager.Find(itemId);
         if (item is null)
         {
             return Array.Empty<ScheduledEntry>();
@@ -177,7 +177,7 @@ public class ChannelPlaylistBuilder
     /// <param name="itemId">The item.</param>
     /// <returns>The runtime in ticks.</returns>
     public long RuntimeOf(Guid itemId)
-        => _libraryManager.GetItemById(itemId)?.RunTimeTicks ?? 0;
+        => _libraryManager.Find(itemId)?.RunTimeTicks ?? 0;
 
     /// <summary>
     /// What a library item is called, or an empty string when it is gone. An episode is named
@@ -188,7 +188,7 @@ public class ChannelPlaylistBuilder
     /// <returns>The name.</returns>
     public string NameOf(Guid itemId)
     {
-        var item = _libraryManager.GetItemById(itemId);
+        var item = _libraryManager.Find(itemId);
         if (item is null)
         {
             return string.Empty;
@@ -215,7 +215,7 @@ public class ChannelPlaylistBuilder
     /// <returns>Whether it has a trailer of any kind.</returns>
     public bool HasTrailer(Guid itemId)
     {
-        var item = _libraryManager.GetItemById(itemId);
+        var item = _libraryManager.Find(itemId);
         if (item is null)
         {
             return false;
@@ -233,7 +233,7 @@ public class ChannelPlaylistBuilder
 
         if (item is MediaBrowser.Controller.Entities.TV.Episode episode && episode.SeriesId != Guid.Empty)
         {
-            var series = _libraryManager.GetItemById(episode.SeriesId);
+            var series = _libraryManager.Find(episode.SeriesId);
             return series?.RemoteTrailers.Any(t => !string.IsNullOrEmpty(t.Url)) == true;
         }
 
@@ -249,7 +249,7 @@ public class ChannelPlaylistBuilder
     /// <returns>The address, or null.</returns>
     public string? RemoteTrailerUrl(Guid itemId)
     {
-        var item = _libraryManager.GetItemById(itemId);
+        var item = _libraryManager.Find(itemId);
         if (item is null)
         {
             return null;
@@ -265,7 +265,7 @@ public class ChannelPlaylistBuilder
         // the same fallback HasTrailer makes.
         if (item is MediaBrowser.Controller.Entities.TV.Episode episode && episode.SeriesId != Guid.Empty)
         {
-            return _libraryManager.GetItemById(episode.SeriesId)?
+            return _libraryManager.Find(episode.SeriesId)?
                 .RemoteTrailers.FirstOrDefault(t => !string.IsNullOrEmpty(t.Url))?.Url;
         }
 
@@ -280,7 +280,7 @@ public class ChannelPlaylistBuilder
     /// <returns>The decade, or zero.</returns>
     public int DecadeOf(Guid itemId)
     {
-        var year = _libraryManager.GetItemById(itemId)?.ProductionYear ?? 0;
+        var year = _libraryManager.Find(itemId)?.ProductionYear ?? 0;
         return year > 0 ? year / 10 * 10 : 0;
     }
 
@@ -432,7 +432,7 @@ public class ChannelPlaylistBuilder
                 continue;
             }
 
-            var item = _libraryManager.GetItemById(source.ItemId);
+            var item = _libraryManager.Find(source.ItemId);
             if (item is null)
             {
                 _logger.LogWarning("LiteTV channel {Channel}: source item {ItemId} no longer exists; skipping.", channelName, source.ItemId);

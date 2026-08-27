@@ -1,5 +1,8 @@
 using System;
 using Jellyfin.Plugin.LiteTv.Api;
+using Jellyfin.Plugin.LiteTv.Core;
+using MediaBrowser.Controller.Library;
+using NSubstitute;
 using Xunit;
 
 namespace Jellyfin.Plugin.LiteTv.Tests;
@@ -56,5 +59,43 @@ public class PlacedLengthTests
     public void AShortIdentTheWeekCanHold_KeepsItsOwnLength()
     {
         Assert.Equal(30, LiteTvController.LengthOf(0, TimeSpan.FromSeconds(30).Ticks));
+    }
+}
+
+/// <summary>
+/// Half of what a channel schedules has no library item behind it - an advert is an address, a
+/// trailer is an address, and a break announcing nothing has no programme to name. Every one of
+/// those carries an empty guid, and Jellyfin's <c>GetItemById</c> <b>throws</b> on one rather
+/// than answering null.
+/// <para>
+/// One advert on air with nothing trailed made <c>GET /LiteTv/Channels</c> answer 400; the app
+/// reads a failure there as "this server has no LiteTV" and drops the whole TV section from its
+/// navigation drawer. Nothing anywhere said why, and whether it happened at all depended on what
+/// was airing at the moment somebody opened the app.
+/// </para>
+/// </summary>
+public class EmptyIdTests
+{
+    [Fact]
+    public void AnEmptyId_MeansNoItem_AndTheLibraryIsNeverAsked()
+    {
+        var library = Substitute.For<ILibraryManager>();
+        library.GetItemById(Arg.Any<Guid>())
+            .Returns(_ => throw new ArgumentException("Guid can't be empty", "id"));
+
+        // No throw, no lookup: an empty id is the answer, not a question.
+        Assert.Null(library.Find(Guid.Empty));
+        library.DidNotReceive().GetItemById(Arg.Any<Guid>());
+    }
+
+    [Fact]
+    public void ARealId_IsAsked()
+    {
+        var library = Substitute.For<ILibraryManager>();
+        var id = Guid.NewGuid();
+
+        library.Find(id);
+
+        library.Received(1).GetItemById(id);
     }
 }

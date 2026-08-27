@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "A channel can be deleted again. The old configuration page had a \"Remove this channel\" card and the rebuilt app lost it, which left a configuration you could only ever add to. It is back on Settings, where it was: two presses, because there is no undo, and the second one names the channel it is about to remove. Nothing reaches the server until Save, as everywhere else here. Two things behind it also had to be put right. A channel's schedule is kept in its own file rather than in the configuration - deliberately, so that saving the configuration can never destroy a week somebody spent an evening arranging - which meant a deleted channel would have left its schedule behind for ever, belonging to nothing and invisible to everyone. The server now throws that away when it notices the channel has gone, and refuses to do any such tidying when the channel list reads empty, since that is also what a configuration looks like when it has failed to load. And deleting the very last channel used to hide the Save button along with the channel it belonged to, so the one change you had just made could not be written down; the header stays now, and says what pressing Save would do.",
+  "changelog": "The app's whole TV section could disappear, and this is why. Jellyfin's own library lookup throws an error when it is handed an empty id instead of answering \"no such item\" - and half of what a channel schedules has no library item behind it at all: an advert is an address, a trailer is an address, and a break that is not announcing anything has no programme to name. One of those on air was enough to make the request that lists channels fail outright. The app reads a failure there as \"this server does not have the plugin\" and quietly takes TV out of its menu, so the channels vanished with nothing anywhere saying why - and whether it happened depended entirely on what happened to be airing at the moment somebody opened the app, which is why it looked random. Every library lookup in the plugin now treats an empty id as nothing rather than as a question, in one place that all of them go through; seventeen of them were unguarded. Caught by opening the app on an emulator and finding no TV section at all, then reading the server's log rather than the app's.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-27T20:10:00.000Z",
-  "version": "1.0.75.0",
+  "timestamp": "2026-08-27T20:35:00.000Z",
+  "version": "1.0.76.0",
   "status": "Active",
   "autoUpdate": false
 }

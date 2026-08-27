@@ -560,7 +560,7 @@ public class LiteTvController : ControllerBase
     private int LengthOf(WeekAiringDto airing)
     {
         var ticks = airing.ItemId is { } itemId && itemId != Guid.Empty
-            ? _libraryManager.GetItemById(itemId)?.RunTimeTicks ?? 0
+            ? _libraryManager.Find(itemId)?.RunTimeTicks ?? 0
             : 0;
         return LengthOf(airing.DurationSeconds, ticks);
     }
@@ -1301,7 +1301,7 @@ public class LiteTvController : ControllerBase
                 yield return id;
             }
 
-            if (_libraryManager.GetItemById(id) is not BoxSet boxSet)
+            if (_libraryManager.Find(id) is not BoxSet boxSet)
             {
                 continue;
             }
@@ -1382,7 +1382,7 @@ public class LiteTvController : ControllerBase
     {
         if (!cache.TryGetValue(itemId, out var item))
         {
-            cache[itemId] = item = _libraryManager.GetItemById(itemId);
+            cache[itemId] = item = _libraryManager.Find(itemId);
         }
 
         return item;
@@ -1395,7 +1395,7 @@ public class LiteTvController : ControllerBase
     /// </summary>
     private List<TrailerDto> RemoteTrailers(Guid itemId)
     {
-        var item = _libraryManager.GetItemById(itemId);
+        var item = _libraryManager.Find(itemId);
 
         // An episode almost never has trailers of its own - the providers attach them to the
         // series - so a channel advertising "SpongeBob at 20:15" would find nothing to play
@@ -1403,7 +1403,7 @@ public class LiteTvController : ControllerBase
         // is being advertised is the programme, and nobody cuts a trailer per episode.
         if (item is Episode episode && (item.RemoteTrailers is null || item.RemoteTrailers.Count == 0))
         {
-            item = episode.SeriesId != Guid.Empty ? _libraryManager.GetItemById(episode.SeriesId) ?? item : item;
+            item = episode.SeriesId != Guid.Empty ? _libraryManager.Find(episode.SeriesId) ?? item : item;
         }
 
         return item?.RemoteTrailers
@@ -1578,7 +1578,7 @@ public class LiteTvController : ControllerBase
 
             foreach (var match in scored.Results)
             {
-                var item = _libraryManager.GetItemById(match.Id);
+                var item = _libraryManager.Find(match.Id);
                 if (item == null)
                 {
                     continue;
@@ -1602,7 +1602,7 @@ public class LiteTvController : ControllerBase
         result.Engine = "Rough";
 
         var seedItems = seeds
-            .Select(id => _libraryManager.GetItemById(id))
+            .Select(id => _libraryManager.Find(id))
             .OfType<BaseItem>()
             .Where(item => item is Movie or Series)
             .ToList();
@@ -1639,7 +1639,7 @@ public class LiteTvController : ControllerBase
 
         foreach (var match in ranked)
         {
-            var item = _libraryManager.GetItemById(match.Id);
+            var item = _libraryManager.Find(match.Id);
             if (item == null)
             {
                 continue;
