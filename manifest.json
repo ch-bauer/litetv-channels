@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.71.0",
+        "changelog": "The configuration page in 1.0.70.0 was blank, and this makes it appear. The new page waited for an event this dashboard does not send - it listened for viewshow, while the page it replaced had listened for pageshow for seventy releases - so the handler that loads the app never ran, no script tag was ever made, and the notice that exists to say the app is missing could not fire either. It now listens for both names, because a lifecycle whose name changed between versions has to be met halfway. A second fault behind that one is fixed at the same time: a module is evaluated once per document, so leaving the page and coming back would have re-added a script tag that never ran, and the page would have worked exactly once. Each visit now loads under its own query string and Svelte takes the previous one down properly. The link to the previous configuration page is gone; it never worked, for the same reason nothing else on the page did.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.71.0/litetv-channels_1.0.71.0.zip",
+        "checksum": "c34a9311ebbf4429d22aa380bbec5038",
+        "timestamp": "2026-08-27T12:45:00.000Z"
+      },
+      {
         "version": "1.0.70.0",
         "changelog": "The configuration page is no longer a page. It is a web app - Vite, TypeScript and Svelte - built from the design boards and shipped inside the plugin, the way the Segment Editor plugin packages its editor. All nine screens were ported: the week and the day, content, breaks, look, settings, the server, and both halves of making a channel out of what the library already holds. Most of what was wrong with the old page was wrong because it was one very large HTML file wearing dashboard components, and those complaints are simply gone: the cramped shelf, the search bar, the boxes that sized themselves oddly, the scaling. The rest were real and are answered - a selected slot can be unselected, the shelf is a list you drag entries out of, Delete removes and the arrow keys move, the grid opens scrolled to the now line, taking a channel off this week happens at once instead of after a round trip, and a block is edited without the whole week in the way. Two things arrived alongside it: a channel now says how long it takes to play through in words, and a YouTube playlist can be a channel source. The page as it was is still installed beside the new one and there is a link to it at the foot, because a rewrite with no way back is one nobody can afford to try.",
         "targetAbi": "10.11.0.0",
