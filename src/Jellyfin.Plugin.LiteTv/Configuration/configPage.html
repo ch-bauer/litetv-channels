@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>LiteTV</title>
 </head>
 <body>
     <!--
         The configuration page is now an app, built by Vite in web/ and embedded in the plugin;
-        this file only mounts it. Everything it used to be is still here as configPage.legacy.html
-        and reachable from the notice below, until the new one has been lived with.
+        this file only mounts it. Everything it used to be is still here as configPage.legacy.html,
+        registered as the hidden page "LiteTV (previous page)".
 
         Why an app at all: the old page was one very large hand-written file wearing the
         dashboard's own components, and most of what was wrong with it was wrong because of that.
@@ -28,80 +28,115 @@
                 </p>
             </div>
         </div>
-    </div>
 
-    <script type="text/javascript">
-        (function () {
-            var page = document.querySelector('#litetvConfigPage');
+        <script type="text/javascript">
+            (function () {
+                // The script lives INSIDE the page div, where the page that worked for seventy
+                // releases kept it. 1.0.70.0 moved it out to a sibling of the div, and a host
+                // that injects only the page element's own subtree would drop it on the floor -
+                // which looks exactly like a lifecycle event that never fired. Cheap to match.
+                var page = document.currentScript
+                    ? document.currentScript.parentNode
+                    : document.querySelector('#litetvConfigPage');
 
-            // Each visit loads the module under its own query string. A module URL is evaluated
-            // ONCE per document, so re-adding the same src after a viewhide would append a tag
-            // that never runs - the page would work the first time and be blank on every return
-            // to it. The bundle is served no-store anyway, so nothing is being defeated here.
-            var visit = 0;
+                // Breadcrumbs. A blank page could previously say nothing about itself: the notice
+                // above only appears once a script tag exists to fail, so any fault upstream of
+                // that was silent. This object is always here, so one console line reports how
+                // far the loader got:  window.__litetvLoader
+                var trail = window.__litetvLoader = {
+                    ran: true, page: !!page, mounted: false, starts: [], errors: []
+                };
+                if (!page) { return; }
 
-            // Where the plugin serves its own bundle. Both files keep stable names precisely so
-            // this file can name them; everything else in the bundle is content-hashed.
-            function url(file) {
-                var u = ApiClient.getUrl('LiteTv/Web/' + file);
-                return u + (u.indexOf('?') === -1 ? '?' : '&') + 'v=' + visit;
-            }
+                // Each visit loads the module under its own query string. A module URL is
+                // evaluated ONCE per document, so re-adding the same src after a hide would
+                // append a tag that never runs - the page would work the first time and be blank
+                // on every return to it. The counter hangs off `window`, not off this closure:
+                // the host re-runs this script on each visit, and a closure variable would reset
+                // to zero and hand out a URL the document had already evaluated.
+                window.__litetvVisit = window.__litetvVisit || 0;
 
-            function showMissing() {
-                var notice = page.querySelector('#litetvBundleMissing');
-                if (notice) { notice.style.display = 'block'; }
-            }
-
-            function show() {
-                // Both events are listened for, so this must be idempotent. It also guards the
-                // case of a show arriving without an intervening hide.
-                if (page.getAttribute('data-litetv-loaded') === 'yes') { return; }
-                page.setAttribute('data-litetv-loaded', 'yes');
-                visit++;
-
-                var css = document.createElement('link');
-                css.rel = 'stylesheet';
-                css.href = url('litetv.css');
-                css.id = 'litetvAppCss';
-                document.head.appendChild(css);
-
-                var script = document.createElement('script');
-                script.type = 'module';
-                script.src = url('litetv.js');
-                script.id = 'litetvAppJs';
-                script.onerror = showMissing;
-                document.head.appendChild(script);
-            }
-
-            function hide() {
-                if (page.getAttribute('data-litetv-loaded') !== 'yes') { return; }
-                page.removeAttribute('data-litetv-loaded');
-
-                // Let Svelte take its own effects down. Clearing the host would orphan them.
-                if (typeof window.__litetvUnmount === 'function') {
-                    try { window.__litetvUnmount(); } catch (e) { console.error('[litetv]', e); }
+                function url(file) {
+                    var u = ApiClient.getUrl('LiteTv/Web/' + file);
+                    return u + (u.indexOf('?') === -1 ? '?' : '&') + 'v=' + window.__litetvVisit;
                 }
-                delete window.__litetvUnmount;
 
-                ['litetvAppCss', 'litetvAppJs'].forEach(function (id) {
-                    var node = document.getElementById(id);
-                    if (node && node.parentNode) { node.parentNode.removeChild(node); }
-                });
-                var host = page.querySelector('#litetv-app');
-                if (host) { host.innerHTML = ''; }
-            }
+                function showMissing() {
+                    trail.errors.push('script onerror');
+                    var notice = page.querySelector('#litetvBundleMissing');
+                    if (notice) { notice.style.display = 'block'; }
+                }
 
-            // BOTH names, and this is not belt-and-braces. This dashboard fires `pageshow` - the
-            // page that worked for seventy releases listened for exactly that - while `viewshow`
-            // is the newer name and fires in other versions. Listening for only `viewshow` is
-            // what shipped in 1.0.70.0, and the result was a blank page with nothing able to say
-            // why: no handler ran, so no script tag was ever made, so `onerror` could never fire
-            // either. A lifecycle whose name changed between versions has to be met halfway.
-            page.addEventListener('pageshow', show);
-            page.addEventListener('viewshow', show);
-            page.addEventListener('pagehide', hide);
-            page.addEventListener('viewhide', hide);
-        })();
-    </script>
+                function show(why) {
+                    trail.starts.push(why);
+
+                    // Called from four events and from the self-start below, so it must be
+                    // idempotent. It also guards a show arriving without an intervening hide.
+                    if (page.getAttribute('data-litetv-loaded') === 'yes') { return; }
+                    if (typeof ApiClient === 'undefined' || !ApiClient) {
+                        trail.errors.push('no ApiClient at ' + why);
+                        return;
+                    }
+                    page.setAttribute('data-litetv-loaded', 'yes');
+                    window.__litetvVisit++;
+                    trail.mounted = true;
+
+                    var css = document.createElement('link');
+                    css.rel = 'stylesheet';
+                    css.href = url('litetv.css');
+                    css.id = 'litetvAppCss';
+                    document.head.appendChild(css);
+
+                    var script = document.createElement('script');
+                    script.type = 'module';
+                    script.src = url('litetv.js');
+                    script.id = 'litetvAppJs';
+                    script.onerror = showMissing;
+                    document.head.appendChild(script);
+                }
+
+                function hide() {
+                    if (page.getAttribute('data-litetv-loaded') !== 'yes') { return; }
+                    page.removeAttribute('data-litetv-loaded');
+                    trail.mounted = false;
+
+                    // Let Svelte take its own effects down. Clearing the host would orphan them.
+                    if (typeof window.__litetvUnmount === 'function') {
+                        try { window.__litetvUnmount(); } catch (e) { console.error('[litetv]', e); }
+                    }
+                    delete window.__litetvUnmount;
+
+                    ['litetvAppCss', 'litetvAppJs'].forEach(function (id) {
+                        var node = document.getElementById(id);
+                        if (node && node.parentNode) { node.parentNode.removeChild(node); }
+                    });
+                    var host = page.querySelector('#litetv-app');
+                    if (host) { host.innerHTML = ''; }
+                }
+
+                // THE PAGE MOUNTS ITSELF, and the events are a safety net for returning to it.
+                //
+                // This is the whole bug in 1.0.70.0 and 1.0.71.0. The legacy page registered a
+                // `pageshow` listener AND called its loader on a timeout - and the timeout is
+                // what actually mounted it, every time, for seventy releases. The app kept the
+                // listener and dropped the timeout, so it sat waiting for an event that does not
+                // arrive here under either name, and 1.0.71.0's "listen for `viewshow` too"
+                // could not help. Nothing is gained by asking permission to draw a page the host
+                // has already put in the document: `show()` is idempotent, so self-starting
+                // costs nothing and removes the entire class of failure.
+                //
+                // A tick later, so the dashboard gets first refusal on a page it is about to
+                // show anyway - and a second attempt a beat after that, for the case where
+                // `ApiClient` is not yet up when the host injects the page.
+                setTimeout(function () { show('self-start'); }, 0);
+                setTimeout(function () { show('self-start retry'); }, 300);
+
+                page.addEventListener('pageshow', function () { show('pageshow'); });
+                page.addEventListener('viewshow', function () { show('viewshow'); });
+                page.addEventListener('pagehide', hide);
+                page.addEventListener('viewhide', hide);
+            })();
+        </script>
+    </div>
 </body>
 </html>

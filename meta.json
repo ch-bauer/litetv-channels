@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "The configuration page in 1.0.70.0 was blank, and this makes it appear. The new page waited for an event this dashboard does not send - it listened for viewshow, while the page it replaced had listened for pageshow for seventy releases - so the handler that loads the app never ran, no script tag was ever made, and the notice that exists to say the app is missing could not fire either. It now listens for both names, because a lifecycle whose name changed between versions has to be met halfway. A second fault behind that one is fixed at the same time: a module is evaluated once per document, so leaving the page and coming back would have re-added a script tag that never ran, and the page would have worked exactly once. Each visit now loads under its own query string and Svelte takes the previous one down properly. The link to the previous configuration page is gone; it never worked, for the same reason nothing else on the page did.",
+  "changelog": "The configuration page was blank in 1.0.70.0 and still blank in 1.0.71.0, and this makes it appear. Both releases had the same shape of fault: the page waited to be told to draw itself. 1.0.71.0 added the second event name on the theory that the first one was wrong, and it changed nothing, because no such event arrives here under either name. The page it replaced had in fact never depended on one - it registered a listener and also loaded itself a tick later, and the tick is what drew it, every time, for seventy releases. That line was the part that got left behind. The page now mounts itself as soon as it is in the document and uses the events only to tidy up on the way out, which costs nothing, since loading was already written to be safe to ask for twice. The script has also moved back inside the page element, where the old one lived, so a host that injects only that element cannot drop it. And the loader now leaves a trail of what it did, so a page that comes up empty can say why instead of saying nothing.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-27T12:45:00.000Z",
-  "version": "1.0.71.0",
+  "timestamp": "2026-08-27T15:30:00.000Z",
+  "version": "1.0.72.0",
   "status": "Active",
   "autoUpdate": false
 }
