@@ -256,6 +256,16 @@ public sealed class YouTubePlaylist
                     return;
                 }
 
+                // What YouTube actually sends now. Measured 27 Aug 2026 against a real playlist:
+                // the WEB browse response carries no `playlistVideoRenderer` at all any more -
+                // every entry is a `lockupViewModel`. The old shape is kept because a walk costs
+                // nothing and this is the third shape these entries have had.
+                if (element.TryGetProperty("lockupViewModel", out var lockup))
+                {
+                    TakeLockup(lockup, items, seen);
+                    return;
+                }
+
                 if (element.TryGetProperty("continuationCommand", out var command)
                     && command.TryGetProperty("token", out var token)
                     && token.GetString() is { Length: > 0 } text)
@@ -293,6 +303,105 @@ public sealed class YouTubePlaylist
         var seconds = Seconds(video);
 
         items.Add(new Item(videoId, title, seconds));
+    }
+
+    /// <summary>
+    /// One entry in the shape YouTube uses today.
+    /// <para>
+    /// A lockup keeps the same three facts somewhere else: the video id is <c>contentId</c>, the
+    /// title is <c>metadata.lockupMetadataViewModel.title.content</c>, and the length is only
+    /// ever the badge drawn over the thumbnail - "9:52" - so it is read the same way a visible
+    /// duration always was.
+    /// </para>
+    /// <para>
+    /// The content type is checked, because a playlist page also lockups things that are not
+    /// videos, and scheduling a channel or a playlist as if it were a programme is worse than
+    /// skipping it.
+    /// </para>
+    /// </summary>
+    /// <param name="lockup">The lockup.</param>
+    /// <param name="items">Where to put what is found.</param>
+    /// <param name="seen">Video ids already taken.</param>
+    private static void TakeLockup(JsonElement lockup, List<Item> items, HashSet<string> seen)
+    {
+        if (lockup.TryGetProperty("contentType", out var type)
+            && type.GetString() is { Length: > 0 } kind
+            && !kind.Contains("VIDEO", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!lockup.TryGetProperty("contentId", out var idElement)
+            || idElement.GetString() is not { Length: > 0 } videoId
+            || !seen.Add(videoId))
+        {
+            return;
+        }
+
+        var title = videoId;
+        if (lockup.TryGetProperty("metadata", out var metadata)
+            && metadata.TryGetProperty("lockupMetadataViewModel", out var model)
+            && model.TryGetProperty("title", out var titleNode)
+            && titleNode.TryGetProperty("content", out var content)
+            && content.GetString() is { Length: > 0 } written)
+        {
+            title = written;
+        }
+
+        items.Add(new Item(videoId, title, LockupSeconds(lockup)));
+    }
+
+    /// <summary>
+    /// The length badge on a lockup's thumbnail, in seconds, or zero when there is not one -
+    /// which is what a live entry looks like.
+    /// </summary>
+    /// <param name="lockup">The lockup.</param>
+    /// <returns>The length in seconds.</returns>
+    private static int LockupSeconds(JsonElement lockup)
+    {
+        var text = FirstBadgeText(lockup);
+        return text is null ? 0 : Clock(text);
+    }
+
+    private static string? FirstBadgeText(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                if (element.TryGetProperty("thumbnailBadgeViewModel", out var badge)
+                    && badge.TryGetProperty("text", out var badgeText)
+                    && badgeText.GetString() is { Length: > 0 } written
+                    // A badge also carries "New", "4K" and the like; a length has a colon in it.
+                    && written.Contains(':', StringComparison.Ordinal))
+                {
+                    return written;
+                }
+
+                foreach (var property in element.EnumerateObject())
+                {
+                    var found = FirstBadgeText(property.Value);
+                    if (found is not null)
+                    {
+                        return found;
+                    }
+                }
+
+                break;
+
+            case JsonValueKind.Array:
+                foreach (var child in element.EnumerateArray())
+                {
+                    var found = FirstBadgeText(child);
+                    if (found is not null)
+                    {
+                        return found;
+                    }
+                }
+
+                break;
+        }
+
+        return null;
     }
 
     /// <summary>YouTube writes text as either a plain string, a "simpleText", or "runs".</summary>
@@ -336,11 +445,16 @@ public sealed class YouTubePlaylist
         }
 
         var text = Text(video, "lengthText");
-        if (text is null)
-        {
-            return 0;
-        }
+        return text is null ? 0 : Clock(text);
+    }
 
+    /// <summary>
+    /// A visible duration - "9:52", "1:04:11" - in seconds, or zero when it is not one.
+    /// </summary>
+    /// <param name="text">The written duration.</param>
+    /// <returns>The seconds.</returns>
+    private static int Clock(string text)
+    {
         var total = 0;
         foreach (var part in text.Split(':'))
         {

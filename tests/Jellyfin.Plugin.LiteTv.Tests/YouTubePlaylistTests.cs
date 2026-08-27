@@ -88,6 +88,88 @@ public class YouTubePlaylistTests
         Assert.Equal(95, items[1].Seconds);
     }
 
+    /// <summary>
+    /// The shape YouTube actually sends, taken from a real playlist on 27 Aug 2026.
+    /// <para>
+    /// There is not one <c>playlistVideoRenderer</c> in that response any more - every entry is
+    /// a <c>lockupViewModel</c>, with the id in <c>contentId</c>, the title two levels down in
+    /// <c>lockupMetadataViewModel</c>, and the length only as the badge drawn on the thumbnail.
+    /// Reading zero videos from a real playlist is what this looked like from outside, and it
+    /// was silent: no exception, no warning, just an empty playlist.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void TodaysShape_IsRead()
+    {
+        var json = Response("""
+        { "contents": { "x": [ { "lockupViewModel": {
+            "contentId": "fNk_zzaMoSs",
+            "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+            "contentImage": { "thumbnailViewModel": { "overlays": [ { "thumbnailBottomOverlayViewModel": {
+              "badges": [ { "thumbnailBadgeViewModel": { "text": "9:52" } } ] } } ] } },
+            "metadata": { "lockupMetadataViewModel": {
+              "title": { "content": "Vectors | Chapter 1" } } }
+        } } ] } }
+        """);
+
+        var items = new List<YouTubePlaylist.Item>();
+        YouTubePlaylist.Harvest(json, items, new HashSet<string>(StringComparer.Ordinal));
+
+        var only = Assert.Single(items);
+        Assert.Equal("fNk_zzaMoSs", only.VideoId);
+        Assert.Equal("Vectors | Chapter 1", only.Title);
+        Assert.Equal(9 * 60 + 52, only.Seconds);
+        Assert.Equal("https://www.youtube.com/watch?v=fNk_zzaMoSs", only.Url);
+    }
+
+    [Fact]
+    public void ALockupThatIsNotAVideo_IsNotScheduled()
+    {
+        // A playlist page also lockups channels and other playlists. Airing one as a programme
+        // is worse than skipping it.
+        var json = Response("""
+        { "x": [
+          { "lockupViewModel": {
+              "contentId": "UCsomethingchannel",
+              "contentType": "LOCKUP_CONTENT_TYPE_CHANNEL",
+              "metadata": { "lockupMetadataViewModel": { "title": { "content": "Some channel" } } } } },
+          { "lockupViewModel": {
+              "contentId": "ccccccccccc",
+              "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+              "metadata": { "lockupMetadataViewModel": { "title": { "content": "A video" } } } } }
+        ] }
+        """);
+
+        var items = new List<YouTubePlaylist.Item>();
+        YouTubePlaylist.Harvest(json, items, new HashSet<string>(StringComparer.Ordinal));
+
+        var only = Assert.Single(items);
+        Assert.Equal("ccccccccccc", only.VideoId);
+        // No badge at all - a live entry looks like this, and it is kept, saying zero.
+        Assert.Equal(0, only.Seconds);
+    }
+
+    [Fact]
+    public void ABadgeThatIsNotADuration_IsNotReadAsOne()
+    {
+        var json = Response("""
+        { "x": [ { "lockupViewModel": {
+            "contentId": "ddddddddddd",
+            "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+            "contentImage": { "thumbnailViewModel": { "overlays": [ { "thumbnailBottomOverlayViewModel": {
+              "badges": [
+                { "thumbnailBadgeViewModel": { "text": "4K" } },
+                { "thumbnailBadgeViewModel": { "text": "1:04:11" } } ] } } ] } },
+            "metadata": { "lockupMetadataViewModel": { "title": { "content": "A long one" } } }
+        } } ] }
+        """);
+
+        var items = new List<YouTubePlaylist.Item>();
+        YouTubePlaylist.Harvest(json, items, new HashSet<string>(StringComparer.Ordinal));
+
+        Assert.Equal(3851, Assert.Single(items).Seconds);
+    }
+
     [Fact]
     public void TheVisibleDurationIsUsedWhenLengthSecondsIsAbsent()
     {
