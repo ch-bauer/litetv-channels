@@ -14,7 +14,6 @@
     import Card from '../lib/ui/Card.svelte';
     import Note from '../lib/ui/Note.svelte';
     import SectionTitle from '../lib/ui/SectionTitle.svelte';
-    import { store } from '../lib/config.svelte';
     import { mmss, resolveDuration, skipNote, type Duration } from '../lib/api/duration';
     import type { TvChannel } from '../lib/types';
 
@@ -85,7 +84,6 @@
                 Decade: 0,
                 Enabled: true,
             });
-            store.touch();
             url = '';
             name = '';
         } finally {
@@ -95,7 +93,6 @@
 
     function remove(index: number): void {
         adverts.splice(index, 1);
-        store.touch();
     }
 
     function lengthOf(advert: Advert): string {

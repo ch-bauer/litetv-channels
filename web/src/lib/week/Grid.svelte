@@ -8,6 +8,8 @@
            grid, or Escape. The old page could only ever move the selection to something else.
          - **The now line**, and the grid **opens scrolled to it** rather than at the top of the
            day. Arriving at midnight to look at a channel that is on air now was absurd.
+         - **Drag to move.** A bar is dragged to another time or another day, and it lands
+           where it looks like it is landing - the grab point is kept, not the bar's top edge.
          - **Keyboard**: Delete takes the selected airing off; the arrows move between airings;
            Alt with an arrow nudges the selected one by five minutes.
          - **It scales.** Day columns are fractions, not fixed widths, and the body scrolls
@@ -125,17 +127,56 @@
         }
     }
 
+    /*
+        Two things can be dragged onto a day, and they are told apart by what the drag carries:
+        an entry from the shelf, which the screen turns into a new airing, and a bar already on
+        the week, which is a move. A move is done here because only the grid knows the airing.
+    */
     function onDrop(event: DragEvent, day: number): void {
         event.preventDefault();
         const payload = event.dataTransfer?.getData('text/plain');
-        if (!payload || !onDropItem) { return; }
+        if (!payload) { return; }
+
         const column = event.currentTarget as HTMLElement;
-        const y = event.clientY - column.getBoundingClientRect().top;
+        const y = event.clientY - column.getBoundingClientRect().top - grabbedAt;
         let second = day * SECONDS_PER_DAY + Math.max(0, y / pxPerSecond);
         // Alt drops on the second; otherwise it lands on the nearest five minutes, which is
         // what anyone actually means by dropping a programme "at eight".
         if (!event.altKey) { second = Math.round(second / 300) * 300; }
-        onDropItem(payload, Math.round(second));
+        second = Math.round(second);
+
+        let moved: WeekAiring | null = null;
+        try {
+            const parsed = JSON.parse(payload) as { airingId?: string };
+            if (parsed.airingId) {
+                moved = placed.find((a) => a.Id === parsed.airingId) ?? null;
+            }
+        } catch {
+            // Not ours. The screen decides what to do with it.
+        }
+
+        if (moved) {
+            // Everything the row already is, at a new time: the server keeps its length, its
+            // item and its offset, and bends the rest of the week around it.
+            void week.place({ ...moved, StartSecond: second });
+            return;
+        }
+
+        onDropItem?.(payload, second);
+    }
+
+    /*
+        Where in the bar it was picked up, so a programme dropped lands where it looks like it
+        is being dropped rather than jumping its own height up the day.
+    */
+    let grabbedAt = 0;
+
+    function onBarDragStart(event: DragEvent, airing: WeekAiring): void {
+        const bar = event.currentTarget as HTMLElement;
+        grabbedAt = event.clientY - bar.getBoundingClientRect().top;
+        event.dataTransfer?.setData('text/plain', JSON.stringify({ airingId: airing.Id }));
+        if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; }
+        week.selectedId = airing.Id;
     }
 </script>
 
@@ -177,8 +218,11 @@
                         type="button"
                         class="bar"
                         class:selected={week.selectedId === airing.Id}
+                        draggable="true"
+                        ondragstart={(e) => onBarDragStart(e, airing)}
+                        ondragend={() => (grabbedAt = 0)}
                         style="top: {topOf(airing, day)}px; height: {height}px; background: {KIND_FILL[airing.Kind]};"
-                        title="{airing.Name} — {clock(secondOfDay(airing.StartSecond))}, {Math.round(airing.DurationSeconds / 60)} min"
+                        title="{airing.Name} — {clock(secondOfDay(airing.StartSecond))}, {Math.round(airing.DurationSeconds / 60)} min · drag to move it"
                         onclick={(e) => pick(airing, e)}
                     >
                         {#if labelled(height)}{airing.Name}{/if}
@@ -270,8 +314,14 @@
 
     .bar:hover { filter: brightness(1.12); }
 
-    /* A ring, never a size change: a bar that grows on focus shoves its neighbours. */
-    .bar.selected { box-shadow: 0 0 0 2px #fff; }
+    /*
+        A ring, never a size change: a bar that grows on focus shoves its neighbours.
+        The ring is drawn INSIDE the bar. An outer ring reaches 2px beyond the box, into
+        the bar that starts where this one ends - and that bar, being later in the day, is
+        later in the DOM and paints over it. That is why the highlight had a top, a left
+        and a right and no bottom.
+    */
+    .bar.selected { box-shadow: inset 0 0 0 2px #fff; z-index: 1; }
 
     .now {
         position: absolute;

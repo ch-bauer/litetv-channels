@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { store } from '../config.svelte';
     import { search, toSource, type SearchHit } from '../search';
     import type { ChannelSource } from '../types';
 
@@ -30,7 +29,6 @@
             Name: 'YouTube playlist',
             Url: url,
         });
-        store.touch();
         playlist = '';
     }
 
@@ -77,7 +75,6 @@
     function add(hit: SearchHit): void {
         if (sources.some((s) => s.ItemId === hit.id)) { return; }
         sources.push(toSource(hit));
-        store.touch();
     }
 
     function already(hit: SearchHit): boolean {

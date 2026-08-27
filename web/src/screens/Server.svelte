@@ -157,7 +157,7 @@
                         <span class="label">Channel playback account</span>
                         <button type="button" class="help" class:on={accountHelp} onclick={() => (accountHelp = !accountHelp)} aria-label="About the playback account">?</button>
                     </div>
-                    <input class="text" bind:value={config.ChannelUserName} oninput={() => store.touch()} />
+                    <input class="text" bind:value={config.ChannelUserName} />
                     <p class="note">Channel viewing is recorded against this account, never yours.</p>
                     {#if accountHelp}
                         <p class="deeper">A channel plays with this account's token, so what it watches lands on its watch history and not on the account of whoever is looking. That is the whole reason it exists.</p>
@@ -173,7 +173,7 @@
                         <input
                             type="checkbox"
                             checked={config.SkipTrailerSegments}
-                            onchange={(e) => { config.SkipTrailerSegments = e.currentTarget.checked; store.touch(); }}
+                            onchange={(e) => { config.SkipTrailerSegments = e.currentTarget.checked; }}
                         />
                         <span>Ask SponsorBlock and skip what it names</span>
                     </label>
@@ -184,7 +184,7 @@
 
                 <div class="field">
                     <span class="label">Ask YouTube as</span>
-                    <input class="text" bind:value={config.YouTubeClient} oninput={() => store.touch()} placeholder="default" />
+                    <input class="text" bind:value={config.YouTubeClient} placeholder="default" />
                     <p class="note">
                         Only change this if trailers stop working; what YouTube hands over differs
                         by client and by day.

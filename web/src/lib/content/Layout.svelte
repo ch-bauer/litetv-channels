@@ -6,7 +6,6 @@
         they act on."
     */
     import Card from '../ui/Card.svelte';
-    import { store } from '../config.svelte';
     import { api } from '../jellyfin';
     import type { PlayOrder, TvChannel } from '../types';
 
@@ -38,7 +37,6 @@
 
     function setRightThrough(on: boolean): void {
         channel.EpisodesPerBlock = on ? 0 : 2;
-        store.touch();
     }
 
     const HELP = `A channel takes from each of its sources in turn.
@@ -64,7 +62,6 @@ With two, it plays two before moving on - which is what makes a channel that air
     function pick(order: PlayOrder): void {
         if (channel.Order === order) { return; }
         channel.Order = order;
-        store.touch();
     }
 </script>
 
@@ -129,7 +126,6 @@ With two, it plays two before moving on - which is what makes a channel that air
                     oninput={(event) => {
                         const n = Number(event.currentTarget.value);
                         channel.EpisodesPerBlock = Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
-                        store.touch();
                     }}
                     aria-label="How many at a time"
                 />

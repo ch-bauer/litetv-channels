@@ -20,7 +20,36 @@ function host(): HTMLElement {
     return made;
 }
 
-const app = mount(App, { target: host() });
+/*
+ * How tall the app is.
+ *
+ * It used to be `82vh` with a 720px floor, which is a guess about a page this app does not own:
+ * too short and the dashboard shows a band of empty ground under it - which is what "a big
+ * empty space at the bottom of the config page" was - and too tall and the whole dashboard
+ * scrolls past a page that already scrolls inside itself.
+ *
+ * So it is measured: from wherever the app actually starts, down to the bottom of the window.
+ * The dashboard animates a page in, so it is measured again once that has settled, and on every
+ * resize after.
+ */
+function fit(node: HTMLElement): void {
+    const measure = (): void => {
+        // Clamped at zero: scrolled down, the top is negative, and subtracting it would make the
+        // app grow every time it was measured.
+        const top = Math.max(0, node.getBoundingClientRect().top);
+        const height = Math.max(460, window.innerHeight - top - 16);
+        node.style.setProperty('--lt-app-height', height + 'px');
+    };
+
+    measure();
+    setTimeout(measure, 300);
+    window.addEventListener('resize', measure);
+}
+
+const target = host();
+fit(target);
+
+const app = mount(App, { target });
 
 /*
  * The host page takes the app down again when the view is hidden, and it has to be Svelte that

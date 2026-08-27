@@ -6,6 +6,8 @@
     import Grid from '../lib/week/Grid.svelte';
     import Shelf from '../lib/week/Shelf.svelte';
     import { week } from '../lib/week/weekStore.svelte';
+    import { store } from '../lib/config.svelte';
+    import { resolveDuration } from '../lib/api/duration';
     import { DAY_NAMES, KIND_FILL, clock, dayOf, secondOfDay } from '../lib/api/week';
     import type { TvChannel } from '../lib/types';
 
@@ -51,22 +53,55 @@
         });
     }
 
-    function onDropItem(payload: string, second: number): void {
+    /*
+        The server lays a week out from the configuration it HOLDS, so an unsaved change to the
+        channel's content would simply not be in it - the week would come back looking as though
+        the edit had been ignored. So this saves first, and says so on the button rather than
+        writing to the server behind the owner's back.
+    */
+    async function layOut(): Promise<void> {
+        if (store.dirty) {
+            await store.save();
+            // save() reports its own failure. Still dirty means it did not land, and laying the
+            // week out now would quietly use the old content.
+            if (store.dirty) { return; }
+        }
+        await week.generate();
+    }
+
+    async function onDropItem(payload: string, second: number): Promise<void> {
+        let dropped: { itemId: string | null; url: string | null; name: string };
         try {
-            const dropped = JSON.parse(payload) as { itemId: string | null; url: string | null; name: string };
-            void week.place({
-                ItemId: dropped.itemId,
-                Url: dropped.url ?? '',
-                Name: dropped.name,
-                Kind: 'Programme',
-                StartSecond: second,
-                // Length is the server's to decide from the item: a typed length is the control
-                // that turned out to be a lie twice over.
-                DurationSeconds: 0,
-            });
+            dropped = JSON.parse(payload) as typeof dropped;
         } catch {
             // Something else was dragged onto the grid. Nothing to do.
+            return;
         }
+
+        /*
+            Length is nobody's to type - it is the item's own runtime, which the server reads
+            from the library, or an address's playable length, which only the resolver knows.
+            Zero means "you work it out"; the server no longer stores it as a zero-length row.
+        */
+        let seconds = 0;
+        if (dropped.url) {
+            try {
+                const measured = await resolveDuration(dropped.url);
+                seconds = measured.PlayableSeconds > 0 ? measured.PlayableSeconds : measured.LengthSeconds;
+            } catch {
+                // The address could not be measured. The server's fallback length applies, and
+                // the row can be seen and moved rather than silently not being there.
+            }
+        }
+
+        await week.place({
+            ItemId: dropped.itemId,
+            Url: dropped.url ?? '',
+            Name: dropped.name,
+            Kind: 'Programme',
+            StartSecond: second,
+            DurationSeconds: Math.round(seconds),
+        });
     }
 </script>
 
@@ -99,8 +134,16 @@
             <span><i style="background: {KIND_FILL.Advert}"></i>Advert</span>
         </div>
 
-        <button type="button" class="chip" onclick={() => week.generate()} disabled={week.busy}>
-            {week.busy ? 'Working…' : 'Lay this week out'}
+        <button
+            type="button"
+            class="chip"
+            onclick={layOut}
+            disabled={week.busy}
+            title={store.dirty
+                ? 'The week is laid out by the server from the saved configuration, so this saves your changes first.'
+                : 'Lays the whole week out again from this channel’s content and settings.'}
+        >
+            {week.busy ? 'Working…' : store.dirty ? 'Save and lay this week out' : 'Lay this week out'}
         </button>
     </div>
 

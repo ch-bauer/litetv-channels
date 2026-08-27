@@ -394,7 +394,9 @@ public class LiteTvController : ControllerBase
 
         var week = _weeks.Get(channelId) ?? new StoredWeek { ChannelId = channelId };
         week.ChannelId = channelId;
-        week.Airings = WeekEditing.Place(week.Airings, FromDto(airing));
+        var placed = FromDto(airing);
+        placed.DurationSeconds = LengthOf(airing);
+        week.Airings = WeekEditing.Place(week.Airings, placed);
         _weeks.Save(week);
         return ToWeekDto(channel, week);
     }
@@ -463,6 +465,62 @@ public class LiteTvController : ControllerBase
     /// <summary>The stored row a page's payload describes.</summary>
     /// <param name="dto">The payload.</param>
     /// <returns>The row.</returns>
+    /// <summary>
+    /// What a fallback length is, in seconds, for something dropped onto the week that the
+    /// library cannot measure. Half an hour: long enough to see, grab and move, and obviously
+    /// a placeholder rather than a claim about the item.
+    /// </summary>
+    public const int UnknownLengthSeconds = 30 * 60;
+
+    /// <summary>
+    /// How long a placed row runs.
+    /// <para>
+    /// The page deliberately sends nothing when something is dragged onto the week: a typed
+    /// length has twice turned out to be a control that lied, and the number that matters is
+    /// the item's own runtime. So the length is resolved <b>here</b>, where the library is.
+    /// Storing the zero the page sent is how a dragged programme became a hairline nobody
+    /// could see, and read as "drag and drop does not work".
+    /// </para>
+    /// </summary>
+    /// <param name="sentSeconds">The length the page sent; zero or less means it did not know.</param>
+    /// <param name="runtimeTicks">The library item's runtime, or zero when there is none.</param>
+    /// <returns>The length in seconds, always more than nothing.</returns>
+    public static int LengthOf(int sentSeconds, long runtimeTicks)
+    {
+        if (sentSeconds > 0)
+        {
+            return sentSeconds;
+        }
+
+        if (runtimeTicks > 0)
+        {
+            var seconds = (int)Math.Round(runtimeTicks / (double)TimeSpan.TicksPerSecond);
+
+            // A runtime that rounds to less than the week will keep is no answer: the row would
+            // be dropped as a sliver, or drawn as a hairline, which is the fault being fixed.
+            if (seconds >= WeekEditing.MinimumRemainderSeconds)
+            {
+                return seconds;
+            }
+        }
+
+        // An address, or an item the library never measured. Something visible beats nothing.
+        return UnknownLengthSeconds;
+    }
+
+    /// <summary>
+    /// The same question with the library in hand: how long the row the page sent should run.
+    /// </summary>
+    /// <param name="airing">The row as the page sent it.</param>
+    /// <returns>The length in seconds.</returns>
+    private int LengthOf(WeekAiringDto airing)
+    {
+        var ticks = airing.ItemId is { } itemId && itemId != Guid.Empty
+            ? _libraryManager.GetItemById(itemId)?.RunTimeTicks ?? 0
+            : 0;
+        return LengthOf(airing.DurationSeconds, ticks);
+    }
+
     private static StoredAiring FromDto(WeekAiringDto dto)
     {
         return new StoredAiring

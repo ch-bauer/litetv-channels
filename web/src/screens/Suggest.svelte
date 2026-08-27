@@ -4,7 +4,8 @@
 
         Two halves, which are boards 7 and 8: start from a few titles you like, or start from a
         library and some genres. Both end the same way — a proposed lineup, a look at the evening
-        it would make, and Create / Tweak / Not that.
+        it would make, and Create / Not that - where "not that" is about the lineup, and clears
+        it rather than leaving the screen.
 
         **Nothing is saved until Save.** The channel is added to the configuration in the page and
         the screen says so, because a "Create" button that quietly writes to the server is how
@@ -183,6 +184,30 @@
         onDone();
     }
 
+    /*
+        "Not that" is an answer about the proposal, not about the screen: it stands beside
+        Create, so it means "not this lineup". It used to leave for whichever channel happened
+        to be selected, which read as the button dropping you somewhere at random.
+
+        It now throws the proposal away and leaves you here to ask for another. Leaving is what
+        the rail is for, and the hint under the buttons says so.
+    */
+    function notThat(): void {
+        if (half === 'titles') {
+            seeds = [];
+            hits = [];
+            term = '';
+            answer = null;
+            chosen = {};
+            scoreError = null;
+        } else {
+            pickedGenres = [];
+            folderId = null;
+            items = [];
+        }
+        name = 'New channel';
+    }
+
     function scoreOf(result: SuggestionMatch): string {
         return Math.round(result.Score) + '';
     }
@@ -330,9 +355,16 @@
                 <p class="hint">{proposed.length} titles would go on it.</p>
                 <div class="actions">
                     <button type="button" class="go" disabled={proposed.length === 0} onclick={create}>Create</button>
-                    <button type="button" class="quiet" onclick={onDone}>Not that</button>
+                    <button
+                        type="button"
+                        class="quiet"
+                        onclick={notThat}
+                        disabled={proposed.length === 0}
+                        title="Throws this lineup away so you can ask for another"
+                    >Not that</button>
                 </div>
                 <p class="hint warn">Nothing is written to the server until you press Save.</p>
+                <p class="hint">Pick a channel in the rail to leave without making one.</p>
             </Card>
         </div>
     </div>

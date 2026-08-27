@@ -7,7 +7,6 @@
         whole day in 150px, which is enough to see the shape and pick one. The fields for the
         block you have picked sit underneath, where they belong.
     */
-    import { store } from '../config.svelte';
     import { measure } from '../runtime';
     import SourceList from './SourceList.svelte';
     import SourceSearch from './SourceSearch.svelte';
@@ -67,21 +66,18 @@
             Order: 'Sequential',
         });
         picked = channel.Blocks.length - 1;
-        store.touch();
     }
 
     function removeBlock(): void {
         if (!current) { return; }
         channel.Blocks.splice(picked, 1);
         picked = Math.max(0, picked - 1);
-        store.touch();
     }
 
     function toggleDay(day: string): void {
         if (!current) { return; }
         const at = current.Days.indexOf(day);
         if (at === -1) { current.Days.push(day); } else { current.Days.splice(at, 1); }
-        store.touch();
     }
 
     let fitting = $state(false);
@@ -101,7 +97,6 @@
             account = measured.account;
             if (measured.minutes > 0) {
                 current.DurationMinutes = measured.minutes;
-                store.touch();
             }
         } finally {
             fitting = false;
@@ -113,7 +108,6 @@
         const [h, m] = value.split(':').map(Number);
         if (Number.isNaN(h) || Number.isNaN(m)) { return; }
         current.StartMinutes = h * 60 + m;
-        store.touch();
     }
 </script>
 
@@ -151,7 +145,7 @@
 <div class="editor">
     {#if current}
         <div class="line">
-            <input class="name" bind:value={current.Name} oninput={() => store.touch()} aria-label="Block name" />
+            <input class="name" bind:value={current.Name} aria-label="Block name" />
             <label>
                 Starts
                 <input
@@ -162,7 +156,7 @@
             </label>
             <label>
                 For
-                <input type="number" min="15" step="15" bind:value={current.DurationMinutes} oninput={() => store.touch()} />
+                <input type="number" min="15" step="15" bind:value={current.DurationMinutes} />
                 min
             </label>
             <button type="button" class="ghost" onclick={fitToContent} disabled={fitting}>
@@ -251,7 +245,8 @@
     }
 
     .block:hover { filter: brightness(1.12); }
-    .block.picked { box-shadow: 0 0 0 2px #fff; }
+    /* Inside the block, for the reason spelled out in week/Grid.svelte. */
+    .block.picked { box-shadow: inset 0 0 0 2px #fff; z-index: 1; }
 
     .editor { margin-top: 10px; }
 

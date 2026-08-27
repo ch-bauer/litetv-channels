@@ -7,7 +7,6 @@
         words, and they now live on Content beside the sources they act on.
     */
     import Card from '../lib/ui/Card.svelte';
-    import { store } from '../lib/config.svelte';
     import type { TvChannel } from '../lib/types';
 
     let { channel }: { channel: TvChannel } = $props();
@@ -62,7 +61,6 @@ This is how far down the schedule it may reach to find something worth trailing.
         const value = Number(raw);
         if (!Number.isFinite(value)) { return; }
         setting.set(Math.min(setting.max, Math.max(setting.min, Math.round(value))));
-        store.touch();
     }
 
     /** A typical evening, as the settings stand. */
@@ -99,7 +97,6 @@ This is how far down the schedule it may reach to find something worth trailing.
                 id="channel-name"
                 class="text"
                 bind:value={channel.Name}
-                oninput={() => store.touch()}
             />
             <p class="note">What the guide calls it on the television.</p>
         </div>
@@ -108,7 +105,7 @@ This is how far down the schedule it may reach to find something worth trailing.
             type="button"
             class="onair"
             class:on={channel.Enabled}
-            onclick={() => { channel.Enabled = !channel.Enabled; store.touch(); }}
+            onclick={() => { channel.Enabled = !channel.Enabled; }}
             aria-pressed={channel.Enabled}
         >
             <span class="box">

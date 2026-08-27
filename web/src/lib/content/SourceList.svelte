@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { store } from '../config.svelte';
     import { absolute } from '../jellyfin';
     import type { ChannelSource } from '../types';
 
@@ -41,7 +40,6 @@
         const [taken] = list.splice(from, 1);
         list.splice(to, 0, taken);
         selected = to;
-        store.touch();
     }
 
     function remove(index: number): void {
@@ -49,10 +47,28 @@
         if (selected !== null && selected >= sources.length) {
             selected = sources.length ? sources.length - 1 : null;
         }
-        store.touch();
+    }
+
+    /*
+        What was selected before the press. Clicking a row focuses it first, and focus selects
+        it - so a plain "is it already selected" test in the click would see the selection the
+        focus had just made and clear it immediately. Reading it at mousedown is the honest
+        answer to "was this row already the selected one when you clicked it".
+    */
+    let selectedAtPress: number | null = null;
+
+    /** Clicking the selected row again clears it. Escape clears it too. */
+    function press(index: number): void {
+        selected = selectedAtPress === index ? null : index;
     }
 
     function onKey(event: KeyboardEvent, index: number): void {
+        if (event.key === 'Escape') {
+            selected = null;
+            (document.activeElement as HTMLElement | null)?.blur();
+            return;
+        }
+
         if (event.key === 'Delete' || event.key === 'Backspace') {
             event.preventDefault();
             remove(index);
@@ -92,7 +108,8 @@
             data-source-row={index}
             tabindex="0"
             draggable="true"
-            onclick={() => (selected = index)}
+            onmousedown={() => (selectedAtPress = selected)}
+            onclick={() => press(index)}
             onfocus={() => (selected = index)}
             onkeydown={(e) => onKey(e, index)}
             ondragstart={() => (dragging = index)}

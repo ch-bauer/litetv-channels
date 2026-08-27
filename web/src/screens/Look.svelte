@@ -10,7 +10,6 @@
     import Card from '../lib/ui/Card.svelte';
     import Note from '../lib/ui/Note.svelte';
     import SectionTitle from '../lib/ui/SectionTitle.svelte';
-    import { store } from '../lib/config.svelte';
     import { absolute, api, authHeaders, dashboard } from '../lib/jellyfin';
     import { search, type SearchHit } from '../lib/search';
     import type { TvChannel } from '../lib/types';
@@ -90,7 +89,6 @@
                 dataType: 'json',
             });
             artwork[picking + 'Url'] = '/LiteTv/Artwork/' + channel.Id + '/' + picking + '?t=' + Date.now();
-            store.touch();
             picking = null;
         } catch (err) {
             bar.alert('That picture could not be taken: ' + (err instanceof Error ? err.message : String(err)));
@@ -114,7 +112,6 @@
             });
             if (!answer.ok) { throw new Error(answer.status + ' ' + answer.statusText); }
             artwork[slot + 'Url'] = '/LiteTv/Artwork/' + channel.Id + '/' + slot + '?t=' + Date.now();
-            store.touch();
         } catch (err) {
             bar.alert('That picture could not be uploaded: ' + (err instanceof Error ? err.message : String(err)));
         } finally {
@@ -125,7 +122,6 @@
 
     function clearSlot(slot: Slot): void {
         artwork[slot + 'Url'] = null;
-        store.touch();
     }
 
     async function findBorrow(): Promise<void> {
@@ -140,7 +136,6 @@
     function borrow(hit: SearchHit): void {
         artwork['ImageItemId'] = hit.id;
         artwork['ImageItemName'] = hit.name;
-        store.touch();
         borrowTerm = '';
         borrowHits = [];
     }
@@ -148,7 +143,6 @@
     function stopBorrowing(): void {
         artwork['ImageItemId'] = null;
         artwork['ImageItemName'] = null;
-        store.touch();
     }
 </script>
 

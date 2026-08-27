@@ -102,8 +102,10 @@
 <style>
     .app {
         display: flex;
-        min-height: 720px;
-        height: 82vh;
+        /* Measured by main.ts from where the app actually sits; the fallback is only for a
+           host that runs the app without it, such as the dev entry. */
+        height: var(--lt-app-height, 82vh);
+        min-height: 460px;
         overflow: hidden;
     }
 

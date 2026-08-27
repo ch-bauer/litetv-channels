@@ -59,8 +59,15 @@
 #litetv-app a { color: #9b8bf7; }
 #litetv-app a:hover { color: #b6a9fa; }
 
-/* Focus is a ring, never a size change - see the note kept about zoom on focus. */
+/*
+ * Focus is a ring, never a size change - see the note kept about zoom on focus.
+ *
+ * The ring is drawn INSIDE the element. An outward ring (offset 2px) is cut off wherever the
+ * thing focused sits flush against something: a row in a list that scrolls, a row in a card with
+ * `overflow: hidden`, a bar that abuts the next bar. That was reported as "the selection
+ * highlight is cut off almost everywhere", and it is one rule, not one per screen.
+ */
 #litetv-app :focus-visible {
     outline: 2px solid var(--lt-accent);
-    outline-offset: 2px;
+    outline-offset: -2px;
 }

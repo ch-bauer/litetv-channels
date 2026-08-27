@@ -97,8 +97,17 @@
 </nav>
 
 <style>
+    /*
+        One width, always. `flex: 0 0 246px` is not enough on its own: a flex item's automatic
+        minimum size is its content, so a long channel name could push the rail wider than its
+        own basis - which is what "the rail changes width with the channel name" was. The
+        minimum is stated, and every row inside is allowed to shrink and ellipsise instead.
+    */
     .rail {
         flex: 0 0 246px;
+        width: 246px;
+        min-width: 246px;
+        max-width: 246px;
         border-right: 1px solid var(--lt-line);
         display: flex;
         flex-direction: column;
@@ -176,6 +185,7 @@
 
     .row {
         display: flex;
+        min-width: 0;
         align-items: center;
         gap: 9px;
         padding: 7px 9px;
@@ -242,6 +252,7 @@
 
     .dest {
         display: flex;
+        min-width: 0;
         align-items: center;
         gap: 10px;
         padding: 8px 11px;
