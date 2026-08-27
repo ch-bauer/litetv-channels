@@ -6,7 +6,7 @@
  * configuration page in a real dashboard, or `index.html` under `vite dev` - so the app itself
  * has no opinion about the page around it beyond needing that one node.
  */
-import { mount } from 'svelte';
+import { mount, unmount } from 'svelte';
 import App from './App.svelte';
 
 function host(): HTMLElement {
@@ -20,4 +20,17 @@ function host(): HTMLElement {
     return made;
 }
 
-export default mount(App, { target: host() });
+const app = mount(App, { target: host() });
+
+/*
+ * The host page takes the app down again when the view is hidden, and it has to be Svelte that
+ * does it: clearing the host node would leave every effect and listener in this module running
+ * against detached DOM. The dashboard keeps a configuration page's element alive between visits,
+ * so this is a real teardown and not a formality.
+ */
+declare global {
+    interface Window { __litetvUnmount?: () => void; }
+}
+window.__litetvUnmount = () => { void unmount(app); };
+
+export default app;

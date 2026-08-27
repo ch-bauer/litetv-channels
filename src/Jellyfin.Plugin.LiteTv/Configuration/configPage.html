@@ -26,12 +26,7 @@
                     plugin built without running that step compiles and installs perfectly happily
                     with no page inside it, which is why this says so rather than showing nothing.
                 </p>
-                <p><a href="#" id="litetvLegacyLink2">Open the previous configuration page</a></p>
             </div>
-
-            <p style="margin: 0.5em 1.5em 1.5em; font-size: 0.85em; opacity: 0.5;">
-                <a href="#" id="litetvLegacyLink">Open the previous configuration page</a>
-            </p>
         </div>
     </div>
 
@@ -39,22 +34,17 @@
         (function () {
             var page = document.querySelector('#litetvConfigPage');
 
+            // Each visit loads the module under its own query string. A module URL is evaluated
+            // ONCE per document, so re-adding the same src after a viewhide would append a tag
+            // that never runs - the page would work the first time and be blank on every return
+            // to it. The bundle is served no-store anyway, so nothing is being defeated here.
+            var visit = 0;
+
             // Where the plugin serves its own bundle. Both files keep stable names precisely so
             // this file can name them; everything else in the bundle is content-hashed.
             function url(file) {
-                return ApiClient.getUrl('LiteTv/Web/' + file);
-            }
-
-            function legacyHref() {
-                // The old page is registered as a second, hidden plugin page under this name.
-                return 'configurationpage?name=LiteTV%20(previous%20page)';
-            }
-
-            function wireLegacy() {
-                ['litetvLegacyLink', 'litetvLegacyLink2'].forEach(function (id) {
-                    var link = page.querySelector('#' + id);
-                    if (link) { link.setAttribute('href', legacyHref()); }
-                });
+                var u = ApiClient.getUrl('LiteTv/Web/' + file);
+                return u + (u.indexOf('?') === -1 ? '?' : '&') + 'v=' + visit;
             }
 
             function showMissing() {
@@ -62,11 +52,13 @@
                 if (notice) { notice.style.display = 'block'; }
             }
 
-            page.addEventListener('viewshow', function () {
-                wireLegacy();
+            function show() {
+                // Both events are listened for, so this must be idempotent. It also guards the
+                // case of a show arriving without an intervening hide.
+                if (page.getAttribute('data-litetv-loaded') === 'yes') { return; }
+                page.setAttribute('data-litetv-loaded', 'yes');
+                visit++;
 
-                // Loaded once per view, and torn down on viewhide, because the dashboard keeps
-                // the page element around and would otherwise mount the app twice.
                 var css = document.createElement('link');
                 css.rel = 'stylesheet';
                 css.href = url('litetv.css');
@@ -79,16 +71,36 @@
                 script.id = 'litetvAppJs';
                 script.onerror = showMissing;
                 document.head.appendChild(script);
-            });
+            }
 
-            page.addEventListener('viewhide', function () {
+            function hide() {
+                if (page.getAttribute('data-litetv-loaded') !== 'yes') { return; }
+                page.removeAttribute('data-litetv-loaded');
+
+                // Let Svelte take its own effects down. Clearing the host would orphan them.
+                if (typeof window.__litetvUnmount === 'function') {
+                    try { window.__litetvUnmount(); } catch (e) { console.error('[litetv]', e); }
+                }
+                delete window.__litetvUnmount;
+
                 ['litetvAppCss', 'litetvAppJs'].forEach(function (id) {
                     var node = document.getElementById(id);
                     if (node && node.parentNode) { node.parentNode.removeChild(node); }
                 });
                 var host = page.querySelector('#litetv-app');
                 if (host) { host.innerHTML = ''; }
-            });
+            }
+
+            // BOTH names, and this is not belt-and-braces. This dashboard fires `pageshow` - the
+            // page that worked for seventy releases listened for exactly that - while `viewshow`
+            // is the newer name and fires in other versions. Listening for only `viewshow` is
+            // what shipped in 1.0.70.0, and the result was a blank page with nothing able to say
+            // why: no handler ran, so no script tag was ever made, so `onerror` could never fire
+            // either. A lifecycle whose name changed between versions has to be met halfway.
+            page.addEventListener('pageshow', show);
+            page.addEventListener('viewshow', show);
+            page.addEventListener('pagehide', hide);
+            page.addEventListener('viewhide', hide);
         })();
     </script>
 </body>
