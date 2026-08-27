@@ -6,9 +6,26 @@
         Anchor, interleaving and shuffle are deliberately NOT here - the board says so in as many
         words, and they now live on Content beside the sources they act on.
     */
+    import { store } from '../lib/config.svelte';
     import type { TvChannel } from '../lib/types';
 
     let { channel }: { channel: TvChannel } = $props();
+
+    /*
+        Deleting a channel. The old page had this and the rebuilt one lost it, which left a
+        configuration you could only ever add to.
+
+        Two presses, because there is no undo: the second one names the channel. Nothing reaches
+        the server until Save, and the channel's stored week - which lives in its own file, not
+        in the configuration - is thrown away by the server once it sees the channel has gone.
+    */
+    let confirming = $state(false);
+
+    // Asking about one channel and then switching channels must not leave the question armed.
+    $effect(() => {
+        void channel.Id;
+        confirming = false;
+    });
 
     // The break cadence and the evening it makes moved to the Breaks screen, where the owner
     // expects to find them. What is left here is what the channel IS rather than how it runs.
@@ -64,6 +81,27 @@
                     button on the Week tab, which discards what you arranged by hand.
                 </p>
             </div>
+        </div>
+
+        <div class="danger-card">
+            <div class="danger-title">Remove this channel</div>
+            <p class="danger-note">
+                Takes the channel and its schedule away. <strong>Nothing in your library is
+                touched</strong> &mdash; a channel is only ever a schedule over titles you already
+                have.
+            </p>
+            {#if confirming}
+                <div class="danger-row">
+                    <span class="asking">Delete &ldquo;{channel.Name}&rdquo;?</span>
+                    <button type="button" class="really" onclick={() => store.removeChannel(channel.Id)}>
+                        Yes, delete it
+                    </button>
+                    <button type="button" class="keep" onclick={() => (confirming = false)}>Keep it</button>
+                </div>
+                <p class="danger-note">It goes for good when you press Save.</p>
+            {:else}
+                <button type="button" class="delete" onclick={() => (confirming = true)}>Delete channel</button>
+            {/if}
         </div>
 
         <div class="footnote">
@@ -151,6 +189,50 @@
 
     .onair-text { display: block; }
     .note-inline { display: block; font-size: 12.5px; color: var(--lt-text-muted); }
+
+    .danger-card {
+        border: 1px solid rgba(224, 133, 133, .25);
+        border-radius: var(--lt-radius);
+        background: rgba(224, 133, 133, .05);
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+    }
+
+    .danger-title { font-size: 13px; font-weight: 700; color: #e08585; }
+
+    .danger-note { margin: 0; font-size: 12.5px; color: var(--lt-text-muted); line-height: 1.5; }
+
+    .danger-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+
+    .asking { font-size: 13px; font-weight: 600; color: var(--lt-text-title); }
+
+    .delete, .really, .keep {
+        padding: 6px 13px;
+        border-radius: var(--lt-radius-small);
+        font-family: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        align-self: flex-start;
+    }
+
+    .delete {
+        background: none;
+        border: 1px solid rgba(224, 133, 133, .4);
+        color: #e08585;
+    }
+
+    .delete:hover { background: rgba(224, 133, 133, .12); }
+
+    .really { background: #c0504d; border: 1px solid #c0504d; color: #fff; }
+
+    .keep {
+        background: none;
+        border: 1px solid var(--lt-line-strong);
+        color: var(--lt-text-body);
+    }
 
     .warn {
         border: 1px solid rgba(217, 154, 58, .25);

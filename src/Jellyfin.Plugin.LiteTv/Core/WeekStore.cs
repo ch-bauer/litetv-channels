@@ -48,6 +48,13 @@ public class WeekStore
     {
         _directory = Path.Combine(applicationPaths.PluginConfigurationsPath, "LiteTv", "weeks");
         _logger = logger;
+
+        // A deleted channel leaves its week behind, and the week is the one part of a channel
+        // that does not live in the configuration - so nothing else would ever clear it up.
+        if (Plugin.Instance is not null)
+        {
+            Plugin.Instance.ConfigurationChanged += (_, _) => PruneToConfiguredChannels();
+        }
     }
 
     /// <summary>
@@ -134,6 +141,58 @@ public class WeekStore
         }
 
         _cache.TryRemove(channelId, out _);
+    }
+
+    /// <summary>
+    /// Throws away the weeks of channels that no longer exist.
+    /// <para>
+    /// Called whenever the configuration changes, because that is when a channel can vanish:
+    /// deleting one takes it out of the configuration, and its week would otherwise sit in the
+    /// plugin's folder for ever, invisible and belonging to nothing.
+    /// </para>
+    /// <para>
+    /// <b>An empty channel list prunes nothing.</b> "No channels" is also what a configuration
+    /// looks like when it has failed to load, or before it is first written, and a rule that
+    /// deletes every stored week the moment the list reads empty is one bad read away from
+    /// throwing away every curated week on the server.
+    /// </para>
+    /// </summary>
+    public void PruneToConfiguredChannels()
+    {
+        var configured = Plugin.Instance?.Configuration.Channels;
+        if (configured is null || configured.Count == 0)
+        {
+            return;
+        }
+
+        var live = configured.Select(c => c.Id).ToHashSet();
+
+        try
+        {
+            if (!Directory.Exists(_directory))
+            {
+                return;
+            }
+
+            foreach (var path in Directory.EnumerateFiles(_directory, "*.json"))
+            {
+                var name = Path.GetFileNameWithoutExtension(path);
+                if (!Guid.TryParse(name, out var channelId) || live.Contains(channelId))
+                {
+                    continue;
+                }
+
+                Delete(channelId);
+                _logger.LogInformation(
+                    "LiteTV: removed the stored week of channel {Channel}, which no longer exists.",
+                    channelId);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Tidying up is not worth failing a configuration save over.
+            _logger.LogWarning(ex, "LiteTV could not tidy up the stored weeks.");
+        }
     }
 
     /// <summary>

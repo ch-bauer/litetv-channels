@@ -56,7 +56,23 @@
             {:else if destination === 'server'}
                 <Server />
             {:else if !channel}
-                <p class="unported">This server has no channels yet. Use + in the rail to make one.</p>
+                <!--
+                    The header comes too, because deleting the last channel is a change that has
+                    to be savable. Without it, Save lived only inside the branch that draws a
+                    channel, and removing the final one hid the button that would have written
+                    the removal down.
+                -->
+                <header>
+                    <h1>No channels</h1>
+                    <div class="spacer"></div>
+                    <span class="saved" class:dirty={store.dirty}>{saved}</span>
+                    <button type="button" class="save" disabled={!store.dirty} onclick={() => store.save()}>Save</button>
+                </header>
+                <p class="unported">
+                    {store.dirty
+                        ? 'Nothing is left. Press Save to write that down, or use + in the rail to make another.'
+                        : 'This server has no channels yet. Use + in the rail to make one.'}
+                </p>
             {:else}
                 <header>
                     <h1>{channel.Name}</h1>

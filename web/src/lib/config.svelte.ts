@@ -115,6 +115,23 @@ class ConfigStore {
         this.config.Channels.push(made);
         this.channelId = made.Id;
     }
+
+    /**
+     * Takes a channel out of the configuration and selects whatever is beside it.
+     *
+     * Not saved, like everything else here - Save is what reaches the server. The channel's
+     * stored week lives in its own file rather than in the configuration, and the server throws
+     * that away when it sees the channel has gone.
+     */
+    removeChannel(channelId: string): void {
+        if (!this.config) { return; }
+        const at = this.config.Channels.findIndex((c) => c.Id === channelId);
+        if (at === -1) { return; }
+
+        this.config.Channels.splice(at, 1);
+        const next = this.config.Channels[at] ?? this.config.Channels[at - 1] ?? null;
+        this.channelId = next ? next.Id : null;
+    }
 }
 
 export const store = new ConfigStore();
