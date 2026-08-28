@@ -307,10 +307,10 @@
     const standInNote = $derived(
         standIns.length === 0
             ? null
-            : trueTiles.length > 0
-                ? 'No banner for these, so the widest picture there is.'
-                : 'No provider had a true banner for these titles, so these are the widest '
-                    + 'pictures they do have.',
+            : source === 'online'
+                ? 'No provider had a true banner for these titles, so these are the widest '
+                    + 'pictures they do have.'
+                : 'These titles hold no banner, so this is the widest picture they do have.',
     );
 
     /** Whether there is anything left to fetch, which is what shows the button. */
