@@ -26,7 +26,6 @@
 
     let body = $state<HTMLDivElement | null>(null);
     let now = $state(nowSecond());
-    let scrolledToNow = false;
 
     // The clock ticks so the now line is not a lie after ten minutes of looking at it.
     $effect(() => {
@@ -60,9 +59,7 @@
         if (week.view === 'week') {
             return [0, 1, 2, 3, 4, 5, 6].map((d) => firstDay + d);
         }
-        // The day view opens on today when today is in the week being looked at, and on its
-        // Monday otherwise - there is no "today" in next week.
-        return [week.weekIndex === week.currentWeek ? dayOf(nowInCycle) : firstDay];
+        return [week.shownDay];
     });
 
     const placed = $derived(
@@ -114,13 +111,106 @@
         body.scrollTop = Math.max(0, target);
     }
 
-    // Once, when the grid first has a size. Doing it on every draw would fight the scrollbar
-    // every time a bar moved.
+    /** What is on air this second, or null - off air, in a gap, or another week of the cycle. */
+    const onNow = $derived.by(() => {
+        if (week.weekIndex !== week.currentWeek) { return null; }
+        return week.airings.find((a) => a.Kind !== 'Gap'
+            && nowInCycle >= a.StartSecond
+            && nowInCycle < a.StartSecond + a.DurationSeconds) ?? null;
+    });
+
+    /*
+        The zoom that shows what is on now properly.
+
+        A bar is worth looking at when it is big enough to read and still has its neighbours
+        around it for context, so the programme on air is given a bit over half the height and
+        the rest of the view shows what it ran after and what follows. Anything shorter than a
+        few minutes would ask for a zoom past the slider's end, so it is clamped there and the
+        programme simply fills what it can.
+    */
+    function framedZoom(): number | null {
+        if (!body || !onNow || onNow.DurationSeconds <= 0) { return null; }
+        const perSecond = (0.55 * body.clientHeight) / onNow.DurationSeconds;
+        return Math.min(1200, Math.max(8, Math.round(perSecond * 3600)));
+    }
+
+    /*
+        Following what is on air, while the box is ticked.
+
+        Only when the programme CHANGES, not on every draw: re-deciding the zoom continuously
+        would fight the slider, and re-deciding it after the zoom it just set would not settle.
+    */
+    let framedFor = '';
     $effect(() => {
-        if (body && !scrolledToNow && dayHeight > 0) {
-            scrolledToNow = true;
-            scrollToNow();
-        }
+        if (!body || week.airings.length === 0) { return; }
+
+        /*
+            Two reasons to frame what is on, and they want the same number:
+
+              - the box is ticked, so it is followed for as long as it stays ticked; or
+              - nobody has touched the slider on this channel and view, so this is simply the
+                zoom it opens at. A fixed default cannot serve both a film channel of four bars
+                a day and a channel of forty, and the useful thing to see on arriving is what
+                is on now - so the default is worked out rather than picked.
+
+            Either way the slider wins the moment it is moved: setZoom drops the worked-out
+            zoom and `zoomSetByHand` keeps this from putting it back.
+        */
+        /*
+            The box is the whole switch, in both views.
+
+            Ticked - which is how a channel starts - the zoom is worked out so the programme on
+            air fills a good half of the view, in the week as well as the day. Unticked, nothing
+            here touches the zoom and the slider's number stands, remembered per channel.
+        */
+        if (!week.frameNow) { return; }
+
+        // Only when the programme CHANGES. Re-deciding on every draw would fight the layout it
+        // just caused and never settle.
+        const programme = week.channelKey + '|' + week.view + '|'
+            + (onNow ? (onNow.Id ?? onNow.Name) : 'nothing on');
+        if (programme === framedFor) { return; }
+        framedFor = programme;
+
+        const zoom = framedZoom();
+        if (zoom !== null && zoom !== week.zoom) { week.setAutoZoom(zoom); }
+    });
+
+    /*
+        Arriving somewhere shows the now line.
+
+        This used to run once, the first time the grid had a size - and the first time was the
+        WEEK view's grid, so switching to Day, or opening a channel, kept a scroll position
+        worked out at a different zoom entirely. Measured on the test server: the day opened at
+        00:00 with the now line a full screen below the fold, at 13:22.
+
+        So it runs on arrival instead - another channel, another view, another week of the
+        cycle - and while the box is ticked, whenever the zoom moves under it too. Between
+        those it leaves the scrollbar alone, because a grid that scrolls itself while you are
+        reading it is worse than one that opens in the wrong place.
+    */
+    let arrivedAt = '';
+    $effect(() => {
+        /*
+            Both of these are read to be depended upon, not only to be checked. The grid has to
+            have been LAID OUT before it can be scrolled, and `dayHeight` is no evidence of
+            that - it comes from the zoom alone and is a healthy number while the column is
+            still empty. So the first pass after a channel loads used to set a scrollTop that
+            clamped straight back to zero, latch the arrival there, and never try again: which
+            is precisely how the day came up at midnight with the now line a screen below the
+            fold, at 13:22, on the test server.
+        */
+        const rows = week.airings.length;
+        if (!body || !week.week || rows === 0 || dayHeight <= 0) { return; }
+        if (body.scrollHeight - body.clientHeight <= 0) { return; }
+
+        const arrival = [
+            week.channelKey, week.view, week.weekIndex,
+            week.frameNow ? week.zoom : 'free',
+        ].join('|');
+        if (arrival === arrivedAt) { return; }
+        arrivedAt = arrival;
+        scrollToNow();
     });
 
     function pick(airing: WeekAiring, event: MouseEvent): void {
@@ -536,9 +626,14 @@
         z-index: 2;
     }
 
+    /*
+        On the RIGHT-hand end of the line. A bar's name is drawn at its left edge, so a chip
+        there landed on top of whatever was airing - the owner read "…Wild - Bärengebiet" with
+        the time sitting across it.
+    */
     .now-time {
         position: absolute;
-        left: 2px;
+        right: 3px;
         top: -0.85em;
         font-size: 9.5px;
         font-weight: 700;

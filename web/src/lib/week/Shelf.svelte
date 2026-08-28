@@ -458,10 +458,15 @@
     /*
         Room to be used. The old shelf was one line high, which is why it read as an afterthought;
         this is a list you can actually pick from, and it scrolls rather than growing without end.
+
+        The cap follows the window rather than sitting at a fixed 190px: once the app stopped
+        collapsing to its floor there was room going spare, and the shelf is the part of this
+        screen that was starved of it. It still cannot eat the grid whole - the clamp's ceiling
+        sees to that - and it only reaches for the room when it has entries to show.
     */
     .entries {
         margin-top: 9px;
-        max-height: 190px;
+        max-height: clamp(190px, 30vh, 420px);
         overflow-y: auto;
         border: 1px solid var(--lt-line);
         border-radius: var(--lt-radius);

@@ -24,18 +24,28 @@
         return;
     }
 
-    // Hide whatever the installed page has drawn, rather than removing it: reloading brings it
-    // back, and nothing here should be able to damage the page it is borrowing.
     const page = document.querySelector('#litetvConfigPage, .page:not(.hide)') || document.body;
-    for (const child of Array.from(page.children)) {
-        if (child.id !== 'litetv-app') { child.style.display = 'none'; }
-    }
 
     let host = document.getElementById('litetv-app');
     if (!host) {
         host = document.createElement('div');
         host.id = 'litetv-app';
         page.appendChild(host);
+    }
+
+    /*
+        Hide whatever the installed page has drawn, rather than removing it: reloading brings it
+        back, and nothing here should be able to damage the page it is borrowing.
+
+        Only the host's own SIBLINGS, at every level up to the page. Hiding every child of the
+        page was wrong the moment the installed page put its host inside a wrapper - the
+        dashboard's `.content-primary` - because that wrapper is an ANCESTOR of the host, so
+        hiding it hid the app as well and the injection came up blank.
+    */
+    for (let node = host; node && node !== page && node.parentElement; node = node.parentElement) {
+        for (const sibling of Array.from(node.parentElement.children)) {
+            if (sibling !== node) { sibling.style.display = 'none'; }
+        }
     }
     host.innerHTML = '';
 

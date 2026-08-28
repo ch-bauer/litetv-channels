@@ -19,13 +19,30 @@
  * get. So every edit costs one round trip, exactly as it did when every edit was a write.
  */
 import {
-    MAX_WEEKS, applyEdits, editWords, getWeek,
+    MAX_WEEKS, SECONDS_PER_DAY, applyEdits, editWords, getWeek, nowSecond,
     type Week, type WeekAiring, type WeekEdit,
 } from '../api/week';
 
 export type View = 'week' | 'day';
 
 const ZOOM_KEY = 'litetv.week.zoom';
+
+const VIEWS: View[] = ['week', 'day'];
+
+/** Where a view starts before anybody has zoomed it: a week at a glance, a day up close. */
+const DEFAULT_ZOOM: Record<View, number> = { week: 46, day: 170 };
+
+/*
+    The slider's own bounds. A remembered zoom outside them would be clamped away on the way to
+    the screen, and the setting would look like it had not stuck - so they are checked here, on
+    the way in, and the slider must not disagree with them.
+*/
+const ZOOM_MIN = 8;
+const ZOOM_MAX = 1200;
+
+function sane(value: number): boolean {
+    return Number.isFinite(value) && value >= ZOOM_MIN && value <= ZOOM_MAX;
+}
 
 class WeekStore {
     /** The week as the pending edits leave it: what is drawn, and what Save would store. */
@@ -38,8 +55,44 @@ class WeekStore {
     pending = $state<WeekEdit[]>([]);
 
     view = $state<View>('week');
-    /** Pixels per hour, kept per view: a week is read at a glance, a day is read closely. */
-    zoomFor = $state<Record<View, number>>({ week: 46, day: 170 });
+
+    /*
+        Pixels per hour, kept per CHANNEL and per view.
+
+        Per view because a week is read at a glance and a day is read closely. Per channel
+        because the channels are not alike: a film channel is four bars a day and a channel of
+        every SpongeBob episode is forty, and a zoom that suits one is useless on the other.
+        Carrying one number between them meant every channel change was followed by a
+        correction.
+    */
+    zoomByChannel = $state<Record<string, Partial<Record<View, number>>>>({});
+
+    /*
+        The zoom nobody asked for: worked out from what is on air.
+
+        A channel that has never been zoomed by hand opens at the zoom that shows the programme
+        playing right now properly - which is the useful thing to see on arriving, and better
+        than any fixed number could be, because the channels are not alike. It is also what the
+        "Follow what's on" box keeps up to date while it is ticked.
+
+        Held in memory only, and NOT written down: it is derived from the schedule and the size
+        of the window, so it should be worked out afresh rather than remembered stale. It takes
+        precedence over a remembered zoom, and moving the slider throws it away - see setZoom.
+    */
+    autoZoom = $state<Record<string, Partial<Record<View, number>>>>({});
+
+    /** The last zoom set by hand, kept only to fill the older single-zoom keys on the way out. */
+    private lastManual: Partial<Record<View, number>> = {};
+
+    /*
+        Ticked per channel: hold the zoom and the scroll on whatever is on air right now.
+
+        On unless the channel says otherwise, because it is the right thing on arriving at a
+        channel - the question a schedule is opened with is nearly always "what is on?". An
+        empty record therefore means ticked, and unticking has to be WRITTEN DOWN as false
+        rather than left absent.
+    */
+    frameNowByChannel = $state<Record<string, boolean>>({});
 
     /** The airing being inspected, by id. Null is a real state: nothing selected. */
     selectedId = $state<string | null>(null);
@@ -55,8 +108,43 @@ class WeekStore {
 
     private channelId: string | null = null;
 
+    /** The channel the store is holding, as a key. Empty before anything is loaded. */
+    get channelKey(): string {
+        return this.channelId ?? '';
+    }
+
     get zoom(): number {
-        return this.zoomFor[this.view];
+        return this.autoZoom[this.channelKey]?.[this.view]
+            ?? this.zoomByChannel[this.channelKey]?.[this.view]
+            ?? DEFAULT_ZOOM[this.view];
+    }
+
+    /** The zoom worked out from what is on air. Not remembered, and beaten by the slider. */
+    setAutoZoom(value: number): void {
+        const key = this.channelKey;
+        this.autoZoom[key] = { ...this.autoZoom[key], [this.view]: value };
+    }
+
+    /** Whether this channel is following what is on air. Ticked until told otherwise. */
+    get frameNow(): boolean {
+        return this.frameNowByChannel[this.channelKey] ?? true;
+    }
+
+    /*
+        Which day of the cycle the Day view shows: today when today is in the week being looked
+        at, and that week's Monday otherwise - there is no "today" in next week.
+
+        Here rather than in the grid because the status line under the grid has to name the same
+        day the grid is drawing, and two implementations of that sum would eventually disagree.
+    */
+    get shownDay(): number {
+        if (this.weekIndex !== this.currentWeek) { return this.weekIndex * 7; }
+        return this.currentWeek * 7 + Math.floor(nowSecond() / SECONDS_PER_DAY);
+    }
+
+    setFrameNow(on: boolean): void {
+        this.frameNowByChannel[this.channelKey] = on;
+        this.remember();
     }
 
     get airings(): WeekAiring[] {
@@ -89,10 +177,37 @@ class WeekStore {
         return last ? editWords(last) : null;
     }
 
+    /** The slider. A hand on it beats anything worked out, on this channel and this view. */
     setZoom(value: number): void {
-        this.zoomFor[this.view] = value;
+        const key = this.channelKey;
+        this.zoomByChannel[key] = { ...this.zoomByChannel[key], [this.view]: value };
+
+        // Thrown away rather than left underneath: it takes precedence in the getter, so
+        // keeping it would mean the slider moved and nothing happened.
+        const auto = { ...this.autoZoom[key] };
+        delete auto[this.view];
+        this.autoZoom[key] = auto;
+
+        this.lastManual[this.view] = value;
+        this.remember();
+    }
+
+    private remember(): void {
         try {
-            localStorage.setItem(ZOOM_KEY, JSON.stringify({ ...this.zoomFor, view: this.view }));
+            localStorage.setItem(ZOOM_KEY, JSON.stringify({
+                // The older single-zoom keys are still written, so a downgrade to a build that
+                // only knows that shape still finds a zoom it understands.
+                ...this.lastManual,
+                view: this.view,
+                channels: Object.fromEntries(
+                    Object.keys({ ...this.zoomByChannel, ...this.frameNowByChannel })
+                        .filter((id) => id !== '')
+                        .map((id) => [id, {
+                            ...this.zoomByChannel[id],
+                            frameNow: this.frameNowByChannel[id] === true,
+                        }]),
+                ),
+            }));
         } catch {
             // How far somebody has zoomed in is not worth an error.
         }
@@ -102,15 +217,29 @@ class WeekStore {
         try {
             const stored = JSON.parse(localStorage.getItem(ZOOM_KEY) ?? 'null');
             if (!stored) { return; }
-            for (const view of ['week', 'day'] as View[]) {
+            if (stored.view === 'week' || stored.view === 'day') { this.view = stored.view; }
+
+            for (const view of VIEWS) {
                 const value = Number(stored[view]);
-                // The bounds must match the slider's, or a remembered zoom is silently clamped
-                // away and the setting appears not to stick.
-                if (Number.isFinite(value) && value >= 8 && value <= 1200) {
-                    this.zoomFor[view] = value;
+                if (sane(value)) { this.lastManual[view] = value; }
+            }
+
+            const channels: unknown = stored.channels;
+            if (!channels || typeof channels !== 'object') { return; }
+            for (const [id, held] of Object.entries(channels as Record<string, unknown>)) {
+                const record = (held ?? {}) as Record<string, unknown>;
+                const kept: Partial<Record<View, number>> = {};
+                for (const view of VIEWS) {
+                    const value = Number(record[view]);
+                    if (sane(value)) { kept[view] = value; }
+                }
+                if (Object.keys(kept).length > 0) { this.zoomByChannel[id] = kept; }
+                // Both values are kept: the box is ticked by default, so an unticked channel
+                // is only unticked if the false was written down and read back.
+                if (typeof record.frameNow === 'boolean') {
+                    this.frameNowByChannel[id] = record.frameNow;
                 }
             }
-            if (stored.view === 'week' || stored.view === 'day') { this.view = stored.view; }
         } catch {
             // Nothing remembered, or something else wrote the key. The defaults are fine.
         }

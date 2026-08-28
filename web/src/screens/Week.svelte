@@ -29,6 +29,31 @@
         if (!week.week.Curated) {
             return 'No week laid out — this channel airs from its content and settings.';
         }
+
+        /*
+            The Day view counts the DAY.
+
+            It used to give the whole schedule's total whichever view you were in - "386
+            scheduled" under a single Friday - which answers a question nobody asked while
+            looking at one day, and is the number the design board puts a day's own count in
+            the place of.
+        */
+        if (week.view === 'day') {
+            const from = week.shownDay * SECONDS_PER_DAY;
+            const to = from + SECONDS_PER_DAY;
+            const onDay = week.airings.filter((a) => a.Kind !== 'Gap'
+                && a.StartSecond < to && a.StartSecond + a.DurationSeconds > from);
+            if (onDay.length === 0) { return 'Nothing scheduled · ' + dayWords(from); }
+
+            // Clamped to the day, so a programme running over midnight is reported by the part
+            // of it that is on this day rather than by where it started or ended.
+            const first = Math.min(...onDay.map((a) => Math.max(a.StartSecond, from)));
+            const last = Math.max(...onDay.map((a) => Math.min(a.StartSecond + a.DurationSeconds, to)));
+            const until = last >= to ? 'midnight' : clock(secondOfDay(last));
+            return onDay.length + ' scheduled · ' + dayWords(from)
+                + ' ' + clock(secondOfDay(first)) + '–' + until;
+        }
+
         const placed = week.airings.filter((a) => a.Kind !== 'Gap').length;
         const over = week.weeks === 1 ? '' : ' over ' + week.weeks + ' weeks';
         return placed + ' scheduled' + over;
@@ -234,10 +259,32 @@
                 max="1200"
                 step="2"
                 value={week.zoom}
-                oninput={(e) => week.setZoom(Number(e.currentTarget.value))}
+                oninput={(e) => {
+                    // Taking the slider takes the wheel: the zoom cannot be both driven by
+                    // what is on air and set by hand, and the hand wins.
+                    if (week.frameNow) { week.setFrameNow(false); }
+                    week.setZoom(Number(e.currentTarget.value));
+                }}
                 aria-label="Zoom"
             />
             <span class="reading">names from {Math.max(1, Math.round(13 / (week.zoom / 60)))} min</span>
+        </label>
+
+        <!--
+            Follow what is on air.
+
+            Off, the zoom is whatever you left it at for this channel. On, it is chosen so the
+            programme playing right now fills a good half of the view and the grid stays on the
+            now line - so opening the channel answers "what is on?" without a scroll or a drag,
+            and keeps answering it as the evening moves on.
+        -->
+        <label class="follow" title="Zoom to the programme on air now, and keep the now line in view">
+            <input
+                type="checkbox"
+                checked={week.frameNow}
+                onchange={(e) => week.setFrameNow(e.currentTarget.checked)}
+            />
+            Follow what's on
         </label>
 
         <div class="spacer"></div>
@@ -426,6 +473,20 @@
     }
 
     .zoom input { width: 110px; accent-color: var(--lt-accent); }
+
+    .follow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--lt-text-dim);
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .follow input { accent-color: var(--lt-accent); cursor: pointer; margin: 0; }
+
+    .follow:hover { color: var(--lt-text); }
 
     .weeks {
         display: flex;
