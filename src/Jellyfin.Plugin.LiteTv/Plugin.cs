@@ -71,6 +71,22 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             incoming.ProofOfOriginMintedUtc = held.MintedUtc;
         }
 
+        /*
+            The playback token, for the same reason and with more at stake.
+
+            Jellyfin keeps one session per device id, so authenticating the playback account
+            revokes the token whatever is currently playing is using. The token is stored to
+            avoid that - and a writer that sends the configuration back without it would wipe
+            it, making the next tune-in authenticate and stop the stream. That would mean
+            pressing Save on the configuration page ends whatever is on the television.
+        */
+        if (configuration is PluginConfiguration saving
+            && string.IsNullOrEmpty(saving.ChannelUserToken)
+            && Sessions.ChannelPlaybackUser.HeldToken.Length > 0)
+        {
+            saving.ChannelUserToken = Sessions.ChannelPlaybackUser.HeldToken;
+        }
+
         base.UpdateConfiguration(configuration);
     }
 

@@ -33,6 +33,25 @@ public class PluginConfiguration : BasePluginConfiguration
     public string ChannelUserPassword { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the access token that account is currently playing with.
+    /// <para>
+    /// This is stored for one reason: <b>Jellyfin keeps one session per device id, so every
+    /// authentication of this account revokes the token the previous holder is using.</b> The
+    /// plugin used to hold the token in memory only, which meant a restart, a plugin install
+    /// or a second client tuning in authenticated afresh and killed a stream that was
+    /// playing - on a television, a video that loads for ever, because the stream's own
+    /// requests were being refused.
+    /// </para>
+    /// <para>
+    /// Kept here, the token outlives the process: it is checked before another is minted, and
+    /// a new one is only asked for when this one is genuinely dead. It is as sensitive as
+    /// <see cref="ChannelUserPassword"/> and no more - both grant the same dull account - and
+    /// like the password it is never typed by anyone.
+    /// </para>
+    /// </summary>
+    public string ChannelUserToken { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the language the configuration page is written in: <c>auto</c>, <c>en</c>
     /// or <c>de</c>.
     /// <para>

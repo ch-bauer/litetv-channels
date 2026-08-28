@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
+using Jellyfin.Data.Queries;
 using Jellyfin.Plugin.LiteTv.Configuration;
+using MediaBrowser.Controller.Devices;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Users;
@@ -40,10 +42,17 @@ public sealed class ChannelPlaybackUser
     /// client asking for these credentials shares one device, so the dashboard shows a
     /// single "LiteTV" session rather than one per television.
     /// </summary>
+    /// <remarks>
+    /// The cost of one shared device id is why <c>ChannelUserToken</c> exists:
+    /// <b>Jellyfin keeps one session per device id</b>, so authenticating again revokes the
+    /// token the last caller is playing with. Every authentication here is somebody else's
+    /// stream ending, and the code below authenticates as rarely as it possibly can.
+    /// </remarks>
     private const string DeviceId = "litetv-channel-playback";
 
     private readonly IUserManager _userManager;
     private readonly ISessionManager _sessionManager;
+    private readonly IDeviceManager _deviceManager;
     private readonly ILogger<ChannelPlaybackUser> _logger;
 
     /// <summary>
@@ -56,18 +65,35 @@ public sealed class ChannelPlaybackUser
     private ChannelCredentials? _cached;
 
     /// <summary>
+    /// Gets the token last minted or adopted, held in memory as well as saved.
+    /// </summary>
+    /// <remarks>
+    /// This exists for the same reason <c>ProofOfOrigin.Held</c> does, and against the same
+    /// trap: <b>a configuration save carries the whole configuration</b>, so any writer that
+    /// does not know about this field sends it back empty and wipes it. For this field that
+    /// would be worse than losing a setting - the next tune-in would authenticate afresh and
+    /// stop whatever is playing, so pressing Save would end a stream. <c>Plugin</c> fills the
+    /// gap back in from here. Cleared by <see cref="Forget"/>, so a save that is MEANT to
+    /// clear the token still can.
+    /// </remarks>
+    internal static string HeldToken { get; private set; } = string.Empty;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChannelPlaybackUser"/> class.
     /// </summary>
     /// <param name="userManager">The user manager.</param>
     /// <param name="sessionManager">The session manager.</param>
+    /// <param name="deviceManager">The device manager, used to check a stored token is alive.</param>
     /// <param name="logger">The logger.</param>
     public ChannelPlaybackUser(
         IUserManager userManager,
         ISessionManager sessionManager,
+        IDeviceManager deviceManager,
         ILogger<ChannelPlaybackUser> logger)
     {
         _userManager = userManager;
         _sessionManager = sessionManager;
+        _deviceManager = deviceManager;
         _logger = logger;
     }
 
@@ -104,10 +130,61 @@ public sealed class ChannelPlaybackUser
     }
 
     /// <summary>
-    /// Forgets the cached token, so the next caller authenticates afresh. Used when the
-    /// configured account name changes: the old token belongs to the wrong account.
+    /// Forgets the token, in memory and on disk, so the next caller authenticates afresh.
+    /// Used when the configured account name changes: the old token belongs to the wrong
+    /// account, and leaving it stored would have the plugin hand out credentials for an
+    /// account nobody asked for.
     /// </summary>
-    public void Forget() => _cached = null;
+    public void Forget()
+    {
+        _cached = null;
+
+        var config = Plugin.Instance?.Configuration;
+        if (config is null || config.ChannelUserToken.Length == 0)
+        {
+            return;
+        }
+
+        // Cleared here FIRST, or the gap-filling in Plugin.UpdateConfiguration would put
+        // it straight back and Forget would be a no-op.
+        HeldToken = string.Empty;
+        config.ChannelUserToken = string.Empty;
+        Plugin.Instance!.UpdateConfiguration(config);
+    }
+
+    /// <summary>
+    /// Whether a token is one the server will still accept, and belongs to this account.
+    /// </summary>
+    /// <remarks>
+    /// A pure read: it asks which device holds this token and touches nothing. Deliberately
+    /// not <c>GetSessionByAuthenticationToken</c>, which answers the same question but
+    /// brings a session into being as a side effect of the asking.
+    /// </remarks>
+    internal bool IsAlive(string token, Guid userId)
+    {
+        if (string.IsNullOrEmpty(token))
+        {
+            return false;
+        }
+
+        try
+        {
+            var devices = _deviceManager.GetDevices(new DeviceQuery { AccessToken = token, Limit = 1 });
+
+            // The token has to belong to the account it is about to be handed out for. A
+            // renamed account can leave a live token behind that plays as the wrong user,
+            // and playing as the wrong user is the one thing this class exists to prevent.
+            var device = devices.Items.Count > 0 ? devices.Items[0] : null;
+            return device is not null && device.UserId.Equals(userId);
+        }
+        catch (Exception ex)
+        {
+            // Never fatal: not knowing whether a token is alive is answered by minting a
+            // new one, which costs a stream but not the feature.
+            _logger.LogWarning(ex, "LiteTV: could not check the stored playback token; assuming it is dead");
+            return false;
+        }
+    }
 
     private async Task<ChannelCredentials?> PrepareAsync()
     {
@@ -139,8 +216,45 @@ public sealed class ChannelPlaybackUser
                 Plugin.Instance!.UpdateConfiguration(config);
             }
 
-            await _userManager.ChangePassword(user.Id, config.ChannelUserPassword).ConfigureAwait(false);
             await RestrictAsync(user.Id).ConfigureAwait(false);
+
+            /*
+                The stored token first, and this is the whole point of the exercise.
+
+                Authenticating revokes whatever token this device already holds, so a restart,
+                a plugin install or a second television tuning in used to end a stream that
+                was playing - on a television, a video that loads for ever, because the
+                stream's own requests are being refused. Reusing a token that is still good
+                means none of those do.
+            */
+            if (IsAlive(config.ChannelUserToken, user.Id))
+            {
+                HeldToken = config.ChannelUserToken;
+
+                _logger.LogInformation(
+                    "LiteTV: reusing the stored playback token for {Name}; nothing playing is interrupted",
+                    name);
+
+                return new ChannelCredentials
+                {
+                    UserId = user.Id,
+                    UserName = name,
+                    AccessToken = config.ChannelUserToken
+                };
+            }
+
+            /*
+                Only now is the password written.
+
+                It used to be rewritten on every single call. Changing an account's password
+                is itself grounds for the server to revoke its tokens, so the path that was
+                meant to be cheap was quietly making the expensive one necessary.
+            */
+            await _userManager.ChangePassword(user.Id, config.ChannelUserPassword).ConfigureAwait(false);
+
+            _logger.LogInformation(
+                "LiteTV: authenticating {Name} afresh; any stream already playing on this account will stop",
+                name);
 
             var result = await _sessionManager.AuthenticateNewSession(new AuthenticationRequest
             {
@@ -157,6 +271,11 @@ public sealed class ChannelPlaybackUser
                 _logger.LogError("LiteTV: the channel playback account authenticated without a token");
                 return null;
             }
+
+            // Written down, so the next restart reuses this token instead of revoking it.
+            HeldToken = result.AccessToken;
+            config.ChannelUserToken = result.AccessToken;
+            Plugin.Instance!.UpdateConfiguration(config);
 
             return new ChannelCredentials
             {

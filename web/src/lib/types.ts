@@ -54,6 +54,15 @@ export interface PluginConfig {
     Channels: TvChannel[];
     ChannelUserName: string;
     ChannelUserPassword: string;
+    /**
+     * The playback account's current access token.
+     *
+     * The page never reads or writes this - it is declared so it is carried back untouched on
+     * save. Blanking it would make the next tune-in authenticate afresh, and because Jellyfin
+     * keeps one session per device id, authenticating revokes the token whatever is playing is
+     * using. In other words: drop this field and pressing Save stops the television.
+     */
+    ChannelUserToken: string;
     SkipTrailerSegments: boolean;
     YouTubeClient: string;
     ProofOfOriginToken: string;
