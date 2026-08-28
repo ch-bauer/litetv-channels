@@ -23,8 +23,8 @@ public class SiblingPlugins
         new("b9f0c474-e1a9-4a06-9c8a-3f1d2e5b7a10", "Collection Row", "Shows a film's collections on the detail page in the TV app."),
         new("b7c3f1e2-9a4d-4e8b-b0c6-2f5d8a913c47", "FSK Rating Updater", "Normalises age ratings so the playback badge has something to draw."),
         new("684a50b4-3970-44ef-aab0-3a162b415374", "SponsorBlock Segments", "Trims sponsor and outro stretches off linked trailers."),
-        new("64c04809-0078-401f-a883-2fc0fddace8c", "Next Up Cleanup", string.Empty),
-        new("c3cbb73c-59e6-4ec6-9cba-a86ba70e73c0", "Clear Transcodes", string.Empty)
+        new("64c04809-0078-401f-a883-2fc0fddace8c", "Next Up Cleanup", "Keeps Continue Watching tidy, so a channel that was tuned out of does not sit there as an unfinished programme."),
+        new("c3cbb73c-59e6-4ec6-9cba-a86ba70e73c0", "Clear Transcodes", "Clears leftover transcode files. LiteTV never asks for a transcode, but the rest of the server does.")
     };
 
     private readonly IPluginManager _pluginManager;

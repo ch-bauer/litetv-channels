@@ -373,7 +373,12 @@
                                                 {/if}
                                             </span>
                                         </div>
-                                        <p class="why">{plugin.WhyItMatters}</p>
+                                        <!-- Only when there is one. An empty line still takes
+                                             its margin, which reads as a row that lost its
+                                             description rather than one that never had it. -->
+                                        {#if plugin.WhyItMatters}
+                                            <p class="why">{plugin.WhyItMatters}</p>
+                                        {/if}
                                     </div>
                                 </div>
                             {/each}
