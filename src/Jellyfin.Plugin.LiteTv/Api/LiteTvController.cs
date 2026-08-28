@@ -2407,10 +2407,18 @@ public class PlaylistItemDto
 public class WeekEditsDto
 {
     /// <summary>
-    /// Gets the edits, oldest first. Applied in order to the stored week; the last one is the
-    /// one an undo takes off.
+    /// Gets or sets the edits, oldest first. Applied in order to the stored week; the last one
+    /// is the one an undo takes off.
+    /// <para>
+    /// <b>The setter is load-bearing.</b> Every other collection on these DTOs is get-only,
+    /// which is right because every other one is only ever serialised OUT. This one is
+    /// deserialised IN, and System.Text.Json cannot fill a collection it has no way to assign:
+    /// it skips the property and hands the action an empty list. Nothing fails - the run is
+    /// simply empty, every rehearsal answers with the week exactly as stored, and every edit
+    /// appears on screen and then undoes itself. That shipped in 1.0.77.0.
+    /// </para>
     /// </summary>
-    public List<WeekEditDto> Edits { get; } = new();
+    public List<WeekEditDto> Edits { get; set; } = new();
 }
 
 /// <summary>
