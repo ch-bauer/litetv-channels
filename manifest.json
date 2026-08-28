@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.87.0",
+        "changelog": "**The shelf and the selected-programme bar were unreachable on the Week screen, and that was a regression in 1.0.84.0.** Stopping the grid from collapsing while a channel loads meant wrapping it in a plain container - and the grid is written to take the column's leftover height and scroll inside itself, so the wrapper broke that: the grid grew to its full natural height, thousands of pixels of it, the page stopped scrolling, and everything below it was pushed somewhere nobody could reach. Both were still being drawn; there was simply no way to get to them. The wrapper now carries the grid's own sizing.\n\n**A playlist channel showed two titles that contradicted each other.** A YouTube playlist source was named by a description the page composed - \"16 videos - <the first video's title>\" - and the schedule then carried that under every programme as its series, so the app drew \"7 vs. Wild Folge 3\" with \"16 videos - 7 vs. Wild - The Beginning | Episode 1\" beneath it. It reads as a channel airing the wrong thing, and was reported as exactly that. The playlist's own name is read from YouTube now. **Playlists added before this keep the old name until they are added again** - or just rename the source.\n\n**The schedule says when things air.** A block tall enough for two lines now carries its start and end time above its name, instead of keeping them in a tooltip a television cannot show. **And the times down the left are clock times** - `00:00`, `02:00` - rather than the bare `00 02 04 06`, which read as an axis on a chart instead of the time of day.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.87.0/litetv-channels_1.0.87.0.zip",
+        "checksum": "ae2ec7279737207ea52e385777d6404d",
+        "timestamp": "2026-08-29T12:00:00.000Z"
+      },
+      {
         "version": "1.0.86.0",
         "changelog": "**YouTube answers in your language now.** Every request the plugin made said `hl=en, gl=US`, written into two files - so a German household read an English schedule for videos that have perfectly good German titles. YouTube localises a title and hands back the original where there is no translation, so asking in German costs nothing and loses nothing. It follows the language the configuration page is set to, and there is a field on Server settings - **Ask YouTube in** - that takes any language tag.\n\n**An advert nobody named is called what YouTube calls it**, not `aqz-KE-bpKQ`. The title arrives on the same answer as the length, so it costs no extra request.\n\nA test now fails the build if any code asks YouTube in a hard-coded language again.",
         "targetAbi": "10.11.0.0",
