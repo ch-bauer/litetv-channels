@@ -76,6 +76,26 @@ public class PluginConfiguration : BasePluginConfiguration
     public string PageLanguage { get; set; } = "auto";
 
     /// <summary>
+    /// Gets or sets the language YouTube is asked to answer in - a tag such as <c>de</c>,
+    /// <c>de-DE</c> or <c>en-GB</c>. Empty follows <see cref="PageLanguage"/>, and then the
+    /// server's own culture.
+    /// <para>
+    /// This is what a YouTube programme is CALLED in the schedule. YouTube localises titles:
+    /// an uploader can give one video a German title and an English one, and the API answers
+    /// with whichever the request asks for, falling back to the original where there is no
+    /// translation - so asking in German costs nothing for a video that has no German title.
+    /// Every call used to say <c>en</c>/<c>US</c>, hard-coded, which is why a German household
+    /// read an English schedule.
+    /// </para>
+    /// <para>
+    /// A free field rather than a list of two, because YouTube takes any tag and a shortlist
+    /// here would be an answer disguised as a question. See <see cref="Trailers.YouTubeLocale"/>
+    /// for how it is resolved.
+    /// </para>
+    /// </summary>
+    public string YouTubeLanguage { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the parts of a trailer that are not the trailer
     /// are skipped, using SponsorBlock's public database.
     /// <para>

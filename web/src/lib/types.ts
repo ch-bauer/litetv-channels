@@ -82,6 +82,14 @@ export interface PluginConfig {
     ChannelUserToken: string;
     SkipTrailerSegments: boolean;
     YouTubeClient: string;
+    /** The language the configuration page is written in: `auto`, `en` or `de`. */
+    PageLanguage: string;
+    /**
+     * The language YouTube is asked to answer in - a tag like `de` or `de-DE`. Empty follows
+     * `PageLanguage`, then the server's own culture. It is what a YouTube programme is CALLED
+     * in the schedule.
+     */
+    YouTubeLanguage: string;
     ProofOfOriginToken: string;
     ProofOfOriginVisitorData: string;
     ProofOfOriginMintedUtc: string | null;

@@ -359,6 +359,7 @@ public class LiteTvController : ControllerBase
         return new DurationDto
         {
             VideoId = videoId,
+            Title = _trailers.KnownTitle(url),
             LengthSeconds = length,
             SkippedSeconds = (int)Math.Round(skipped, MidpointRounding.AwayFromZero),
             PlayableSeconds = PlayableLength.Of(length, asSegments),
@@ -2642,6 +2643,17 @@ public class DurationDto
 {
     /// <summary>Gets or sets the YouTube video id, when the address is one.</summary>
     public string? VideoId { get; set; }
+
+    /// <summary>
+    /// Gets or sets what YouTube calls the video, in the language the server asks in - see
+    /// <see cref="Trailers.YouTubeLocale"/>. Null when YouTube would not say.
+    /// <para>
+    /// Here so an advert nobody typed a name for is not listed by its video id. The break card
+    /// read "aqz-KE-bpKQ", which tells nobody anything, and the title arrives on the same
+    /// answer as the length so it costs no extra request.
+    /// </para>
+    /// </summary>
+    public string? Title { get; set; }
 
     /// <summary>
     /// Gets or sets the video's own length in seconds, or zero when YouTube would not say -

@@ -16,6 +16,12 @@ export interface SkipSegment {
 
 export interface Duration {
     VideoId: string | null;
+    /**
+     * What YouTube calls it, in the language the server asks in. Null when YouTube would not
+     * say. Used as an advert's name when nobody typed one - the list used to fall back to the
+     * video id, and "aqz-KE-bpKQ" is not a name.
+     */
+    Title: string | null;
     /** Zero when YouTube would not say - which is not the same as "very short". */
     LengthSeconds: number;
     SkippedSeconds: number;

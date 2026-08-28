@@ -241,6 +241,16 @@ public sealed class YouTubeStreamResolver
     /// </summary>
     private readonly ConcurrentDictionary<string, int> _lengths = new(StringComparer.Ordinal);
 
+    /*
+        What the video is CALLED, learned from the same answer as the length.
+
+        An advert with no name typed for it used to be listed by its video id - "aqz-KE-bpKQ" in
+        the break card, which tells nobody anything. The player response carries the title and
+        carries it in the language the request asked for (see YouTubeLocale), so the name and
+        the German-titles rule are the same fact fetched once.
+    */
+    private readonly ConcurrentDictionary<string, string> _titles = new(StringComparer.Ordinal);
+
     /// <summary>
     /// What the last resolution actually produced. There is no other way to tell a channel
     /// playing a 1080p ladder from one quietly serving 360p to every television in the house:
@@ -507,7 +517,7 @@ public sealed class YouTubeStreamResolver
     /// </summary>
     private const string AppPlayerEndpoint =
         "https://youtubei.googleapis.com/youtubei/v1/player"
-        + "?prettyPrint=false&fields=playabilityStatus,streamingData,videoDetails.lengthSeconds";
+        + "?prettyPrint=false&fields=playabilityStatus,streamingData,videoDetails.lengthSeconds,videoDetails.title";
 
     /// <summary>
     /// The reel endpoint, for the one client ReVanced does not give the player endpoint.
@@ -518,7 +528,7 @@ public sealed class YouTubeStreamResolver
     /// </summary>
     private const string ReelPlayerEndpoint =
         "https://youtubei.googleapis.com/youtubei/v1/reel/reel_item_watch"
-        + "?prettyPrint=false&fields=playerResponse.playabilityStatus,playerResponse.streamingData,playerResponse.videoDetails.lengthSeconds";
+        + "?prettyPrint=false&fields=playerResponse.playabilityStatus,playerResponse.streamingData,playerResponse.videoDetails.lengthSeconds,playerResponse.videoDetails.title";
 
     /// <summary>
     /// The <c>context.client</c> object, in ReVanced's own field order.
@@ -556,8 +566,10 @@ public sealed class YouTubeStreamResolver
             context["visitorData"] = held.VisitorData;
         }
 
-        context["hl"] = "en";
-        context["gl"] = "US";
+        // Asked in the same language as everything else - what comes back carries titles too,
+        // and two halves of one plugin answering in different languages is its own bug.
+        context["hl"] = YouTubeLocale.Language();
+        context["gl"] = YouTubeLocale.Region();
 
         return context;
     }
@@ -604,21 +616,44 @@ public sealed class YouTubeStreamResolver
     }
 
     /// <summary>
-    /// Keeps the length off a player response, whatever else that response turned out to be
-    /// good for. A client that answers with no playable stream usually still says how long the
-    /// video is, and that answer is as true as any other client's.
+    /// Keeps the length and the title off a player response, whatever else that response turned
+    /// out to be good for. A client that answers with no playable stream usually still says how
+    /// long the video is and what it is called, and those answers are as true as any other
+    /// client's.
     /// </summary>
     /// <param name="id">The video.</param>
     /// <param name="root">The player response.</param>
     private void RememberLength(string id, System.Text.Json.JsonElement root)
     {
-        if (root.TryGetProperty("videoDetails", out var details)
-            && details.TryGetProperty("lengthSeconds", out var length)
+        if (!root.TryGetProperty("videoDetails", out var details))
+        {
+            return;
+        }
+
+        if (details.TryGetProperty("lengthSeconds", out var length)
             && int.TryParse(length.GetString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
             && seconds > 0)
         {
             _lengths[id] = seconds;
         }
+
+        if (details.TryGetProperty("title", out var title)
+            && title.GetString() is { Length: > 0 } named)
+        {
+            _titles[id] = named;
+        }
+    }
+
+    /// <summary>
+    /// Gets what a video is called, if it has already been asked about. Never goes to the
+    /// network: like <see cref="KnownLength"/> this is for callers that cannot wait.
+    /// </summary>
+    /// <param name="url">The address.</param>
+    /// <returns>The title, or null when it is not known here.</returns>
+    public string? KnownTitle(string? url)
+    {
+        var id = VideoId(url);
+        return id is not null && _titles.TryGetValue(id, out var known) ? known : null;
     }
 
     private async Task<StreamCandidate?> TryInnertubeAsync(string id, InnertubeClient client, CancellationToken cancellationToken)

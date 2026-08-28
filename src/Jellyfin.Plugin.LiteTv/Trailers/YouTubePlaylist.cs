@@ -181,8 +181,12 @@ public sealed class YouTubePlaylist
                 {
                     ["clientName"] = "WEB",
                     ["clientVersion"] = "2.20240722.01.00",
-                    ["hl"] = "en",
-                    ["gl"] = "US"
+
+                    // The language the SCHEDULE ends up in: YouTube answers with the title
+                    // localised for `hl`, so this is what decides whether a German household
+                    // reads German programme names. See YouTubeLocale.
+                    ["hl"] = YouTubeLocale.Language(),
+                    ["gl"] = YouTubeLocale.Region()
                 }
             }
         };

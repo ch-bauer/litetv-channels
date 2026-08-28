@@ -312,6 +312,27 @@
                 </div>
 
                 <div class="field">
+                    <span class="label">Ask YouTube in</span>
+                    <!--
+                        A free field, not a list of two. YouTube takes any language tag, and
+                        offering "English or German" here would be an answer dressed up as a
+                        question.
+                    -->
+                    <input
+                        class="text"
+                        bind:value={config.YouTubeLanguage}
+                        placeholder={config.PageLanguage && config.PageLanguage !== 'auto'
+                            ? config.PageLanguage
+                            : 'follows this page'}
+                    />
+                    <p class="note">
+                        What a YouTube programme is called in the schedule. A title has one per
+                        language the uploader wrote one in; asking in a language that has none
+                        gets the original back, so nothing is lost.
+                    </p>
+                </div>
+
+                <div class="field">
                     <span class="label">Ask YouTube as</span>
                     {#if clients.length === 0}
                         <input class="text" bind:value={config.YouTubeClient} placeholder="default" />

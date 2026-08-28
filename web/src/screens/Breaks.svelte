@@ -80,7 +80,10 @@
                 return;
             }
             adverts.push({
-                Name: name.trim() || (answer.VideoId ?? address),
+                // Typed name first, then what YouTube calls it, and only then the id. The id
+                // was the whole fallback, so an advert nobody named was listed as
+                // "aqz-KE-bpKQ".
+                Name: name.trim() || answer.Title || answer.VideoId || address,
                 Url: address,
                 DurationSeconds: answer.PlayableSeconds,
                 Decade: 0,
