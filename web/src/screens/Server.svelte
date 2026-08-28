@@ -336,6 +336,50 @@
                         by client and by day.
                     </p>
                 </div>
+
+                <!--
+                    Under the settings rather than beside them: this is a statement about the
+                    server, like everything else in this column, and the cards on the right are
+                    about what is happening right now.
+                -->
+                <div class="field">
+                    <span class="label">Plugins LiteTV leans on</span>
+                    {#if siblings === null}
+                        <p class="note">Asking…</p>
+                    {:else if siblings.length === 0}
+                        <p class="note">The server did not say.</p>
+                    {:else}
+                        <div class="siblings">
+                            {#each siblings as plugin (plugin.Id)}
+                                <div class="sibling">
+                                    <span
+                                        class="dot"
+                                        class:on={plugin.Usable}
+                                        class:half={plugin.Installed && !plugin.Usable}
+                                    ></span>
+                                    <div class="what">
+                                        <div class="line">
+                                            <span class="plugin-name">{plugin.Name}</span>
+                                            <span class="state">
+                                                {#if plugin.Usable}
+                                                    {plugin.Version ?? 'installed'}
+                                                {:else if plugin.Installed}
+                                                    <!-- Installed and silent is its own state, and
+                                                         the one worth naming: it looks like
+                                                         working. -->
+                                                    {plugin.Status ?? 'not answering'}
+                                                {:else}
+                                                    not installed
+                                                {/if}
+                                            </span>
+                                        </div>
+                                        <p class="why">{plugin.WhyItMatters}</p>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
             </div>
 
             <div class="right">
@@ -361,44 +405,6 @@
                             keyed on the token — so this reading improves by itself after a mint.
                             A low reading <em>with</em> a token held is worth chasing.
                         </p>
-                    {/if}
-                </Card>
-
-                <Card>
-                    <h3>Plugins LiteTV leans on</h3>
-                    {#if siblings === null}
-                        <p class="note">Asking…</p>
-                    {:else if siblings.length === 0}
-                        <p class="note">The server did not say.</p>
-                    {:else}
-                        <div class="siblings">
-                            {#each siblings as plugin (plugin.Id)}
-                                <div class="sibling">
-                                    <span
-                                        class="dot"
-                                        class:on={plugin.Usable}
-                                        class:half={plugin.Installed && !plugin.Usable}
-                                    ></span>
-                                    <div class="what">
-                                        <div class="line">
-                                            <span class="plugin-name">{plugin.Name}</span>
-                                            <span class="state">
-                                                {#if plugin.Usable}
-                                                    {plugin.Version ?? 'installed'}
-                                                {:else if plugin.Installed}
-                                                    <!-- Installed and silent is its own state, and the
-                                                         one worth naming: it looks like working. -->
-                                                    {plugin.Status ?? 'not answering'}
-                                                {:else}
-                                                    not installed
-                                                {/if}
-                                            </span>
-                                        </div>
-                                        <p class="why">{plugin.WhyItMatters}</p>
-                                    </div>
-                                </div>
-                            {/each}
-                        </div>
                     {/if}
                 </Card>
 
