@@ -118,7 +118,21 @@ class WeekStore {
     */
     weekIndex = $state(0);
 
-    private channelId: string | null = null;
+    /*
+        $state, and this is not a detail - it is the whole of "the zoom on day does nothing".
+
+        It was a plain field. Everything keyed off the channel - the zoom, both toggles, and so
+        `pxPerSecond` and `dayHeight` in the grid - reads `channelKey`, which reads this. A plain
+        field is invisible to Svelte, so those deriveds ran ONCE, while the channel was still
+        null, keyed off '' and settled on DEFAULT_ZOOM. Nothing ever invalidated them again: the
+        slider wrote a real number under a real channel key, and the grid went on reading a key
+        that was empty when it last looked.
+
+        `view` IS $state, which is exactly why switching to Week and back "helped" - it was the
+        only thing that could invalidate the derived, and on re-running it finally saw the real
+        channel.
+    */
+    private channelId = $state<string | null>(null);
 
     /*
         What the last load was for, as channel and saved-ness. `load` is driven by an effect, so

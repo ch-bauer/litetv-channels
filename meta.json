@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "**The zoom slider works, and there are two toggles instead of one.**\n\nThe slider did nothing on the Day view - switching to Week and back \"helped\" - because the zoom had two sources: a worked-out one and the slider's, and the code preferred the worked-out one, which is the opposite of what it was written to do. Whichever won depended on the order things happened to run in. There is one source now, and the slider writes to it.\n\n**Follow what's on** now only decides *where* the grid is scrolled - it brings the now line into view and, the part that was missing, **keeps it in view while you zoom**.\n\n**Zoom to now** is a new box that decides *how big* things are: the programme on air fills a good half of the view, so a channel of forty short items and a channel of four films both open readable. It re-sizes when the window does, and a hand on the slider unticks it. The two used to be one box doing both jobs, so wanting either without the other was impossible.",
+  "changelog": "**The zoom really works now.** 1.0.88.0 tidied the zoom into one source and split the toggles, which was worth doing, but it did not fix the bug: the slider still did nothing. The cause was one word. The store held the current channel in a plain field rather than a reactive one, so everything keyed off the channel - the zoom, both toggles, and the grid's own height - was worked out once while there was no channel yet and never worked out again. The slider wrote a real number under a real channel and the grid went on reading a key that had been empty when it last looked. Switching to Week and back \"helped\" because the view *was* reactive, and was the only thing that could make the grid look again.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-29T13:00:00.000Z",
-  "version": "1.0.88.0",
+  "timestamp": "2026-08-29T14:00:00.000Z",
+  "version": "1.0.89.0",
   "status": "Active",
   "autoUpdate": false
 }
