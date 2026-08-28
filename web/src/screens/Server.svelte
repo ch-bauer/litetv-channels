@@ -39,6 +39,23 @@
 
     interface ServerUser { Id: string; Name: string; }
 
+    /**
+     * One of the plugins LiteTV leans on, as the server reports it.
+     *
+     * The server answers this in one place so that the page and the television app ask the same
+     * question rather than each interrogating Jellyfin and disagreeing.
+     */
+    interface SiblingPlugin {
+        Id: string;
+        Name: string;
+        Installed: boolean;
+        Version: string | null;
+        Status: string | null;
+        /** Installed AND able to answer. The two are not the same, and the difference shows. */
+        Usable: boolean;
+        WhyItMatters: string;
+    }
+
     /** The drop-down's escape hatch. Not a name any account can have. */
     const NEW_ACCOUNT = '\u0000another';
 
@@ -53,8 +70,25 @@
     let uploading = $state(false);
     let accountHelp = $state(false);
     let skipHelp = $state(false);
+    let siblings = $state<SiblingPlugin[] | null>(null);
 
     const config = $derived(store.config);
+
+    /*
+        Which of the sibling plugins are there.
+
+        This strip existed on the old configuration page and was lost in the rebuild - the
+        endpoint went on being served, and nothing asked it. It is worth having precisely
+        because these plugins fail QUIETLY: a channel still airs without Smart Similar, the
+        suggestions are simply blunter, and nothing anywhere says so. Same for the age badge
+        and the collection row.
+    */
+    $effect(() => {
+        api().getJSON<SiblingPlugin[]>(api().getUrl('LiteTv/Plugins'))
+            .then((rows) => { siblings = rows; })
+            // Not fatal, and not worth a red line: the page's own work does not depend on it.
+            .catch(() => { siblings = []; });
+    });
 
     $effect(() => {
         api().getJSON<PoToken>(api().getUrl('LiteTv/PoToken'))
@@ -331,6 +365,44 @@
                 </Card>
 
                 <Card>
+                    <h3>Plugins LiteTV leans on</h3>
+                    {#if siblings === null}
+                        <p class="note">Asking…</p>
+                    {:else if siblings.length === 0}
+                        <p class="note">The server did not say.</p>
+                    {:else}
+                        <div class="siblings">
+                            {#each siblings as plugin (plugin.Id)}
+                                <div class="sibling">
+                                    <span
+                                        class="dot"
+                                        class:on={plugin.Usable}
+                                        class:half={plugin.Installed && !plugin.Usable}
+                                    ></span>
+                                    <div class="what">
+                                        <div class="line">
+                                            <span class="plugin-name">{plugin.Name}</span>
+                                            <span class="state">
+                                                {#if plugin.Usable}
+                                                    {plugin.Version ?? 'installed'}
+                                                {:else if plugin.Installed}
+                                                    <!-- Installed and silent is its own state, and the
+                                                         one worth naming: it looks like working. -->
+                                                    {plugin.Status ?? 'not answering'}
+                                                {:else}
+                                                    not installed
+                                                {/if}
+                                            </span>
+                                        </div>
+                                        <p class="why">{plugin.WhyItMatters}</p>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </Card>
+
+                <Card>
                     <h3>Where channels play</h3>
                     <p class="prose">
                         Channels are handed to the television by this server. Nothing here changes
@@ -484,6 +556,33 @@
 
     .left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
     .right { flex: 0 0 360px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+
+    .siblings { display: flex; flex-direction: column; gap: 11px; }
+
+    .sibling { display: flex; gap: 9px; align-items: flex-start; }
+
+    /* Three states, three colours: answering, there but silent, absent. */
+    .dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        margin-top: 4px;
+        border-radius: 50%;
+        background: var(--lt-text-faint);
+    }
+
+    .dot.on { background: #2f9e8f; }
+    .dot.half { background: #d99a3a; }
+
+    .sibling .what { min-width: 0; }
+
+    .sibling .line { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+
+    .plugin-name { font-size: 12.5px; font-weight: 600; color: var(--lt-text-title); }
+
+    .state { font-size: 11px; color: var(--lt-text-dim); }
+
+    .why { margin: 2px 0 0; font-size: 11.5px; color: var(--lt-text-dim); line-height: 1.45; }
 
     h2 { font-size: 15px; font-weight: 700; color: var(--lt-text-strong); margin: 0; }
     h3 { font-size: 13px; font-weight: 700; color: var(--lt-text-title); margin: 0 0 9px; }
