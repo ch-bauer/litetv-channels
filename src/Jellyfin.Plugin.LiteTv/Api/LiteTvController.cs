@@ -517,12 +517,17 @@ public class LiteTvController : ControllerBase
             return NotFound();
         }
 
+        // A COPY. `Get` hands back the cached instance - what the guide and playback are
+        // reading - and a rehearsal that walked it in place would change what the channel is
+        // airing while claiming to write nothing. Measured on the test server, where asking
+        // what a fortnight would look like left the channel a fortnight until the next restart.
         var week = RunEdits(
-            _weeks.Get(channelId),
+            _weeks.Get(channelId)?.Copy(),
             channelId,
             edits.Edits,
             weeks => _guide.GenerateWeek(channel, weeks),
-            LengthOf);
+            LengthOf,
+            () => WeeksForCycle(_guide.Cycle(channel).Length));
 
         if (commit)
         {
@@ -573,6 +578,36 @@ public class LiteTvController : ControllerBase
     public const int MaximumWeeks = 13;
 
     /// <summary>
+    /// How many weeks a channel needs before its schedule may repeat, given how long it takes
+    /// to play everything it has once.
+    /// <para>
+    /// This is what the length is actually FOR. A channel of every SpongeBob episode should air
+    /// all of them and then start again; a week-long schedule airs the first week's worth
+    /// forever and never reaches the rest, however many episodes the channel is given. Typing a
+    /// number works, but nobody knows what the number is - the server does.
+    /// </para>
+    /// <para>
+    /// Rounded UP, because a schedule shorter than its content cuts the tail off; and a channel
+    /// with more content than the cap can hold gets the cap, which airs more of it than a week
+    /// ever did.
+    /// </para>
+    /// </summary>
+    /// <param name="length">How long the channel takes to play everything once.</param>
+    /// <returns>The number of weeks, between one and <see cref="MaximumWeeks"/>.</returns>
+    public static int WeeksForCycle(TimeSpan length)
+    {
+        var seconds = length.TotalSeconds;
+        if (seconds <= 0)
+        {
+            // Nothing measurable to play. One week, which is what every channel was before.
+            return 1;
+        }
+
+        var weeks = (int)Math.Ceiling(seconds / StoredWeek.SecondsPerWeek);
+        return Math.Clamp(weeks, 1, MaximumWeeks);
+    }
+
+    /// <summary>
     /// Folds a run of edits over a stored week.
     /// <para>
     /// Pure but for the two things it is handed: how to lay a week out, and how long a placed
@@ -587,6 +622,9 @@ public class LiteTvController : ControllerBase
     /// <param name="edits">The run, oldest first.</param>
     /// <param name="generate">Lays a schedule out afresh, over the number of weeks it is
     /// handed - so laying out again does not undo a channel's fortnightly schedule.</param>
+    /// <param name="fitWeeks">How many weeks the channel's whole content needs. Asked for only
+    /// when a <c>FitLength</c> edit is in the run, because working it out walks the channel's
+    /// entire schedule.</param>
     /// <param name="lengthOf">How long a placed row runs.</param>
     /// <returns>The week the run leaves, or null when it leaves none.</returns>
     public static StoredWeek? RunEdits(
@@ -594,7 +632,8 @@ public class LiteTvController : ControllerBase
         Guid channelId,
         IEnumerable<WeekEditDto> edits,
         Func<int, StoredWeek> generate,
-        Func<WeekAiringDto, int> lengthOf)
+        Func<WeekAiringDto, int> lengthOf,
+        Func<int>? fitWeeks = null)
     {
         // Null all the way through means "this channel has no stored week", which is a real
         // state and not the same as a week with nothing in it: a channel with no week airs from
@@ -611,6 +650,17 @@ public class LiteTvController : ControllerBase
 
                 case "CLEAR":
                     week = null;
+                    break;
+
+                case "FITLENGTH":
+                    // The same as Length, with the number worked out from the channel's content
+                    // instead of typed. Sent with a Generate behind it, or the new weeks are
+                    // empty and the channel airs nothing in them.
+                    if (week is not null && fitWeeks is not null)
+                    {
+                        week.Weeks = Math.Clamp(fitWeeks(), 1, MaximumWeeks);
+                    }
+
                     break;
 
                 case "LENGTH":

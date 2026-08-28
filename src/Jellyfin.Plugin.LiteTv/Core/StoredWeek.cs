@@ -156,4 +156,48 @@ public class StoredWeek
 
     /// <summary>Gets or sets what airs, in order of when.</summary>
     public List<StoredAiring> Airings { get; set; } = new();
+
+    /// <summary>
+    /// A week that can be worked on without touching this one.
+    /// <para>
+    /// <b>Load-bearing, and learned the hard way.</b> <see cref="WeekStore.Get"/> hands back the
+    /// CACHED instance - the very object the guide and playback read - so anything that walks a
+    /// week and changes it as it goes is editing what the channel is airing, live, whether or
+    /// not it ever means to save. A rehearsal of a schedule edit did exactly that on the test
+    /// server: asking "what would this come to" left the channel changed in memory with nothing
+    /// written to disk, so a restart undid it and nothing anywhere said it had happened.
+    /// </para>
+    /// <para>
+    /// The rows are copied too. A shallow copy would share them, and trimming one is precisely
+    /// what an edit does.
+    /// </para>
+    /// </summary>
+    /// <returns>A copy, sharing nothing that can be edited.</returns>
+    public StoredWeek Copy()
+    {
+        return new StoredWeek
+        {
+            Version = Version,
+            Weeks = Weeks,
+            ChannelId = ChannelId,
+            GeneratedUtc = GeneratedUtc,
+            ModifiedUtc = ModifiedUtc,
+            Airings = Airings.ConvertAll(a => new StoredAiring
+            {
+                Id = a.Id,
+                StartSecond = a.StartSecond,
+                DurationSeconds = a.DurationSeconds,
+                Kind = a.Kind,
+                ItemId = a.ItemId,
+                Name = a.Name,
+                Url = a.Url,
+                OffsetTicks = a.OffsetTicks,
+                SeriesName = a.SeriesName,
+                SeriesId = a.SeriesId,
+                BlockName = a.BlockName,
+                TrailedItemId = a.TrailedItemId,
+                TrailedName = a.TrailedName
+            })
+        };
+    }
 }

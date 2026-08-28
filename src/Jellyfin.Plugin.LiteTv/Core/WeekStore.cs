@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using MediaBrowser.Common.Configuration;
 using Microsoft.Extensions.Logging;
@@ -106,7 +106,9 @@ public class WeekStore
     /// caller may hand over whatever the page sent.</param>
     public void Save(StoredWeek week)
     {
-        week.Airings = WeekEditing.Normalise(week.Airings);
+        // Over the week's OWN cycle. Normalising a fortnight against one week would clamp
+        // everything in its second week into its first and silently destroy half a schedule.
+        week.Airings = WeekEditing.Normalise(week.Airings, week.CycleSeconds);
         week.ModifiedUtc = DateTime.UtcNow;
 
         lock (_writeLock)

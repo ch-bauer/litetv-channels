@@ -254,6 +254,24 @@ class WeekStore {
         await this.add({ Kind: 'Length', Weeks: wanted });
     }
 
+    /**
+     * Makes the schedule as long as the channel's content, and lays it out over that.
+     *
+     * This is what a schedule longer than a week is FOR. A channel of every episode of a series
+     * should air all of them and then start again; a week-long schedule airs the first week's
+     * worth for ever and never reaches the rest, with nothing anywhere saying so. How many weeks
+     * that needs is the server's to work out - it already measures how long a channel takes to
+     * play everything once.
+     *
+     * The lay-out goes with it in the same run, because fitting the length on its own leaves the
+     * new weeks empty and the channel dark in them.
+     */
+    async fitToContent(): Promise<void> {
+        this.selectedId = null;
+        this.pending.push({ Kind: 'FitLength' }, { Kind: 'Generate' });
+        await this.rehearse();
+    }
+
     async generate(): Promise<void> {
         this.selectedId = null;
         await this.add({ Kind: 'Generate' });

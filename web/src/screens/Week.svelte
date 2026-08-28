@@ -68,6 +68,19 @@
         the edit had been ignored. So this saves first, and says so on the button rather than
         writing to the server behind the owner's back.
     */
+    /*
+        Same rule as laying out by hand: the server lays a week out from the configuration it
+        HOLDS, so unsaved content has to reach it first or the length is fitted to the old
+        content and the week laid out from it.
+    */
+    async function fitToContent(): Promise<void> {
+        if (store.dirty) {
+            await store.save();
+            if (store.dirty) { return; }
+        }
+        await week.fitToContent();
+    }
+
     async function layOut(): Promise<void> {
         if (store.dirty) {
             await store.save();
@@ -255,6 +268,21 @@
             />
             {week.weeks === 1 ? 'week' : 'weeks'}
         </label>
+
+        <!--
+            The button that is the actual point of a longer schedule. Typing a number works, but
+            nobody knows what the number is - a channel of every episode of a series needs
+            however many weeks that is, and only the server can say. It lays the week out too,
+            because a longer schedule with nothing in the new weeks is a channel that goes dark
+            in them.
+        -->
+        <button
+            type="button"
+            class="chip"
+            onclick={fitToContent}
+            disabled={week.busy || !week.week?.Curated}
+            title="Works out how long this channel takes to play everything once, makes the schedule that long, and lays it out - so every episode airs before it starts again."
+        >{week.busy ? 'Working…' : 'As long as the content'}</button>
 
         <div class="legend">
             <span><i style="background: {KIND_FILL.Programme}"></i>Programme</span>

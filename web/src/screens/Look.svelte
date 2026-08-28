@@ -36,7 +36,25 @@
         { slot: 'Poster', name: 'Poster', ratio: 'tall', height: 128, flex: '0.7 1 0' },
     ];
 
+    /*
+        The shapes a picture can be, named by what Jellyfin calls them underneath.
+
+        The owner asked the obvious question and there was no good answer: the channel wears a
+        banner, a backdrop and a poster, and the gallery offered "wide", "tall" and "square" -
+        one of which matches a slot, one of which sort of does, and one of which is a shape no
+        slot wants. And no banner, because **no provider serves banners** - measured when the
+        gallery was built. A channel banner has to be made from a wide picture.
+
+        So the filters say what they GIVE, the one for the slot being changed is chosen for you,
+        and the banner's missing shape is said out loud rather than left as a gap to work out.
+    */
     type Shape = 'all' | 'wide' | 'tall' | 'square';
+
+    const SHAPES: { id: Shape; label: string; hint: string }[] = [
+        { id: 'wide', label: 'wide', hint: 'backdrops - what a banner and a backdrop are made from' },
+        { id: 'tall', label: 'tall', hint: 'posters - what a poster is made from' },
+        { id: 'square', label: 'stills', hint: 'thumbnails: a 16:9 still, wider than a poster and squarer than a backdrop' },
+    ];
 
     let shape = $state<Shape>('wide');
 
@@ -284,6 +302,16 @@
         }
     }
 
+    /*
+        Pressing Change on a slot puts the gallery on the shape that slot is made from. It used
+        to leave whatever was last chosen, so changing the poster after the backdrop offered a
+        wall of backdrops and no sign that the filter was the reason.
+    */
+    function pickFor(slot: Slot): void {
+        picking = picking === slot ? null : slot;
+        if (picking) { shape = picking === 'Poster' ? 'tall' : 'wide'; }
+    }
+
     function clearSlot(slot: Slot): void {
         artwork[slot + 'Url'] = null;
     }
@@ -371,7 +399,7 @@
                         <button
                             type="button"
                             class="change"
-                            onclick={() => (picking = picking === entry.slot ? null : entry.slot)}
+                            onclick={() => pickFor(entry.slot)}
                         >{picking === entry.slot ? 'Choosing…' : 'Change'}</button>
 
                         <label class="icon" title="Upload a picture">
@@ -402,13 +430,14 @@
             <div class="gallery-head">
                 <h3>{source === 'library' ? 'Pictures your library already has' : 'Pictures from the providers'}</h3>
                 <div class="filters">
-                    {#each ['wide', 'tall', 'square'] as option (option)}
+                    {#each SHAPES as option (option.id)}
                         <button
                             type="button"
                             class="filter"
-                            class:on={shape === option}
-                            onclick={() => (shape = option as Shape)}
-                        >{option}</button>
+                            class:on={shape === option.id}
+                            title={option.hint}
+                            onclick={() => (shape = option.id)}
+                        >{option.label}</button>
                     {/each}
                 </div>
                 <div class="filters" role="group" aria-label="Where the pictures come from">
@@ -431,6 +460,20 @@
                     {picking ? 'Pick one for the ' + picking.toLowerCase() : 'Press Change on a picture first'}
                 </span>
             </div>
+
+            {#if picking === 'Banner'}
+                <p class="shape-note">
+                    Nothing serves banners &mdash; not Jellyfin, not any of its picture providers.
+                    A channel banner is made from a <strong>wide</strong> picture, cropped by the
+                    television to the shape it needs.
+                </p>
+            {:else if picking}
+                <p class="shape-note">
+                    A {picking.toLowerCase()} wants a
+                    <strong>{picking === 'Poster' ? 'tall' : 'wide'}</strong> picture.
+                    The other shapes are here because a good picture beats a right-shaped one.
+                </p>
+            {/if}
 
             <div class="tile-search">
                 <input
@@ -700,7 +743,38 @@
 
     .filter.on { background: var(--lt-accent); border-color: var(--lt-accent); color: #fff; }
 
-    .tile-note { margin-left: auto; font-size: 12px; color: var(--lt-text-dim); }
+    /*
+        Item 63: the head jumped about whenever anything was selected. This line's text changes
+        when a slot is picked - "Press Change on a picture first" becomes "Pick one for the
+        poster" - and in a wrapping flex row a text that changes width re-wraps the row and
+        moves every control in it. It keeps a width now, and drops to its own line before the
+        row is tight enough to wrap on its own.
+    */
+    .tile-note {
+        margin-left: auto;
+        min-width: 15em;
+        text-align: right;
+        font-size: 12px;
+        color: var(--lt-text-dim);
+    }
+
+    @media (max-width: 1000px) {
+        .tile-note {
+            flex: 1 0 100%;
+            margin-left: 0;
+            min-width: 0;
+            text-align: left;
+        }
+    }
+
+    .shape-note {
+        margin: 0 0 10px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--lt-text-muted);
+        padding-left: 13px;
+        border-left: 2px solid var(--lt-line);
+    }
 
     /*
         The column width is set from how many pictures there are - see `tileScale`. `auto-fill`

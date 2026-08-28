@@ -72,7 +72,8 @@ export type WeekEdit =
     | { Kind: 'Remove'; AiringId: string }
     | { Kind: 'Generate' }
     | { Kind: 'Clear' }
-    | { Kind: 'Length'; Weeks: number };
+    | { Kind: 'Length'; Weeks: number }
+    | { Kind: 'FitLength' };
 
 /**
  * Asks what a run of edits comes to, and optionally writes it down.
@@ -97,6 +98,7 @@ export function editWords(edit: WeekEdit): string {
     if (edit.Kind === 'Generate') { return 'laying the week out again'; }
     if (edit.Kind === 'Clear') { return 'emptying the week'; }
     if (edit.Kind === 'Remove') { return 'taking one programme off'; }
+    if (edit.Kind === 'FitLength') { return 'fitting the schedule to the content'; }
     if (edit.Kind === 'Length') {
         return 'making the schedule ' + edit.Weeks + (edit.Weeks === 1 ? ' week long' : ' weeks long');
     }
