@@ -17,10 +17,21 @@
         const films = sources.filter((s) => s.Type === 'Movie').length;
         const series = sources.filter((s) => s.Type === 'Series').length;
         const collections = sources.filter((s) => s.Type === 'Collection').length;
+        /*
+            Playlists count too.
+
+            They were left out, so a channel of a playlist and a series called itself "1 series"
+            and a channel of nothing but playlists summarised itself as the empty string - with
+            two sources sitting in the list underneath saying otherwise. This is the shape of
+            fault the non-stop channel keeps finding: a screen that only knows how to describe
+            things the library holds.
+        */
+        const playlists = sources.filter((s) => s.Type === 'YouTube').length;
         return [
             films ? films + (films === 1 ? ' film' : ' films') : '',
             series ? series + (series === 1 ? ' series' : ' series') : '',
             collections ? collections + (collections === 1 ? ' collection' : ' collections') : '',
+            playlists ? playlists + (playlists === 1 ? ' playlist' : ' playlists') : '',
         ].filter(Boolean).join(' · ');
     });
 </script>

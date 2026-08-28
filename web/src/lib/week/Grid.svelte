@@ -343,8 +343,31 @@
 
     function onDragOver(event: DragEvent, day: number): void {
         event.preventDefault();
+        // Says "this will move" rather than leaving the browser to draw its default refusal
+        // cursor. A drag that shows a no-entry sign the whole way across the week is a drag
+        // everyone reasonably concludes is not working.
+        if (event.dataTransfer) { event.dataTransfer.dropEffect = 'move'; }
         const landed = snap(secondAt(event, day), event.altKey);
         preview = { day, second: landed.second, snapped: landed.snapped };
+    }
+
+    /*
+        Leaving the column - and only leaving the column.
+
+        `dragleave` fires when the pointer crosses into a CHILD too, and a day column is full of
+        children: every bar in it. So dragging across a busy day fired dragleave continuously
+        and wiped the drop line as fast as dragover drew it. With no line, no snap label and a
+        refusal cursor, the whole gesture reads as doing nothing - which is how "drag and drop
+        does not work" and "dragging has no snapping" were both reported of code that works.
+
+        `relatedTarget` is where the pointer went. If that is still inside this column, it never
+        left.
+    */
+    function onDragLeave(event: DragEvent, day: number): void {
+        const column = event.currentTarget as HTMLElement;
+        const goingTo = event.relatedTarget as Node | null;
+        if (goingTo && column.contains(goingTo)) { return; }
+        if (preview?.day === day) { preview = null; }
     }
 
     /*
@@ -439,7 +462,7 @@
                 tabindex="-1"
                 ondragover={(e) => onDragOver(e, day)}
                 ondragenter={onOutsideDragEnter}
-                ondragleave={() => (preview = null)}
+                ondragleave={(e) => onDragLeave(e, day)}
                 ondrop={(e) => onDrop(e, day)}
             >
                 {#each barsFor(day) as airing (airing.Id)}
