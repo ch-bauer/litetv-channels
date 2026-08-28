@@ -33,6 +33,7 @@ public class WeekStore
 
     private readonly string _directory;
     private readonly ILogger<WeekStore> _logger;
+    private readonly ChannelStore _channels;
     private readonly ConcurrentDictionary<Guid, StoredWeek> _cache = new();
 
     // One writer at a time. Two saves racing would each write a whole file, and the loser
@@ -44,17 +45,20 @@ public class WeekStore
     /// </summary>
     /// <param name="applicationPaths">The server's paths.</param>
     /// <param name="logger">The logger.</param>
-    public WeekStore(IApplicationPaths applicationPaths, ILogger<WeekStore> logger)
+    /// <param name="channels">The channels, so a week whose channel has gone can be tidied.</param>
+    public WeekStore(IApplicationPaths applicationPaths, ILogger<WeekStore> logger, ChannelStore channels)
     {
+        ArgumentNullException.ThrowIfNull(applicationPaths);
+        ArgumentNullException.ThrowIfNull(channels);
+
         _directory = Path.Combine(applicationPaths.PluginConfigurationsPath, "LiteTv", "weeks");
         _logger = logger;
+        _channels = channels;
 
-        // A deleted channel leaves its week behind, and the week is the one part of a channel
-        // that does not live in the configuration - so nothing else would ever clear it up.
-        if (Plugin.Instance is not null)
-        {
-            Plugin.Instance.ConfigurationChanged += (_, _) => PruneToConfiguredChannels();
-        }
+        // A deleted channel leaves its week behind, and nothing else would ever clear it up.
+        // It used to hang off the configuration changing, which was where a channel used to
+        // vanish; the channels have their own store now, so it hangs off that instead.
+        channels.Changed += (_, _) => PruneToConfiguredChannels();
     }
 
     /// <summary>
@@ -148,21 +152,21 @@ public class WeekStore
     /// <summary>
     /// Throws away the weeks of channels that no longer exist.
     /// <para>
-    /// Called whenever the configuration changes, because that is when a channel can vanish:
-    /// deleting one takes it out of the configuration, and its week would otherwise sit in the
-    /// plugin's folder for ever, invisible and belonging to nothing.
+    /// Called whenever the channels change, because that is when one can vanish: deleting a
+    /// channel takes its file away, and its week would otherwise sit in the plugin's folder for
+    /// ever, invisible and belonging to nothing.
     /// </para>
     /// <para>
-    /// <b>An empty channel list prunes nothing.</b> "No channels" is also what a configuration
-    /// looks like when it has failed to load, or before it is first written, and a rule that
+    /// <b>An empty channel list prunes nothing.</b> "No channels" is also what the store reads
+    /// as when its folder has failed to load, or before it is first written, and a rule that
     /// deletes every stored week the moment the list reads empty is one bad read away from
     /// throwing away every curated week on the server.
     /// </para>
     /// </summary>
     public void PruneToConfiguredChannels()
     {
-        var configured = Plugin.Instance?.Configuration.Channels;
-        if (configured is null || configured.Count == 0)
+        var configured = _channels.All();
+        if (configured.Count == 0)
         {
             return;
         }

@@ -87,7 +87,17 @@
 
     /** The titles the gallery is showing pictures OF - this channel's, or a search's. */
     let ids = $state<string[]>([]);
-    let onlineTiles = $state<{ url: string; height: number }[]>([]);
+    /*
+        A tile carries whether it IS the kind that was asked for.
+
+        `standIn` is the whole of item 1: a banner filter that falls back draws pictures that
+        are not banners, and drawing them in a five-to-one cell crops away the very thing the
+        owner is being asked to judge - "for that i have to see the picture". So the cell shape
+        follows what is actually IN it, and the two kinds are drawn as two grids rather than
+        mixed into one, because a grid with two cell shapes has ragged rows and that answer was
+        already tried and rejected.
+    */
+    let onlineTiles = $state<Tile[]>([]);
     let onlineBusy = $state(false);
     let onlineNote = $state<string | null>(null);
     let loadingTiles = $state(false);
@@ -208,14 +218,19 @@
             .catch(() => { bannerKindById = {}; });
     });
 
-    function tilesFor(list: string[]): { url: string; height: number }[] {
+    function tilesFor(list: string[]): Tile[] {
         const kind = kindOfShape();
-        return list.map((id) => ({
-            url: absolute(
-                '/Items/' + id + '/Images/' + (bannerKindById[id] ?? kind) + '?maxHeight=480&quality=85',
-            ),
-            height: tileHeight(list.length),
-        }));
+        return list.map((id) => {
+            // Only the banner filter has a stand-in: a backdrop and a poster are asked for by
+            // name and the library either holds one or answers 404, which takes the tile off
+            // the wall entirely.
+            const asked = bannerKindById[id] ?? kind;
+            return {
+                url: absolute('/Items/' + id + '/Images/' + asked + '?maxHeight=480&quality=85'),
+                height: tileHeight(list.length),
+                standIn: shape === 'Banner' && asked !== 'Banner',
+            };
+        });
     }
 
     /*
@@ -257,6 +272,8 @@
         the filter has already fetched pictures of that kind, so a poster lands in a poster-shaped
         cell and hardly loses anything. What it does lose is decided properly later, by Crop.
     */
+    interface Tile { url: string; height: number; standIn: boolean }
+
     const CELL_SHAPE: Record<Slot, { aspect: string; perRow: number }> = {
         // One across. A banner is five to one, so two of them side by side are two slivers.
         Banner: { aspect: '1000 / 185', perRow: 1 },
@@ -265,6 +282,36 @@
     };
 
     const cells = $derived(CELL_SHAPE[shape]);
+
+    /*
+        The cell a STAND-IN goes in, which is the shape of the picture rather than of the slot.
+
+        Only the banner filter ever falls back, and what it falls back to is a thumb - sixteen
+        to nine, three across, exactly the backdrop cell. So this is not a fourth shape to keep
+        in step with the other three; it is the one the pictures already are.
+    */
+    const standInCells = CELL_SHAPE.Backdrop;
+
+    /*
+        Two walls, not one mixed one. Sliced FIRST, so "show more" still means the same number
+        of pictures however they divide.
+    */
+    const trueTiles = $derived(tiles.filter((t) => !t.standIn && !dead[t.url]));
+    const standIns = $derived(tiles.filter((t) => t.standIn && !dead[t.url]));
+
+    /**
+     * Why the stand-ins are on the wall. Said once, above the pictures it is about, rather than
+     * over the whole gallery - the library half never had this line at all and fell back
+     * silently.
+     */
+    const standInNote = $derived(
+        standIns.length === 0
+            ? null
+            : trueTiles.length > 0
+                ? 'No banner for these, so the widest picture there is.'
+                : 'No provider had a true banner for these titles, so these are the widest '
+                    + 'pictures they do have.',
+    );
 
     /** Whether there is anything left to fetch, which is what shows the button. */
     const moreToFetch = $derived(
@@ -366,7 +413,7 @@
             // repaint a gallery somebody has moved on from.
             if (forShape !== shape) { return; }
 
-            onlineTiles = urls.map((url) => ({ url, height: tileHeight(urls.length) }));
+            onlineTiles = urls.map((url) => ({ url, height: tileHeight(urls.length), standIn: fellBack }));
             if (urls.length === 0) {
                 onlineNote = asking.length === 0
                     ? 'Nothing to look up - search for a title first.'
@@ -818,7 +865,10 @@
 
                         <div class="slot-actions">
                             <button type="button" class="change" onclick={applyCrop} disabled={!cropImage || cropBusy}>
-                                {cropBusy ? 'Saving…' : 'Use this crop'}
+                                <span class="lt-swap">
+                                    <span class="lt-ghost">Use this crop</span>
+                                    <span>{cropBusy ? 'Saving…' : 'Use this crop'}</span>
+                                </span>
                             </button>
                             <button type="button" class="icon" title="Cancel" aria-label="Cancel cropping" onclick={closeCrop} disabled={cropBusy}>✕</button>
                         </div>
@@ -922,15 +972,6 @@
 
 
 
-            {#if onlineNote && source === 'online' && tiles.length > 0}
-                <!--
-                    Said with the pictures in view, not only when there are none: the whole point
-                    of this line is to explain what IS on screen when it is not what was asked
-                    for.
-                -->
-                <p class="fell-back">{onlineNote}</p>
-            {/if}
-
             <div class="tile-search">
                 <input
                     type="search"
@@ -950,39 +991,74 @@
                 {/if}
             </div>
 
-            <div
-                class="tiles"
-                style="--lt-cols: {cells.perRow}; --lt-cell: {cells.aspect}"
-            >
-                {#each tiles.filter((t) => !dead[t.url]) as tile (tile.url)}
-                    <button
-                        type="button"
-                        class="tile"
-                        class:offered={offering === tile.url}
-                        disabled={uploading}
-                        title="Choose what to use this picture as"
-                        onclick={() => (offering = offering === tile.url ? null : tile.url)}
-                    >
-                        <!--
-                            A title with no picture of this shape answers 404, and the tile was a
-                            grey box that could be chosen. It takes itself off the wall instead.
-                        -->
-                        <img src={tile.url} alt="" loading="lazy" onerror={() => (dead[tile.url] = true)} />
-                    </button>
-                {:else}
-                    <p class="none">
-                        {#if loadingTiles || tileSearching || onlineBusy}
-                            {onlineBusy ? 'Asking the providers...' : 'Looking...'}
-                        {:else if source === 'online'}
-                            {onlineNote ?? 'Nothing came back.'}
-                        {:else if searchedFrom}
-                            Nothing matching that has a {kindOfShape().toLowerCase()} picture.
-                        {:else}
-                            This channel has no content to take pictures from yet - search above for any title.
-                        {/if}
-                    </p>
-                {/each}
-            </div>
+            <!--
+                Two walls: the pictures that ARE what was asked for, then the ones standing in
+                for them - and the stand-ins get cells of their own shape.
+
+                One grid could not do this. A cell in the slot's shape crops a stand-in to five
+                to one, so the owner is asked to choose and crop a picture they cannot see;
+                letting each cell take its own shape puts the ragged rows back that the grid was
+                introduced to fix. Two grids, each regular, is the only answer that is neither.
+            -->
+            {#if trueTiles.length > 0}
+                <div
+                    class="tiles"
+                    style="--lt-cols: {cells.perRow}; --lt-cell: {cells.aspect}"
+                >
+                    {#each trueTiles as tile (tile.url)}
+                        <button
+                            type="button"
+                            class="tile"
+                            class:offered={offering === tile.url}
+                            disabled={uploading}
+                            title="Choose what to use this picture as"
+                            onclick={() => (offering = offering === tile.url ? null : tile.url)}
+                        >
+                            <!--
+                                A title with no picture of this shape answers 404, and the tile
+                                was a grey box that could be chosen. It takes itself off the wall
+                                instead.
+                            -->
+                            <img src={tile.url} alt="" loading="lazy" onerror={() => (dead[tile.url] = true)} />
+                        </button>
+                    {/each}
+                </div>
+            {/if}
+
+            {#if standIns.length > 0}
+                <p class="fell-back">{standInNote}</p>
+                <div
+                    class="tiles stand-ins"
+                    style="--lt-cols: {standInCells.perRow}; --lt-cell: {standInCells.aspect}"
+                >
+                    {#each standIns as tile (tile.url)}
+                        <button
+                            type="button"
+                            class="tile"
+                            class:offered={offering === tile.url}
+                            disabled={uploading}
+                            title="Choose what to use this picture as"
+                            onclick={() => (offering = offering === tile.url ? null : tile.url)}
+                        >
+                            <img src={tile.url} alt="" loading="lazy" onerror={() => (dead[tile.url] = true)} />
+                        </button>
+                    {/each}
+                </div>
+            {/if}
+
+            {#if trueTiles.length === 0 && standIns.length === 0}
+                <p class="none">
+                    {#if loadingTiles || tileSearching || onlineBusy}
+                        {onlineBusy ? 'Asking the providers...' : 'Looking...'}
+                    {:else if source === 'online'}
+                        {onlineNote ?? 'Nothing came back.'}
+                    {:else if searchedFrom}
+                        Nothing matching that has a {kindOfShape().toLowerCase()} picture.
+                    {:else}
+                        This channel has no content to take pictures from yet - search above for any title.
+                    {/if}
+                </p>
+            {/if}
 
             {#if moreToFetch}
                 <button
@@ -1415,6 +1491,9 @@
         gap: 10px;
     }
 
+    /* The second wall sits under the first; the note between them carries the gap above it. */
+    .tiles.stand-ins { margin-top: 0; }
+
     /* The card's own frame, turned into the thing you drag. */
     .frame.cropping {
         cursor: grab;
@@ -1446,7 +1525,7 @@
 
 
     .fell-back {
-        margin: 0 0 8px;
+        margin: 14px 0 8px;
         font-size: 11.5px;
         color: var(--lt-text-dim);
         border-left: 3px solid var(--lt-collection, var(--lt-accent));

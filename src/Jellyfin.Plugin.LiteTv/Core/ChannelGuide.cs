@@ -23,6 +23,7 @@ public sealed class ChannelGuide
     private readonly WeekStore _weeks;
     private readonly YouTubeStreamResolver _trailers;
     private readonly SponsorBlockClient _sponsorBlock;
+    private readonly ChannelStore _channels;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelGuide"/> class.
@@ -35,12 +36,14 @@ public sealed class ChannelGuide
         ChannelPlaylistBuilder builder,
         WeekStore weeks,
         YouTubeStreamResolver trailers,
-        SponsorBlockClient sponsorBlock)
+        SponsorBlockClient sponsorBlock,
+        ChannelStore channels)
     {
         _builder = builder;
         _weeks = weeks;
         _trailers = trailers;
         _sponsorBlock = sponsorBlock;
+        _channels = channels;
     }
 
     /// <summary>
@@ -73,19 +76,25 @@ public sealed class ChannelGuide
     }
 
     /// <summary>
-    /// Gets the channels that are on air, in configuration order.
+    /// Gets the channels that are on air, in the order the store keeps them.
+    /// <para>
+    /// An instance method rather than a static one since the channels moved out of the
+    /// configuration document and into <see cref="ChannelStore"/>: there is a service to ask
+    /// now, and reaching for a static singleton to avoid asking it is how the configuration
+    /// ended up being read from six unrelated places in the first place.
+    /// </para>
     /// </summary>
     /// <returns>The enabled channels.</returns>
-    public static IReadOnlyList<TvChannel> Channels()
-        => Plugin.Instance?.Configuration.Channels.Where(c => c.Enabled).ToList() ?? new List<TvChannel>();
+    public IReadOnlyList<TvChannel> Channels()
+        => _channels.All().Where(c => c.Enabled).ToList();
 
     /// <summary>
     /// Gets one channel by id, if it is on air.
     /// </summary>
     /// <param name="channelId">The channel id.</param>
     /// <returns>The channel, or null when it is unknown or disabled.</returns>
-    public static TvChannel? Channel(Guid channelId)
-        => Channels().FirstOrDefault(c => c.Id == channelId);
+    public TvChannel? Channel(Guid channelId)
+        => _channels.Get(channelId) is { Enabled: true } found ? found : null;
 
     /// <summary>
     /// Gets what a channel is airing at one moment.

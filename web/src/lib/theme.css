@@ -130,3 +130,25 @@
 }
 
 :where(#litetv-app) :where(input, textarea)::placeholder { color: var(--lt-text-faint); }
+
+/*
+ * A label that changes without changing the width of what holds it.
+ *
+ * THE RULE: nothing on this page may move because something was clicked. A control whose size
+ * depends on its state pushes every control after it sideways, and the button under the pointer
+ * stops being the one that was there - "i don't like things moving around anywhere!". The same
+ * fault has been fixed on the Look screen's head, on its filters, and on the Week toolbar, which
+ * is why the fix now lives here instead of in a component.
+ *
+ * Every candidate label is stacked in one grid cell. The widest is drawn invisibly and sets the
+ * size; the live one is drawn on top of it. A min-width in pixels would be a guess about a font
+ * the dashboard chooses, and would be wrong the moment the page is read in German.
+ *
+ *     <span class="lt-swap">
+ *         <span class="lt-ghost">The longest thing this can say</span>
+ *         <span>{ what it says now }</span>
+ *     </span>
+ */
+.lt-swap { display: inline-grid; }
+.lt-swap > * { grid-area: 1 / 1; }
+.lt-swap .lt-ghost { visibility: hidden; }

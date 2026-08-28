@@ -40,6 +40,14 @@ export interface ProgramBlock {
 
 export interface TvChannel {
     Id: string;
+    /**
+     * Where the channel sits in the list, counting from one.
+     *
+     * A folder of one file per channel has no order of its own, so the server writes the
+     * position down and hands a new channel the end of the list. Nothing on the page sets it;
+     * it is carried so a save round-trips what the server said.
+     */
+    Position: number;
     Name: string;
     Enabled: boolean;
     AnchorUtc: string;

@@ -488,7 +488,10 @@
                                 e.currentTarget.value = '';
                             }}
                         />
-                        {uploading ? 'Uploading…' : 'Upload a build'}
+                        <span class="lt-swap">
+                            <span class="lt-ghost">Upload a build</span>
+                            <span>{uploading ? 'Uploading…' : 'Upload a build'}</span>
+                        </span>
                     </label>
                 {/if}
             </div>

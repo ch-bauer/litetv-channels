@@ -340,7 +340,10 @@
             onclick={fitToContent}
             disabled={week.busy || !week.week?.Curated}
             title="Works out how long this channel takes to play everything once, makes the schedule that long, and lays it out - so every episode airs before it starts again."
-        >{week.busy ? 'Working…' : 'As long as the content'}</button>
+        ><span class="lt-swap">
+                <span class="lt-ghost">As long as the content</span>
+                <span>{week.busy ? 'Working…' : 'As long as the content'}</span>
+            </span></button>
 
         <div class="legend">
             <span><i style="background: {KIND_FILL.Programme}"></i>Programme</span>
@@ -348,26 +351,34 @@
             <span><i style="background: {KIND_FILL.Advert}"></i>Advert</span>
         </div>
 
-        {#if week.dirty}
-            <!--
-                The way back. The owner asked for it in the same breath as asking for the week
-                to wait for Save: an edit you cannot take back is one you cannot afford to try.
-            -->
-            <button
-                type="button"
-                class="chip"
-                onclick={() => week.undo()}
-                disabled={week.busy}
-                title="Takes back {week.undoWords}"
-            >Undo</button>
-            <button
-                type="button"
-                class="chip quiet"
-                onclick={() => week.discard()}
-                disabled={week.busy}
-                title="Throws away every unsaved schedule change and goes back to what the server holds"
-            >Discard {week.pending.length} change{week.pending.length === 1 ? '' : 's'}</button>
-        {/if}
+        <!--
+            The way back. The owner asked for it in the same breath as asking for the week to
+            wait for Save: an edit you cannot take back is one you cannot afford to try.
+
+            ALWAYS HERE, disabled when there is nothing to take back. It used to appear only
+            once the week was dirty, so the first edit pushed "Lay this week out" sideways and
+            the button under the pointer was no longer the one that had been there - "i don't
+            like things moving around anywhere!". Reserving the space costs two grey chips and
+            is the whole fix.
+        -->
+        <button
+            type="button"
+            class="chip"
+            onclick={() => week.undo()}
+            disabled={week.busy || !week.dirty}
+            title={week.dirty ? 'Takes back ' + week.undoWords : 'Nothing to take back yet'}
+        >Undo</button>
+        <button
+            type="button"
+            class="chip quiet"
+            onclick={() => week.discard()}
+            disabled={week.busy || !week.dirty}
+            title="Throws away every unsaved schedule change and goes back to what the server holds"
+        ><span class="lt-swap">
+                <!-- The plural, so the singular cannot be narrower than the box it sits in. -->
+                <span class="lt-ghost">Discard {week.pending.length} changes</span>
+                <span>Discard {week.pending.length} change{week.pending.length === 1 ? '' : 's'}</span>
+            </span></button>
 
         <button
             type="button"
@@ -377,9 +388,15 @@
             title={store.dirty
                 ? 'The week is laid out by the server from the saved configuration, so this saves your changes first.'
                 : 'Lays the whole week out again from this channel’s content and settings.'}
-        >
-            {week.busy ? 'Working…' : store.dirty ? 'Save and lay this week out' : 'Lay this week out'}
-        </button>
+        ><span class="lt-swap">
+                <!--
+                    The widest thing this button can ever say, drawn invisibly underneath it.
+                    That is what fixes the width - a number of pixels would be a guess about a
+                    font the dashboard chooses, and would be wrong in German.
+                -->
+                <span class="lt-ghost">Save and lay this week out</span>
+                <span>{week.busy ? 'Working…' : store.dirty ? 'Save and lay this week out' : 'Lay this week out'}</span>
+            </span></button>
     </div>
 
     {#if week.unsaved}
@@ -391,10 +408,27 @@
         <p class="bad">{week.error}</p>
     {/if}
 
-    {#if week.loading}
-        <p class="waiting">Loading the week…</p>
-    {:else}
+    <!--
+        The grid is ALWAYS drawn, even while a week is being fetched.
+
+        It used to be replaced by a one-line "Loading the week…" - and the grid's height comes
+        from the zoom rather than from its contents, so switching channels collapsed a
+        screenful down to a single line and blew it back up again a moment later. That is the
+        "weird flickering": not a repaint, a reflow of the whole page twice per channel.
+
+        The week itself is still cleared the instant the channel changes, deliberately - a new
+        channel must never be seen wearing the previous one's schedule. So what is drawn here
+        for that moment is an empty grid at the right size, and the word sits OVER it instead of
+        in place of it.
+    -->
+    <div class="grid-wrap">
         <Grid {onDropItem} />
+        {#if week.loading}
+            <p class="waiting over">Loading the week…</p>
+        {/if}
+    </div>
+
+    {#if !week.loading}
 
         {#if selected}
             <div class="inspector" onclick={(e) => e.stopPropagation()}>
@@ -641,5 +675,23 @@
     }
 
     .status, .waiting { color: var(--lt-text-dim); }
+
+    .grid-wrap { position: relative; }
+
+    /*
+        Over the grid, not in place of it. Centred on the grid so it reads as the grid being
+        busy, rather than as a paragraph appearing above everything and pushing the whole page
+        down and back up again on every channel change.
+    */
+    .waiting.over {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        background: color-mix(in srgb, var(--lt-ground-bottom) 55%, transparent);
+        pointer-events: none;
+    }
     .bad { color: #e08585; }
 </style>

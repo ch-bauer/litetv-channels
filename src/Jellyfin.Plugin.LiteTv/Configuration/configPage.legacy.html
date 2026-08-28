@@ -3283,7 +3283,7 @@
                 // configuration - otherwise it would build the channel you had before the edit.
                 applyEditorToChannel();
                 weekStatus('Saving, then laying the week out…');
-                ApiClient.updatePluginConfiguration(pluginId, config)
+                saveConfig()
                     .then(function () { return weekRequest('POST', '/Generate'); })
                     .then(function (data) {
                         week.data = data;
@@ -5503,15 +5503,80 @@
              * and the page would otherwise sit there empty. The guard keeps the two from
              * fighting: whichever arrives first does the work.
              */
+            /*
+                The channels live a FILE EACH on the server now, not inside the configuration
+                document - see Core/ChannelStore.cs for why. This page was written against the
+                old shape and is six thousand lines long, so rather than rewrite it the two ends
+                are shimmed here: the channels are fetched separately and hung on
+                `config.Channels`, where every line below already expects to find them, and a
+                save writes them back one at a time.
+
+                Without this the page would look exactly as though it were saving and would
+                change nothing at all, which is the worst of the three possible outcomes - and
+                this page exists precisely to be the way back when the new one misbehaves.
+            */
+            var serverChannelIds = [];
+
+            function loadConfig() {
+                return Promise.all([
+                    ApiClient.getPluginConfiguration(pluginId),
+                    ApiClient.getJSON(ApiClient.getUrl('LiteTv/Definitions'))
+                ]).then(function (both) {
+                    var loaded = both[0];
+                    loaded.Channels = both[1] || [];
+                    serverChannelIds = loaded.Channels.map(function (c) { return c.Id; });
+                    return loaded;
+                });
+            }
+
+            function saveConfig() {
+                var here = config.Channels || [];
+                var live = here.map(function (c) { return c.Id; });
+                var chain = Promise.resolve();
+
+                // Gone first, so a delete and an add in the same save cannot collide.
+                serverChannelIds.forEach(function (id) {
+                    if (live.indexOf(id) !== -1) { return; }
+                    chain = chain.then(function () {
+                        return ApiClient.fetch({
+                            url: ApiClient.getUrl('LiteTv/Definitions/' + id),
+                            type: 'DELETE'
+                        });
+                    });
+                });
+
+                here.forEach(function (channel) {
+                    chain = chain.then(function () {
+                        return ApiClient.fetch({
+                            url: ApiClient.getUrl('LiteTv/Definitions/' + channel.Id),
+                            type: 'POST',
+                            data: JSON.stringify(channel),
+                            contentType: 'application/json'
+                        });
+                    });
+                });
+
+                return chain.then(function () {
+                    serverChannelIds = live.slice();
+
+                    // Sent WITHOUT the channels. The server empties that list anyway, and
+                    // sending them would put them back into the one document they were moved
+                    // out of.
+                    var rest = {};
+                    Object.keys(config).forEach(function (key) { rest[key] = config[key]; });
+                    rest.Channels = [];
+                    return ApiClient.updatePluginConfiguration(pluginId, rest);
+                });
+            }
+
             var loading = false;
 
             function loadPage() {
                 if (loading || config) { return; }
                 loading = true;
                 Dashboard.showLoadingMsg();
-                return ApiClient.getPluginConfiguration(pluginId).then(function (loaded) {
+                return loadConfig().then(function (loaded) {
                     config = loaded;
-                    config.Channels = config.Channels || [];
                     q('#ChannelUserName').value = config.ChannelUserName || 'LiteTV';
                     q('#SkipTrailerSegments').checked = config.SkipTrailerSegments !== false;
                     q('#YouTubeClient').value = config.YouTubeClient || '';
@@ -6435,7 +6500,7 @@
                     config.ChannelUserName = (q('#ChannelUserName').value || '').trim() || 'LiteTV';
                 config.SkipTrailerSegments = q('#SkipTrailerSegments').checked;
                 config.YouTubeClient = q('#YouTubeClient').value || '';
-                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                    saveConfig().then(function (result) {
                         renderChannelSelect();
                         renderBlockSelect();
                         Dashboard.processPluginConfigurationUpdateResult(result);

@@ -45,6 +45,21 @@ class ConfigStore {
     */
     private settledIds = $state<Set<string>>(new Set());
 
+    /*
+        Channels made here that should arrive with a week already laid out.
+
+        A new channel used to be saved empty and stay blank until somebody found **Lay this week
+        out** - so the one thing everybody wants next was a separate step nobody was told about.
+        It cannot be done at the moment of creation: the server lays a week out from the STORED
+        channel, and a channel made on this page does not exist there yet.
+
+        So it is remembered here and done by Save, which is the moment the server first hears of
+        the channel. That keeps the page's rule intact - nothing reaches the server until Save -
+        and makes the layout part of the same action rather than a second write behind the
+        owner's back.
+    */
+    private wantsLayout = new Set<string>();
+
     /**
      * Whether the server knows this channel at all - true once a Save has carried it across.
      * A channel it does not know has no week and cannot be given one.
@@ -73,7 +88,23 @@ class ConfigStore {
         this.loading = true;
         this.error = null;
         try {
-            const loaded = await api().getPluginConfiguration<PluginConfig>(PLUGIN_ID);
+            /*
+                Two requests, because the channels are no longer part of the configuration
+                document. They are a file each on the server - see Core/ChannelStore.cs - so
+                that one unreadable channel costs one channel rather than all of them, and so a
+                page that loaded before somebody else's edit cannot undo it by posting a whole
+                list back.
+
+                They are put back onto `config.Channels` here on purpose: the rest of the app
+                reads them there and knows nothing about where they came from. Only `save`
+                below has to care.
+            */
+            const [loaded, channels] = await Promise.all([
+                api().getPluginConfiguration<PluginConfig>(PLUGIN_ID),
+                api().getJSON<TvChannel[]>(api().getUrl('LiteTv/Definitions')),
+            ]);
+
+            loaded.Channels = channels ?? [];
             this.config = loaded;
             this.channelId = loaded.Channels[0]?.Id ?? null;
             this.settled = stamp(loaded);
@@ -87,13 +118,76 @@ class ConfigStore {
         }
     }
 
+    /**
+     * Saves what has actually changed.
+     *
+     * One request per channel that differs, one delete per channel that has gone, and the
+     * configuration document for everything that is not a channel. That is the shape the
+     * server now wants: the channels live a file each, so this can no longer post the whole
+     * list and hope.
+     *
+     * The channels are compared against `settled` - the state the server last stated - so a
+     * screen full of channels nobody touched costs nothing, and a save cannot rewrite a
+     * channel this page never edited.
+     */
     async save(): Promise<void> {
         if (!this.config) { return; }
         const bar = dashboard();
         bar.showLoadingMsg();
         try {
             const sent = $state.snapshot(this.config);
-            await api().updatePluginConfiguration(PLUGIN_ID, sent);
+            const before: PluginConfig | null = this.settled ? JSON.parse(this.settled) : null;
+            const had = new Map((before?.Channels ?? []).map((c) => [c.Id, JSON.stringify(c)]));
+
+            // Gone first, so a channel deleted and a channel added in the same save cannot
+            // collide over a position.
+            for (const id of had.keys()) {
+                if (!sent.Channels.some((c) => c.Id === id)) {
+                    await api().fetch({
+                        url: api().getUrl('LiteTv/Definitions/' + id),
+                        type: 'DELETE',
+                    });
+                }
+            }
+
+            for (const channel of sent.Channels) {
+                if (had.get(channel.Id) === JSON.stringify(channel)) { continue; }
+                await api().fetch({
+                    url: api().getUrl('LiteTv/Definitions/' + channel.Id),
+                    type: 'POST',
+                    data: JSON.stringify(channel),
+                    contentType: 'application/json',
+                });
+            }
+
+            /*
+                A channel made on this page is laid out now, in the same Save that created it.
+                After the writes above, so the server is laying out the channel as it now
+                stands, and before `settledIds` below, so the Week screen's reload - which
+                watches exactly that - picks the new week up by itself.
+            */
+            for (const id of [...this.wantsLayout]) {
+                this.wantsLayout.delete(id);
+                const made = sent.Channels.find((c) => c.Id === id);
+                if (!made || made.Sources.length === 0) { continue; }
+                try {
+                    await api().fetch({
+                        url: api().getUrl('LiteTv/Channels/' + id + '/Week/Generate'),
+                        type: 'POST',
+                    });
+                } catch (err) {
+                    // Not worth failing the save over, and not worth an alert either: the
+                    // channel IS saved, and the Week screen offers to lay it out with a button
+                    // that says what went wrong if it is pressed again.
+                    console.warn('[litetv] could not lay out the new channel', id, err);
+                }
+            }
+
+            // Everything that is not a channel. The list is sent empty rather than omitted:
+            // the server clears it anyway, and sending what is on screen would put the
+            // channels back into the one document this change took them out of.
+            await api().updatePluginConfiguration(PLUGIN_ID, { ...sent, Channels: [] });
+
             // Stamped from what was actually sent, so an edit made while the request was in
             // flight still counts as unsaved rather than being swallowed by the round trip.
             this.settled = JSON.stringify(sent);
@@ -114,6 +208,8 @@ class ConfigStore {
         if (!this.config) { return; }
         const made: TvChannel = {
             Id: newId(),
+            // The server hands a new channel the end of the list; zero is how it is asked to.
+            Position: 0,
             Name: name.trim() || 'New channel',
             Enabled: true,
             AnchorUtc: new Date().toISOString(),
@@ -134,6 +230,11 @@ class ConfigStore {
         };
         this.config.Channels.push(made);
         this.channelId = made.Id;
+
+        // Only when there is something to lay out. A channel started from nothing has no
+        // content, and asking the server to schedule nothing produces an error where the owner
+        // expected a week.
+        if (sources.length > 0) { this.wantsLayout.add(made.Id); }
     }
 
     /**

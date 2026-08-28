@@ -8,7 +8,15 @@ namespace Jellyfin.Plugin.LiteTv.Configuration;
 public class PluginConfiguration : BasePluginConfiguration
 {
     /// <summary>
-    /// Gets or sets the defined channels.
+    /// Gets or sets the channels as they used to be stored: <b>migration only, and empty on
+    /// every server that has started once since.</b>
+    /// <para>
+    /// The channels live in <see cref="Core.ChannelStore"/> now, a file each. This property is
+    /// what an older configuration document still holds, and it exists so that document can be
+    /// read once and emptied. Nothing asks it what the channels are - ask the store - and
+    /// <see cref="Plugin.UpdateConfiguration"/> keeps it empty so no writer can put channels
+    /// back into a document where one bad value fails all of them.
+    /// </para>
     /// </summary>
     public List<TvChannel> Channels { get; set; } = new();
 
@@ -296,6 +304,17 @@ public class TvChannel
     /// Gets or sets the channel id.
     /// </summary>
     public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>
+    /// Gets or sets where this channel sits in the list, counting from one.
+    /// <para>
+    /// A list in a document carried its own order for nothing; a folder of files does not, and
+    /// "whatever order the file system enumerates in" is not an order anybody chose. So the
+    /// position is written down. <see cref="Core.ChannelStore"/> sorts by it and puts a channel
+    /// with none at the end, which is where somebody who has just made one looks for it.
+    /// </para>
+    /// </summary>
+    public int Position { get; set; }
 
     /// <summary>
     /// Gets or sets the channel display name.

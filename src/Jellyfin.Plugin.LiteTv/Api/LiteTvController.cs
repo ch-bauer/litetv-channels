@@ -41,6 +41,7 @@ public class LiteTvController : ControllerBase
     private readonly SiblingPlugins _siblings;
     private readonly SmartSimilarClient _smartSimilar;
     private readonly YouTubePlaylist _playlists;
+    private readonly ChannelStore _channels;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
@@ -54,6 +55,8 @@ public class LiteTvController : ControllerBase
     /// <param name="httpClientFactory">Fetches artwork chosen from somewhere else.</param>
     /// <param name="siblings">Which of the other plugins are installed.</param>
     /// <param name="smartSimilar">Scores suggestions, when that plugin is there.</param>
+    /// <param name="playlists">Reads YouTube playlists.</param>
+    /// <param name="channels">The channels, a file each.</param>
     public LiteTvController(
         ChannelGuide guide,
         WeekStore weeks,
@@ -64,7 +67,8 @@ public class LiteTvController : ControllerBase
         IHttpClientFactory httpClientFactory,
         SiblingPlugins siblings,
         SmartSimilarClient smartSimilar,
-        YouTubePlaylist playlists)
+        YouTubePlaylist playlists,
+        ChannelStore channels)
     {
         _guide = guide;
         _weeks = weeks;
@@ -76,6 +80,7 @@ public class LiteTvController : ControllerBase
         _siblings = siblings;
         _smartSimilar = smartSimilar;
         _playlists = playlists;
+        _channels = channels;
     }
 
     /// <summary>
@@ -89,7 +94,7 @@ public class LiteTvController : ControllerBase
         var result = new GuideDto();
 
         var artwork = NewArtworkCache();
-        foreach (var channel in ChannelGuide.Channels())
+        foreach (var channel in _guide.Channels())
         {
             var window = _guide.Window(channel, DateTime.UtcNow, DateTime.UtcNow.AddHours(DefaultGuideHours)).Take(24).ToList();
             var now = window.FirstOrDefault();
@@ -136,7 +141,7 @@ public class LiteTvController : ControllerBase
         var result = new GuideWindowDto { StartUtc = start, EndUtc = end, ServerTimeUtc = DateTime.UtcNow };
 
         var artwork = NewArtworkCache();
-        foreach (var channel in ChannelGuide.Channels())
+        foreach (var channel in _guide.Channels())
         {
             var row = new GuideChannelDto { Id = channel.Id, Name = channel.Name };
             foreach (var airing in _guide.Window(channel, start, end).Take(512))
@@ -161,7 +166,7 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<ChannelNowDto> GetNow([FromRoute] Guid channelId, [FromQuery] int upcoming = 5, [FromQuery] bool breaks = false)
     {
-        var channel = ChannelGuide.Channel(channelId);
+        var channel = _guide.Channel(channelId);
         if (channel is null)
         {
             return NotFound();
@@ -241,7 +246,7 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<CycleDto> GetCycle([FromRoute] Guid channelId)
     {
-        var channel = ChannelGuide.Channel(channelId);
+        var channel = _guide.Channel(channelId);
         if (channel is null)
         {
             return NotFound();
@@ -359,6 +364,77 @@ public class LiteTvController : ControllerBase
             PlayableSeconds = PlayableLength.Of(length, asSegments),
             SkipSegments = segments
         };
+    }
+
+    /// <summary>
+    /// Gets every channel as it is stored - the definitions the configuration page edits, not
+    /// the guide.
+    /// <para>
+    /// The page used to read these out of the plugin configuration document, and write them
+    /// back the same way: the whole list, every time, from a page that might have loaded before
+    /// the last change. They are a file each now (<see cref="ChannelStore"/>), so this is where
+    /// the page gets them and the two endpoints below are how it changes one.
+    /// </para>
+    /// </summary>
+    /// <returns>The channels.</returns>
+    [HttpGet("Definitions")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<TvChannel>> GetDefinitions() => Ok(_channels.All());
+
+    /// <summary>
+    /// Writes <b>one</b> channel, and nothing else.
+    /// <para>
+    /// The whole point of the store. A save carries one channel, so a value the server cannot
+    /// read fails that channel and leaves the others on the air, and a page that has never
+    /// heard of a channel somebody else just made cannot delete it by leaving it out.
+    /// </para>
+    /// <para>
+    /// The id in the route wins over the id in the body: a mismatch is a page bug, and taking
+    /// the route's is what keeps it from writing over a different channel.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <param name="channel">The channel as it should now be.</param>
+    /// <returns>The channel as stored.</returns>
+    [HttpPost("Definitions/{channelId}")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<TvChannel> PutDefinition([FromRoute] Guid channelId, [FromBody] TvChannel channel)
+    {
+        if (channel is null || channelId == Guid.Empty)
+        {
+            return BadRequest();
+        }
+
+        channel.Id = channelId;
+        _channels.Save(channel);
+        return Ok(channel);
+    }
+
+    /// <summary>
+    /// Throws a channel away, and its stored week with it.
+    /// <para>
+    /// The week is deleted here rather than left to the tidying pass, so the folder is right
+    /// the moment the request returns instead of one event later.
+    /// </para>
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <returns>Nothing.</returns>
+    [HttpDelete("Definitions/{channelId}")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult DeleteDefinition([FromRoute] Guid channelId)
+    {
+        if (!_channels.Delete(channelId))
+        {
+            return NotFound();
+        }
+
+        _weeks.Delete(channelId);
+        return NoContent();
     }
 
     /// <summary>
@@ -734,8 +810,8 @@ public class LiteTvController : ControllerBase
     /// </summary>
     /// <param name="channelId">The channel.</param>
     /// <returns>The channel, or null.</returns>
-    private static TvChannel? ConfiguredChannel(Guid channelId)
-        => Plugin.Instance?.Configuration.Channels.FirstOrDefault(c => c.Id == channelId);
+    private TvChannel? ConfiguredChannel(Guid channelId)
+        => _channels.Get(channelId);
 
     /// <summary>The stored row a page's payload describes.</summary>
     /// <param name="dto">The payload.</param>
@@ -1271,7 +1347,7 @@ public class LiteTvController : ControllerBase
     public ActionResult<List<ChannelSuggestionDto>> GetSuggestions()
     {
         var existingNames = new HashSet<string>(
-            Plugin.Instance?.Configuration.Channels.Select(c => c.Name) ?? Enumerable.Empty<string>(),
+            _channels.All().Select(c => c.Name),
             StringComparer.OrdinalIgnoreCase);
         var suggestions = new List<ChannelSuggestionDto>();
 

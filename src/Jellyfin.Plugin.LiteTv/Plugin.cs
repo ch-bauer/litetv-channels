@@ -87,6 +87,26 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             saving.ChannelUserToken = Sessions.ChannelPlaybackUser.HeldToken;
         }
 
+        /*
+            The channels are not in here any more, and this is what keeps them out.
+
+            They live a file each in Core.ChannelStore, for the reason written at the top of
+            that class: one document meant one bad value failed every channel at once. The
+            property survives only so an older document can be read once and emptied - so any
+            writer that still carries a list, an old page or a restored backup, must not be able
+            to put one back.
+
+            Guarded by HasTakenOver rather than done unconditionally: before the migration has
+            run and succeeded, that list is still the only copy of the channels, and emptying it
+            here would delete them.
+        */
+        if (configuration is PluginConfiguration withChannels
+            && Core.ChannelStore.HasTakenOver
+            && withChannels.Channels.Count > 0)
+        {
+            withChannels.Channels.Clear();
+        }
+
         base.UpdateConfiguration(configuration);
     }
 

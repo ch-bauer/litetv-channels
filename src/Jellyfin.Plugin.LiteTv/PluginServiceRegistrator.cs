@@ -22,6 +22,11 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 
         serviceCollection.AddSingleton<ChannelPlaylistBuilder>();
 
+        // The channels: one file each, not a list inside the configuration document. First,
+        // because everything below asks it what the channels are, and because constructing it
+        // is what moves an older server's channels out of that document.
+        serviceCollection.AddSingleton<ChannelStore>();
+
         // The stored weeks: one file per channel, and the schedule itself rather than a cache
         // of one. Singleton so the files are read once and held.
         serviceCollection.AddSingleton<WeekStore>();

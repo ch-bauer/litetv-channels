@@ -16,15 +16,20 @@ public class SiblingPlugins
     /// Enhanced Poster Tags was here and was taken out on the owner's instruction: LiteTV does
     /// not ask it for anything, so reporting it only put a plugin on the page that nothing on
     /// the page uses. Do not add it back.
+    /// <para>
+    /// SponsorBlock Segments, Next Up Cleanup and Clear Transcodes went the same way on
+    /// 28 Aug 2026, for the same reason and on the same instruction - "all not used by LiteTV".
+    /// The strip exists because a missing plugin fails <b>quietly</b>, so it may only ever list
+    /// plugins whose absence changes what LiteTV does. Trimming a trailer is done by LiteTV's
+    /// own SponsorBlockClient, which talks to the SponsorBlock service directly and has never
+    /// needed that plugin.
+    /// </para>
     /// </remarks>
     private static readonly SiblingDefinition[] Known =
     {
         new("61b616fa-7ba8-4262-b2a9-fae29b015930", "Smart Similar", "Scores suggestions. Without it LiteTV falls back to a much rougher genre match."),
         new("b9f0c474-e1a9-4a06-9c8a-3f1d2e5b7a10", "Collection Row", "Shows a film's collections on the detail page in the TV app."),
-        new("b7c3f1e2-9a4d-4e8b-b0c6-2f5d8a913c47", "FSK Rating Updater", "Normalises age ratings so the playback badge has something to draw."),
-        new("684a50b4-3970-44ef-aab0-3a162b415374", "SponsorBlock Segments", "Trims sponsor and outro stretches off linked trailers."),
-        new("64c04809-0078-401f-a883-2fc0fddace8c", "Next Up Cleanup", "Keeps Continue Watching tidy, so a channel that was tuned out of does not sit there as an unfinished programme."),
-        new("c3cbb73c-59e6-4ec6-9cba-a86ba70e73c0", "Clear Transcodes", "Clears leftover transcode files. LiteTV never asks for a transcode, but the rest of the server does.")
+        new("b7c3f1e2-9a4d-4e8b-b0c6-2f5d8a913c47", "FSK Rating Updater", "Normalises age ratings so the playback badge has something to draw.")
     };
 
     private readonly IPluginManager _pluginManager;
