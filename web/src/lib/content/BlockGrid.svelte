@@ -117,6 +117,7 @@
     }
 </script>
 
+{#if blocks.length > 0}
 <div class="blocks">
     {#each blocks as block, index (index)}
         <button
@@ -134,10 +135,9 @@
             <span class="on-days">{daysWords(block)}</span>
             {#if !block.Enabled}<span class="off">off</span>{/if}
         </button>
-    {:else}
-        <p class="no-blocks">No blocks &mdash; the whole week plays the list above.</p>
     {/each}
 </div>
+{/if}
 
 <div class="editor">
     {#if current}
@@ -182,7 +182,10 @@
         </div>
     {:else}
         <div class="line">
-            <span class="empty">No blocks - the whole week plays the list above.</span>
+            <!-- The only empty state. The list above used to carry one as well, so with no
+                 blocks the same sentence was printed twice, once with a button and once
+                 without. -->
+            <span class="empty">No blocks &mdash; the whole week plays the list above.</span>
             <button type="button" class="ghost" onclick={addBlock}>New block</button>
         </div>
     {/if}
@@ -242,7 +245,6 @@
         color: var(--lt-collection);
     }
 
-    .no-blocks { margin: 0; padding: 12px; font-size: 12.5px; color: var(--lt-text-dim); }
 
     .editor { margin-top: 10px; }
 

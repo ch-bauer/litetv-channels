@@ -593,6 +593,19 @@
     */
     .bar.selected { box-shadow: inset 0 0 0 2px #fff; z-index: 1; }
 
+    /*
+        The ring's bottom edge.
+
+        The ring is drawn INSIDE the bar, and the bar's own `::after` - the one-pixel strip that
+        makes the gap to the next programme - is a child, so it paints over that inset edge. The
+        highlight therefore had a top, a left and a right and no bottom, and it looked exactly
+        like the next bar was covering it. It was not: the bar was covering itself.
+
+        Colouring that strip instead of hiding it keeps the gap - bars must not touch, or the
+        schedule reads as one block - and completes the ring in the same pixel.
+    */
+    .bar.selected::after { background: #fff; }
+
     .drop {
         position: absolute;
         left: 0;

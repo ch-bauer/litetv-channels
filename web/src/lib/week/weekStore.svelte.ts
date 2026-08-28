@@ -411,13 +411,36 @@ class WeekStore {
         await this.add({ Kind: 'Clear' });
     }
 
-    /** Takes one airing off the week. Drawn as gone immediately; pending until Save. */
+    /**
+     * Takes one airing off the week. Drawn as gone immediately; pending until Save.
+     *
+     * The selection moves to what follows rather than being dropped. Clearing it meant that
+     * deleting a run of programmes was delete, find the next one, click it, delete - when the
+     * point of having a keyboard shortcut is to press the key again.
+     */
     async remove(airingId: string): Promise<void> {
+        const successor = this.after(airingId);
         await this.add({ Kind: 'Remove', AiringId: airingId }, () => {
             if (!this.week) { return; }
             this.week.Airings = this.week.Airings.filter((a) => a.Id !== airingId);
-            if (this.selectedId === airingId) { this.selectedId = null; }
+            if (this.selectedId === airingId) { this.selectedId = successor; }
         });
+    }
+
+    /**
+     * What to select once this airing is gone: the next real programme in the week, or the
+     * previous one when it was the last. Null only when nothing else is left.
+     *
+     * Gaps are skipped - they have no id and cannot be selected - and the answer is worked out
+     * BEFORE the removal, while the week still holds the row being taken out.
+     */
+    private after(airingId: string): string | null {
+        const rows = this.airings
+            .filter((a) => a.Kind !== 'Gap' && a.Id !== null)
+            .sort((a, b) => a.StartSecond - b.StartSecond);
+        const at = rows.findIndex((a) => a.Id === airingId);
+        if (at === -1) { return null; }
+        return rows[at + 1]?.Id ?? rows[at - 1]?.Id ?? null;
     }
 
     /** Moves or adds one airing. */
