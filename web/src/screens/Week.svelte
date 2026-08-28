@@ -271,9 +271,10 @@
                 step="2"
                 value={week.zoom}
                 oninput={(e) => {
-                    // Taking the slider takes the wheel: the zoom cannot be both driven by
-                    // what is on air and set by hand, and the hand wins.
-                    if (week.frameNow) { week.setFrameNow(false); }
+                    // Taking the slider takes the wheel - but only the wheel. setZoom unticks
+                    // "Zoom to now", because two things cannot decide the size; FOLLOWING is
+                    // left alone, because following what is on at a zoom you chose yourself is
+                    // a perfectly reasonable thing to want.
                     week.setZoom(Number(e.currentTarget.value));
                 }}
                 aria-label="Zoom"
@@ -282,20 +283,31 @@
         </label>
 
         <!--
-            Follow what is on air.
+            TWO boxes, because they are two wants.
 
-            Off, the zoom is whatever you left it at for this channel. On, it is chosen so the
-            programme playing right now fills a good half of the view and the grid stays on the
-            now line - so opening the channel answers "what is on?" without a scroll or a drag,
-            and keeps answering it as the evening moves on.
+            These were one, and it did both jobs at once: it sized the grid AND held it on the
+            now line, so wanting either without the other was impossible. Separated on the
+            owner's instruction - "2 toggles follow and zoom to now".
+
+            Follow decides WHERE the grid is scrolled; it keeps following while you zoom.
+            Zoom to now decides HOW BIG things are; a hand on the slider unticks it.
         -->
-        <label class="follow" title="Zoom to the programme on air now, and keep the now line in view">
+        <label class="follow" title="Keep the now line in view - including while you zoom">
             <input
                 type="checkbox"
                 checked={week.frameNow}
                 onchange={(e) => week.setFrameNow(e.currentTarget.checked)}
             />
             Follow what's on
+        </label>
+
+        <label class="follow" title="Size the grid so the programme on air now is properly visible, rather than a sliver">
+            <input
+                type="checkbox"
+                checked={week.zoomToNow}
+                onchange={(e) => week.setZoomToNow(e.currentTarget.checked)}
+            />
+            Zoom to now
         </label>
 
         <div class="spacer"></div>

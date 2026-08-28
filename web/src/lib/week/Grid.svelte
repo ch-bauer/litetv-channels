@@ -27,6 +27,22 @@
     let body = $state<HTMLDivElement | null>(null);
     let now = $state(nowSecond());
 
+    /*
+        How tall the scrolling area is, watched rather than read once.
+
+        "Zoom to now" sizes the grid from this, so a window that changes size - the dashboard's
+        own sidebar opening, or the browser being resized - has to re-decide, or the programme
+        on air stops filling the half of the view it was sized to fill.
+    */
+    let bodyHeight = $state(0);
+    $effect(() => {
+        if (!body) { return; }
+        const observer = new ResizeObserver(() => { bodyHeight = body?.clientHeight ?? 0; });
+        observer.observe(body);
+        bodyHeight = body.clientHeight;
+        return () => observer.disconnect();
+    });
+
     // The clock ticks so the now line is not a lie after ten minutes of looking at it.
     $effect(() => {
         const timer = setInterval(() => (now = nowSecond()), 30000);
@@ -157,59 +173,40 @@
     }
 
     /*
-        Following what is on air, while the box is ticked.
+        TOGGLE ONE - "Zoom to now": how BIG things are.
 
-        Only when the programme CHANGES, not on every draw: re-deciding the zoom continuously
-        would fight the slider, and re-deciding it after the zoom it just set would not settle.
+        While it is ticked the zoom is sized so the programme on air fills a good half of the
+        view, in the week as well as the day. That is what makes a channel of forty short bars
+        and a channel of four films both open readable, which no fixed number can.
+
+        Only when the programme CHANGES, or the window is resized. Re-deciding on every draw
+        would fight the layout it just caused and never settle. A hand on the slider unticks
+        this - see setZoom - so the two can never argue.
     */
     let framedFor = '';
     $effect(() => {
-        if (!body || week.airings.length === 0) { return; }
+        if (!body || week.airings.length === 0 || !week.zoomToNow) { return; }
 
-        /*
-            Two reasons to frame what is on, and they want the same number:
-
-              - the box is ticked, so it is followed for as long as it stays ticked; or
-              - nobody has touched the slider on this channel and view, so this is simply the
-                zoom it opens at. A fixed default cannot serve both a film channel of four bars
-                a day and a channel of forty, and the useful thing to see on arriving is what
-                is on now - so the default is worked out rather than picked.
-
-            Either way the slider wins the moment it is moved: setZoom drops the worked-out
-            zoom and `zoomSetByHand` keeps this from putting it back.
-        */
-        /*
-            The box is the whole switch, in both views.
-
-            Ticked - which is how a channel starts - the zoom is worked out so the programme on
-            air fills a good half of the view, in the week as well as the day. Unticked, nothing
-            here touches the zoom and the slider's number stands, remembered per channel.
-        */
-        if (!week.frameNow) { return; }
-
-        // Only when the programme CHANGES. Re-deciding on every draw would fight the layout it
-        // just caused and never settle.
-        const programme = week.channelKey + '|' + week.view + '|'
+        const programme = week.channelKey + '|' + week.view + '|' + bodyHeight + '|'
             + (onNow ? (onNow.Id ?? onNow.Name) : 'nothing on');
         if (programme === framedFor) { return; }
         framedFor = programme;
 
         const zoom = framedZoom();
-        if (zoom !== null && zoom !== week.zoom) { week.setAutoZoom(zoom); }
+        if (zoom !== null && zoom !== week.zoom) { week.applyZoomToNow(zoom); }
     });
 
     /*
-        Arriving somewhere shows the now line.
+        TOGGLE TWO - "Follow what's on": WHERE the grid is scrolled.
 
-        This used to run once, the first time the grid had a size - and the first time was the
-        WEEK view's grid, so switching to Day, or opening a channel, kept a scroll position
-        worked out at a different zoom entirely. Measured on the test server: the day opened at
-        00:00 with the now line a full screen below the fold, at 13:22.
+        Ticked, the now line is brought into view: on arriving at a channel, when the programme
+        changes, and - the owner's point - **whenever the zoom moves**, so zooming around while
+        following keeps following instead of leaving the now line somewhere off the screen.
 
-        So it runs on arrival instead - another channel, another view, another week of the
-        cycle - and while the box is ticked, whenever the zoom moves under it too. Between
-        those it leaves the scrollbar alone, because a grid that scrolls itself while you are
-        reading it is worse than one that opens in the wrong place.
+        Unticked, this never touches the scrollbar. A grid that scrolls itself while you are
+        reading it is worse than one that opens in the wrong place, which is why the two
+        toggles are separate: sizing the grid to what is on air and chasing it are different
+        wants.
     */
     let arrivedAt = '';
     $effect(() => {
@@ -226,9 +223,12 @@
         if (!body || !week.week || rows === 0 || dayHeight <= 0) { return; }
         if (body.scrollHeight - body.clientHeight <= 0) { return; }
 
+        // The zoom is part of the arrival WHILE FOLLOWING, which is what makes a zoom keep the
+        // now line in view rather than sliding it off the top.
         const arrival = [
             week.channelKey, week.view, week.weekIndex,
             week.frameNow ? week.zoom : 'free',
+            week.frameNow ? (onNow ? (onNow.Id ?? onNow.Name) : 'nothing') : 'free',
         ].join('|');
         if (arrival === arrivedAt) { return; }
         arrivedAt = arrival;

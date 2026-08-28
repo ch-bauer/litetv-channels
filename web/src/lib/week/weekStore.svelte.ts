@@ -80,18 +80,18 @@ class WeekStore {
     zoomByChannel = $state<Record<string, Partial<Record<View, number>>>>({});
 
     /*
-        The zoom nobody asked for: worked out from what is on air.
+        Ticked per channel: keep the zoom sized so what is on air right now is properly visible,
+        rather than a sliver somewhere.
 
-        A channel that has never been zoomed by hand opens at the zoom that shows the programme
-        playing right now properly - which is the useful thing to see on arriving, and better
-        than any fixed number could be, because the channels are not alike. It is also what the
-        "Follow what's on" box keeps up to date while it is ticked.
+        On unless the channel says otherwise - a channel opened for the first time should show
+        the programme playing at a size you can read, and no fixed number can do that for both a
+        film channel of four bars a day and a channel of forty.
 
-        Held in memory only, and NOT written down: it is derived from the schedule and the size
-        of the window, so it should be worked out afresh rather than remembered stale. It takes
-        precedence over a remembered zoom, and moving the slider throws it away - see setZoom.
+        It is the SECOND of the two toggles the owner asked for, and deliberately separate from
+        "Follow what's on": one decides how big things are, the other decides where the grid is
+        scrolled to. Wanting one without the other is perfectly reasonable in both directions.
     */
-    autoZoom = $state<Record<string, Partial<Record<View, number>>>>({});
+    zoomToNowByChannel = $state<Record<string, boolean>>({});
 
     /** The last zoom set by hand, kept only to fill the older single-zoom keys on the way out. */
     private lastManual: Partial<Record<View, number>> = {};
@@ -132,16 +132,40 @@ class WeekStore {
         return this.channelId ?? '';
     }
 
+    /*
+        ONE source of truth for the zoom, and this is the whole of the fix for "the zoom on day
+        does nothing".
+
+        There used to be two - a worked-out `autoZoom` and the slider's `zoomByChannel` - and the
+        getter preferred `autoZoom`, which is the opposite of what its own comment claimed. So a
+        hand on the slider wrote a number that a stale worked-out one went on beating, the grid
+        kept the zoom it opened at, and switching view and back - which changed which key was
+        looked up - "helped". Whichever of the two was ahead depended on the order effects
+        happened to run in, so it was never going to be reliable.
+
+        Now: the slider writes here, `zoomToNow` writes here, and the getter reads here.
+    */
     get zoom(): number {
-        return this.autoZoom[this.channelKey]?.[this.view]
-            ?? this.zoomByChannel[this.channelKey]?.[this.view]
-            ?? DEFAULT_ZOOM[this.view];
+        return this.zoomByChannel[this.channelKey]?.[this.view] ?? DEFAULT_ZOOM[this.view];
     }
 
-    /** The zoom worked out from what is on air. Not remembered, and beaten by the slider. */
-    setAutoZoom(value: number): void {
+    /**
+     * The zoom worked out from what is on air, applied without taking the toggle off - which is
+     * what separates it from {@link setZoom}, the hand on the slider.
+     */
+    applyZoomToNow(value: number): void {
         const key = this.channelKey;
-        this.autoZoom[key] = { ...this.autoZoom[key], [this.view]: value };
+        this.zoomByChannel[key] = { ...this.zoomByChannel[key], [this.view]: value };
+    }
+
+    /** Whether this channel keeps the zoom sized so what is on air is properly visible. */
+    get zoomToNow(): boolean {
+        return this.zoomToNowByChannel[this.channelKey] ?? true;
+    }
+
+    setZoomToNow(on: boolean): void {
+        this.zoomToNowByChannel[this.channelKey] = on;
+        this.remember();
     }
 
     /** Whether this channel is following what is on air. Ticked until told otherwise. */
@@ -201,11 +225,10 @@ class WeekStore {
         const key = this.channelKey;
         this.zoomByChannel[key] = { ...this.zoomByChannel[key], [this.view]: value };
 
-        // Thrown away rather than left underneath: it takes precedence in the getter, so
-        // keeping it would mean the slider moved and nothing happened.
-        const auto = { ...this.autoZoom[key] };
-        delete auto[this.view];
-        this.autoZoom[key] = auto;
+        // A hand on the slider takes the wheel: nothing may size the grid from what is on air
+        // while somebody is setting it themselves, or the number would be put back underneath
+        // them. Following is left alone - you can follow what is on at any zoom you like.
+        this.zoomToNowByChannel[key] = false;
 
         this.lastManual[this.view] = value;
         this.remember();
@@ -219,11 +242,16 @@ class WeekStore {
                 ...this.lastManual,
                 view: this.view,
                 channels: Object.fromEntries(
-                    Object.keys({ ...this.zoomByChannel, ...this.frameNowByChannel })
+                    Object.keys({
+                        ...this.zoomByChannel,
+                        ...this.frameNowByChannel,
+                        ...this.zoomToNowByChannel,
+                    })
                         .filter((id) => id !== '')
                         .map((id) => [id, {
                             ...this.zoomByChannel[id],
                             frameNow: this.frameNowByChannel[id] === true,
+                            zoomToNow: this.zoomToNowByChannel[id] === true,
                         }]),
                 ),
             }));
@@ -257,6 +285,12 @@ class WeekStore {
                 // is only unticked if the false was written down and read back.
                 if (typeof record.frameNow === 'boolean') {
                     this.frameNowByChannel[id] = record.frameNow;
+                }
+
+                // Same rule for the second box: ticked by default, so only a written-down
+                // false unticks it.
+                if (typeof record.zoomToNow === 'boolean') {
+                    this.zoomToNowByChannel[id] = record.zoomToNow;
                 }
             }
         } catch {

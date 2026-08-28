@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "**The shelf and the selected-programme bar were unreachable on the Week screen, and that was a regression in 1.0.84.0.** Stopping the grid from collapsing while a channel loads meant wrapping it in a plain container - and the grid is written to take the column's leftover height and scroll inside itself, so the wrapper broke that: the grid grew to its full natural height, thousands of pixels of it, the page stopped scrolling, and everything below it was pushed somewhere nobody could reach. Both were still being drawn; there was simply no way to get to them. The wrapper now carries the grid's own sizing.\n\n**A playlist channel showed two titles that contradicted each other.** A YouTube playlist source was named by a description the page composed - \"16 videos - <the first video's title>\" - and the schedule then carried that under every programme as its series, so the app drew \"7 vs. Wild Folge 3\" with \"16 videos - 7 vs. Wild - The Beginning | Episode 1\" beneath it. It reads as a channel airing the wrong thing, and was reported as exactly that. The playlist's own name is read from YouTube now. **Playlists added before this keep the old name until they are added again** - or just rename the source.\n\n**The schedule says when things air.** A block tall enough for two lines now carries its start and end time above its name, instead of keeping them in a tooltip a television cannot show. **And the times down the left are clock times** - `00:00`, `02:00` - rather than the bare `00 02 04 06`, which read as an axis on a chart instead of the time of day.",
+  "changelog": "**The zoom slider works, and there are two toggles instead of one.**\n\nThe slider did nothing on the Day view - switching to Week and back \"helped\" - because the zoom had two sources: a worked-out one and the slider's, and the code preferred the worked-out one, which is the opposite of what it was written to do. Whichever won depended on the order things happened to run in. There is one source now, and the slider writes to it.\n\n**Follow what's on** now only decides *where* the grid is scrolled - it brings the now line into view and, the part that was missing, **keeps it in view while you zoom**.\n\n**Zoom to now** is a new box that decides *how big* things are: the programme on air fills a good half of the view, so a channel of forty short items and a channel of four films both open readable. It re-sizes when the window does, and a hand on the slider unticks it. The two used to be one box doing both jobs, so wanting either without the other was impossible.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-29T12:00:00.000Z",
-  "version": "1.0.87.0",
+  "timestamp": "2026-08-29T13:00:00.000Z",
+  "version": "1.0.88.0",
   "status": "Active",
   "autoUpdate": false
 }
