@@ -11,8 +11,8 @@
         the grid. An address is one more kind of entry that goes on the shelf, added by the field
         at the top, rather than a separate control referring to a box that is not there.
     */
-    import { search, type SearchHit } from '../search';
-    import { api } from '../jellyfin';
+    import { count, search, type SearchHit } from '../search';
+    import { api, failureWords } from '../jellyfin';
     import { fetchPlaylist, looksLikeAddress, looksLikePlaylist, type PlaylistItem } from '../api/playlist';
     import { absolute } from '../jellyfin';
 
@@ -109,7 +109,7 @@
             // appears is a second click for no reason.
             if (seasons.length > 0) { await loadSeason(seasons[0].Id); }
         } catch (err) {
-            openingError = err instanceof Error ? err.message : String(err);
+            openingError = failureWords(err);
         }
     }
 
@@ -137,7 +137,7 @@
                 url: null,
             }));
         } catch (err) {
-            openingError = err instanceof Error ? err.message : String(err);
+            openingError = failureWords(err);
         }
     }
 
@@ -158,7 +158,7 @@
             if (asked !== term) { return; }
             hits = found;
         } catch (err) {
-            failed = err instanceof Error ? err.message : String(err);
+            failed = failureWords(err);
         } finally {
             busy = false;
         }
@@ -197,6 +197,17 @@
         const url = address.trim();
         if (url.length === 0) { return; }
 
+        /*
+            Come back out of an opened series or playlist first.
+
+            The shelf shows EITHER the list or the inside of one entry, and a new entry joins the
+            list - so putting one on while a series was open added it to the half that is not on
+            screen, with nothing to say so. That reads exactly as the button doing nothing, and
+            it is the likeliest thing behind "a playlist added by link does not appear" and
+            "fetching playlists does not work": both work perfectly with the shelf closed.
+        */
+        closeSeries();
+
         if (looksLikePlaylist(url)) {
             addressBusy = true;
             addressNote = null;
@@ -209,7 +220,7 @@
                 extra = [{
                     key: 'pl:' + url,
                     label: found.Items[0].Title + ' + ' + (found.Items.length - 1) + ' more',
-                    detail: found.Items.length + ' videos - a playlist',
+                    detail: count(found.Items.length, 'video') + ' - a playlist',
                     itemId: null,
                     url,
                     playlist: { url, items: found.Items },
@@ -217,7 +228,7 @@
                 address = '';
             } catch (err) {
                 addressNote = 'That playlist could not be read: '
-                    + (err instanceof Error ? err.message : String(err));
+                    + (failureWords(err));
             } finally {
                 addressBusy = false;
             }

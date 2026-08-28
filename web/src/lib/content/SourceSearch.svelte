@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { failureWords } from '../jellyfin';
     import { search, toSource, type SearchHit } from '../search';
     import { fetchPlaylist, looksLikeAddress, looksLikePlaylist } from '../api/playlist';
     import type { ChannelSource } from '../types';
@@ -62,7 +63,7 @@
         } catch (err) {
             playlistNote = {
                 text: 'That playlist could not be read: '
-                    + (err instanceof Error ? err.message : String(err)),
+                    + (failureWords(err)),
                 bad: true,
             };
         } finally {
@@ -88,7 +89,7 @@
             hits = found;
             open = true;
         } catch (err) {
-            failed = err instanceof Error ? err.message : String(err);
+            failed = failureWords(err);
             open = true;
         } finally {
             busy = false;

@@ -18,6 +18,7 @@
  * covers - and a page drawing its own guess at that would be showing a week nobody was going to
  * get. So every edit costs one round trip, exactly as it did when every edit was a write.
  */
+import { failureWords } from '../jellyfin';
 import {
     MAX_WEEKS, SECONDS_PER_DAY, applyEdits, editWords, getWeek, nowSecond,
     type Week, type WeekAiring, type WeekEdit,
@@ -49,6 +50,17 @@ class WeekStore {
     week = $state<Week | null>(null);
     loading = $state(false);
     error = $state<string | null>(null);
+
+    /*
+        True for a channel the page has made and nobody has saved yet.
+
+        Not an error, though it used to arrive as one. A week belongs to a channel the SERVER
+        holds, so every week endpoint answers 404 for a channel that exists only on screen - and
+        that 404 was printed raw above an empty grid, which is what "creating a channel shows an
+        error on the schedule" was. There is nothing wrong: the channel simply has not been sent
+        yet, and Save is the whole remedy.
+    */
+    unsaved = $state(false);
     busy = $state(false);
 
     /** Edits made and not yet saved, oldest first. */
@@ -107,6 +119,13 @@ class WeekStore {
     weekIndex = $state(0);
 
     private channelId: string | null = null;
+
+    /*
+        What the last load was for, as channel and saved-ness. `load` is driven by an effect, so
+        it runs again whenever anything it reads changes; without this, a load provoked by Save
+        would land after a pending edit was made and throw it away. Same key, nothing to do.
+    */
+    private loadedKey: string | null = null;
 
     /** The channel the store is holding, as a key. Empty before anything is loaded. */
     get channelKey(): string {
@@ -250,7 +269,16 @@ class WeekStore {
         this.selectedId = this.selectedId === id ? null : id;
     }
 
-    async load(channelId: string): Promise<void> {
+    /**
+     * Loads a channel's week.
+     *
+     * `onServer` is the caller's answer to "has this channel been saved?" - the configuration
+     * store knows, and the week endpoints only answer about channels the server holds.
+     */
+    async load(channelId: string, onServer = true): Promise<void> {
+        const key = channelId + '|' + (onServer ? 'saved' : 'new');
+        if (this.loadedKey === key) { return; }
+        this.loadedKey = key;
         this.channelId = channelId;
         this.loading = true;
         this.error = null;
@@ -268,10 +296,16 @@ class WeekStore {
             somebody else's schedule already in it.
         */
         this.week = null;
+        this.unsaved = !onServer;
+        if (!onServer) {
+            // Nothing to ask for, and asking would only produce a 404 to print.
+            this.loading = false;
+            return;
+        }
         try {
             this.week = await getWeek(channelId);
         } catch (err) {
-            this.error = err instanceof Error ? err.message : String(err);
+            this.error = failureWords(err);
         } finally {
             this.loading = false;
         }
@@ -292,7 +326,7 @@ class WeekStore {
             this.week = await applyEdits(id, $state.snapshot(this.pending) as WeekEdit[], commit);
             return true;
         } catch (err) {
-            this.error = err instanceof Error ? err.message : String(err);
+            this.error = failureWords(err);
             return false;
         } finally {
             this.busy = false;
@@ -327,7 +361,7 @@ class WeekStore {
             try {
                 this.week = await getWeek(id);
             } catch (err) {
-                this.error = err instanceof Error ? err.message : String(err);
+                this.error = failureWords(err);
             } finally {
                 this.busy = false;
             }
@@ -347,7 +381,7 @@ class WeekStore {
         try {
             this.week = await getWeek(id);
         } catch (err) {
-            this.error = err instanceof Error ? err.message : String(err);
+            this.error = failureWords(err);
         } finally {
             this.busy = false;
         }

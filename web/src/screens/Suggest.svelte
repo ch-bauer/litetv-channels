@@ -13,7 +13,7 @@
     */
     import Card from '../lib/ui/Card.svelte';
     import { store } from '../lib/config.svelte';
-    import { api } from '../lib/jellyfin';
+    import { api, failureWords } from '../lib/jellyfin';
     import { search, type SearchHit } from '../lib/search';
     import { engineWords, scored, type ScoredSuggestions, type SuggestionMatch } from '../lib/api/suggestions';
     import type { ChannelSource } from '../lib/types';
@@ -59,12 +59,72 @@
     */
     let round = $state(0);
 
+    /*
+        Smart Similar's state, asked for only when the scoring falls back.
+
+        The design's answer to "scored roughly" was an **Install it** offer, and the app had no
+        equivalent. Asked rather than assumed, because a fallback has two causes that want
+        opposite advice: the plugin is not there, which installing fixes, or it is there and did
+        not answer - which installing does not fix, and which looks exactly the same from here.
+        That distinction is the whole reason the Server screen draws three states, not two.
+    */
+    interface SmartSimilarState { Installed: boolean; Usable: boolean; Version: string | null; }
+    let smartSimilar = $state<SmartSimilarState | null>(null);
+
+    $effect(() => {
+        if (answer?.Engine !== 'Rough') { return; }
+        api().getJSON<{ Name: string; Installed: boolean; Usable: boolean; Version: string | null }[]>(
+            api().getUrl('LiteTv/Plugins'),
+        )
+            .then((rows) => {
+                const found = rows.find((row) => /smart similar/i.test(row.Name));
+                smartSimilar = found
+                    ? { Installed: found.Installed, Usable: found.Usable, Version: found.Version }
+                    : { Installed: false, Usable: false, Version: null };
+            })
+            // The suggestions still work; this only decides which sentence to print.
+            .catch(() => { smartSimilar = null; });
+    });
+
     /** How many titles a proposal takes, and so how far each "not that" moves along. */
     const WINDOW = 12;
 
+    /*
+        Whether there is another lineup to show at all.
+
+        "Not that" moves a window along a pool and wraps, so it can only offer something
+        different when the pool is BIGGER than the window. On a small library it is not: five
+        titles above the cut-off rotate back to the same five, every press, and the button reads
+        as doing nothing. That is worth saying out loud rather than leaving the owner pressing
+        it - and it says what to do about it, because both remedies are on this screen.
+    */
+    const anotherLineupExists = $derived.by(() => {
+        if (half === 'titles') {
+            return answer !== null && answer.Results.filter((r) => r.Score >= cutoff).length > WINDOW;
+        }
+        return matching.length > 60;
+    });
+
+    /*
+        Look for a title to seed with.
+
+        The answer is thrown away unless the box still says what was asked, which the shelf's
+        search has always done and this one did not. Every keystroke starts a search, and they
+        do not come back in order: typing "Avatar" into a library that has no Avatar showed a
+        list of Fast & Furious films, because the answer to "A" arrived after the answer to
+        "Avatar" and there was nothing to say it was stale. It reads as the search matching
+        things it plainly does not match.
+    */
     async function find(): Promise<void> {
-        if (term.trim().length === 0) { hits = []; return; }
-        try { hits = await search(term, 10); } catch { hits = []; }
+        const asked = term;
+        if (asked.trim().length === 0) { hits = []; return; }
+        try {
+            const found = await search(asked, 10);
+            if (asked !== term) { return; }
+            hits = found;
+        } catch {
+            if (asked === term) { hits = []; }
+        }
     }
 
     function addSeed(hit: SearchHit): void {
@@ -118,7 +178,7 @@
             hiddenTicks = {};
             for (const result of answer.Results.slice(0, WINDOW)) { chosen[result.Id] = true; }
         } catch (err) {
-            scoreError = err instanceof Error ? err.message : String(err);
+            scoreError = failureWords(err);
         } finally {
             scoring = false;
         }
@@ -359,7 +419,19 @@
 
                 {#if answer}
                     {@const words = engineWords(answer.Engine)}
-                    <div class="engine" class:bad={!words.good}>{words.text}</div>
+                    <div class="engine" class:bad={!words.good}>
+                        {words.text}
+                        {#if answer.Engine === 'Rough' && smartSimilar}
+                            {#if !smartSimilar.Installed}
+                                &mdash; <a class="install" href="#/dashboard/plugins">Install it</a>
+                                and these get sharper.
+                            {:else if !smartSimilar.Usable}
+                                &mdash; it <b>is</b> installed{smartSimilar.Version ? ' (' + smartSimilar.Version + ')' : ''}
+                                but is not answering, so installing it again will not help. Look at it
+                                under Plugins.
+                            {/if}
+                        {/if}
+                    </div>
                 {/if}
 
                 {#if answer && answer.Results.length > 0}
@@ -481,8 +553,10 @@
                         type="button"
                         class="quiet"
                         onclick={notThat}
-                        disabled={proposed.length === 0}
-                        title="Keeps what you told it and offers the next lineup"
+                        disabled={proposed.length === 0 || !anotherLineupExists}
+                        title={anotherLineupExists
+                            ? 'Keeps what you told it and offers the next lineup'
+                            : 'There is no other lineup to offer: everything that qualifies is already on this one.'}
                     >Not that &mdash; show me another</button>
                     <button
                         type="button"
@@ -491,6 +565,16 @@
                         title="Clears the seeds and the genres and starts again"
                     >Start over</button>
                 </div>
+                {#if !anotherLineupExists && proposed.length > 0}
+                    <p class="hint">
+                        This is every title that qualifies, so there is no other lineup to offer.
+                        {#if half === 'titles'}
+                            Lower the cut-off, or add another title to start from.
+                        {:else}
+                            Choose another genre, or add one.
+                        {/if}
+                    </p>
+                {/if}
                 {#if round > 0}
                     <p class="hint">Lineup {round + 1}. The titles you started from are kept.</p>
                 {/if}
@@ -587,6 +671,7 @@
         color: var(--lt-text-muted);
     }
 
+    .engine .install { color: inherit; text-decoration: underline; }
     .engine.bad { background: rgba(217, 154, 58, .1); border-left-color: var(--lt-collection); }
 
     .cutoff {

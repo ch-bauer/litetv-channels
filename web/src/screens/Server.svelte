@@ -9,7 +9,7 @@
     */
     import Card from '../lib/ui/Card.svelte';
     import { store } from '../lib/config.svelte';
-    import { api, authHeaders, dashboard } from '../lib/jellyfin';
+    import { api, authHeaders, dashboard, failureWords } from '../lib/jellyfin';
 
     interface PoToken {
         Held: boolean;
@@ -145,7 +145,7 @@
                 });
             }
         } catch (err) {
-            dashboard().alert(err instanceof Error ? err.message : String(err));
+            dashboard().alert(failureWords(err));
         } finally {
             // Whatever happened, the list is re-read: half a clear-out must not be drawn as if
             // it had not happened at all.
@@ -159,7 +159,7 @@
         try {
             builds = await api().getJSON<BuildList>(api().getUrl('LiteTv/Update/Builds'));
         } catch (err) {
-            buildsError = err instanceof Error ? err.message : String(err);
+            buildsError = failureWords(err);
         }
     }
 
@@ -180,7 +180,7 @@
             if (!answer.ok) { throw new Error(answer.status + ' ' + answer.statusText); }
             await loadBuilds();
         } catch (err) {
-            bar.alert('That build could not be uploaded: ' + (err instanceof Error ? err.message : String(err)));
+            bar.alert('That build could not be uploaded: ' + (failureWords(err)));
         } finally {
             uploading = false;
         }
@@ -194,7 +194,7 @@
             });
             await loadBuilds();
         } catch (err) {
-            dashboard().alert(err instanceof Error ? err.message : String(err));
+            dashboard().alert(failureWords(err));
         }
     }
 

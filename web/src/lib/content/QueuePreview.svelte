@@ -6,6 +6,7 @@
         so it has to answer to the controls above it *before* anything is saved, which is why the
         dealing is done in the page. See lib/deal.ts.
     */
+    import { failureWords } from '../jellyfin';
     import Card from '../ui/Card.svelte';
     import { deal, type DealtItem } from '../deal';
     import type { TvChannel } from '../types';
@@ -36,7 +37,7 @@
                 queue = dealt;
             })
             .catch((err: unknown) => {
-                failed = err instanceof Error ? err.message : String(err);
+                failed = failureWords(err);
             })
             .finally(() => {
                 if (asked === signature) { busy = false; }

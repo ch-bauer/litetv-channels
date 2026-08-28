@@ -8,6 +8,15 @@
  */
 
 export type PlayOrder = 'Sequential' | 'Shuffle';
+
+/**
+ * How trailers are worked into the queue. Mirrors the server's `TrailerMode` enum, and it is
+ * spelled out as a union rather than `string` for one reason: a new channel was created with
+ * `'Between'`, which is not a member, and the server answers a **500** to the whole
+ * configuration - so no channel could be saved, not just the new one. A wrong value here is
+ * unsaveable, and that is worth a compile error.
+ */
+export type TrailerMode = 'Off' | 'Preview' | 'Manual' | 'Both';
 export type ChannelSourceType = 'Movie' | 'Series' | 'Collection' | 'YouTube';
 
 export interface ChannelSource {
@@ -41,7 +50,7 @@ export interface TvChannel {
     Order: PlayOrder;
     SlotMinutes: number;
     TrailersInGaps: boolean;
-    Trailers: string;
+    Trailers: TrailerMode;
     TrailerEveryPrograms: number;
     TrailerLookahead: number;
     TrailerTitles: ChannelSource[];

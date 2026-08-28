@@ -16,8 +16,13 @@
     let { channel }: { channel: TvChannel } = $props();
 
     $effect(() => {
-        // Reloads whenever the channel changes, and only then.
-        void week.load(channel.Id);
+        /*
+            Reloads whenever the channel changes - and whenever a channel the page only just
+            made becomes one the server holds, which is the one thing Save does to it. Reading
+            `serverHas` here is what makes the second case happen by itself: a new channel shows
+            "not saved yet", and the moment Save lands its week arrives without another prompt.
+        */
+        void week.load(channel.Id, store.serverHas(channel.Id));
     });
 
     week.restoreZoom();
@@ -113,6 +118,12 @@
             // week out now would quietly use the old content.
             if (store.dirty) { return; }
         }
+        /*
+            A channel saved a moment ago had no week to load, and the endpoints would have
+            refused it. Fetch one now - before the edit rather than after it, so the reload
+            cannot throw the edit away.
+        */
+        if (week.unsaved) { await week.load(channel.Id, store.serverHas(channel.Id)); }
         // Pending, like every other schedule edit: it is drawn at once, Undo takes it back, and
         // nothing is written down until Save. Laying a week out used to be irreversible the
         // instant it was pressed, over a week somebody had curated by hand.
@@ -371,7 +382,12 @@
         </button>
     </div>
 
-    {#if week.error}
+    {#if week.unsaved}
+        <p class="waiting">
+            This channel has not been saved yet, so it has no schedule on the server. Press
+            <b>Save</b> — or <b>Save and lay this week out</b> above — and its week appears here.
+        </p>
+    {:else if week.error}
         <p class="bad">{week.error}</p>
     {/if}
 

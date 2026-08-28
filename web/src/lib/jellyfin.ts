@@ -93,3 +93,32 @@ export function authHeaders(): Record<string, string> {
 export function absolute(url: string): string {
     return /^https?:/i.test(url) ? url : api().serverAddress() + url;
 }
+
+/**
+ * What went wrong, in words a person can act on.
+ *
+ * Written because every failure on this page used to read **`[object Response]`**. Jellyfin's
+ * `ApiClient` rejects with the `Response` itself rather than an `Error`, so the idiom the whole
+ * app used - `failureWords(err)` - fell through to `String()` on
+ * an object whose `toString` is exactly that. "Could not save: [object Response]" is what the
+ * owner saw when a channel could not be created, and it named neither the code nor the route,
+ * so the one useful fact - a **500** - had to be found by hand afterwards.
+ *
+ * The body is not read: it would make this asynchronous, and every caller is a `catch` that
+ * wants a string now. The status and the route are what identify the fault anyway.
+ */
+export function failureWords(err: unknown): string {
+    if (typeof Response !== 'undefined' && err instanceof Response) {
+        const where = err.url ? ' from ' + err.url.replace(/^https?:\/\/[^/]+/, '') : '';
+        const why = err.status === 500
+            // Said outright, because it is nearly always this: the configuration is posted as
+            // one document, and one value the server cannot read fails the whole of it.
+            ? 'the server could not process it - a value somewhere in the configuration may be one it cannot read'
+            : err.status === 404
+                ? 'the server has no such thing - an unsaved channel looks exactly like this'
+                : err.statusText || 'the server refused it';
+        return 'HTTP ' + err.status + where + ': ' + why;
+    }
+
+    return err instanceof Error ? err.message : String(err);
+}

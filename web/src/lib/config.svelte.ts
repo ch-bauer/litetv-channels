@@ -10,7 +10,7 @@
  * Now it is the live configuration compared against what the server last gave us, so a control
  * cannot fail to mark the page dirty, and putting a value back the way it was un-marks it.
  */
-import { api, dashboard, PLUGIN_ID } from './jellyfin';
+import { api, dashboard, PLUGIN_ID, failureWords } from './jellyfin';
 import { newId } from './ids';
 import type { ChannelSource, PluginConfig, TvChannel } from './types';
 
@@ -34,6 +34,24 @@ class ConfigStore {
 
     /** The configuration as the server last stated it - what `dirty` is measured against. */
     private settled = $state<string>('');
+
+    /*
+        The channel ids the SERVER holds, which is not the same list as the one on screen.
+
+        A channel made here exists only in the page until Save, and the endpoints that answer
+        about a channel - the stored week above all - answer 404 for one it has never been told
+        about. Asked blindly, that 404 reaches the schedule as a raw error over an empty grid,
+        which is exactly what a new channel used to look like. So the page can ask first.
+    */
+    private settledIds = $state<Set<string>>(new Set());
+
+    /**
+     * Whether the server knows this channel at all - true once a Save has carried it across.
+     * A channel it does not know has no week and cannot be given one.
+     */
+    serverHas(channelId: string | null): boolean {
+        return channelId !== null && this.settledIds.has(channelId);
+    }
 
     /** True while what is on screen differs from what the server holds. */
     readonly dirty = $derived(this.config !== null && stamp(this.config) !== this.settled);
@@ -59,10 +77,11 @@ class ConfigStore {
             this.config = loaded;
             this.channelId = loaded.Channels[0]?.Id ?? null;
             this.settled = stamp(loaded);
+            this.settledIds = new Set(loaded.Channels.map((c) => c.Id));
         } catch (err) {
             // Said out loud. A configuration that silently fails to load leaves a page that
             // looks merely empty, which is the failure this project keeps rediscovering.
-            this.error = err instanceof Error ? err.message : String(err);
+            this.error = failureWords(err);
         } finally {
             this.loading = false;
         }
@@ -78,9 +97,10 @@ class ConfigStore {
             // Stamped from what was actually sent, so an edit made while the request was in
             // flight still counts as unsaved rather than being swallowed by the round trip.
             this.settled = JSON.stringify(sent);
+            this.settledIds = new Set(sent.Channels.map((c) => c.Id));
             this.savedAt = new Date();
         } catch (err) {
-            bar.alert('Could not save: ' + (err instanceof Error ? err.message : String(err)));
+            bar.alert('Could not save: ' + (failureWords(err)));
         } finally {
             bar.hideLoadingMsg();
         }
@@ -104,7 +124,7 @@ class ConfigStore {
             Order: 'Sequential',
             SlotMinutes: 0,
             TrailersInGaps: true,
-            Trailers: 'Between',
+            Trailers: 'Off',
             TrailerEveryPrograms: 3,
             TrailerLookahead: 3,
             TrailerTitles: [],

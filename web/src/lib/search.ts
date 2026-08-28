@@ -34,10 +34,10 @@ function kindOf(type: string): ChannelSourceType | null {
 
 function detailOf(item: RawItem, kind: ChannelSourceType): string {
     if (kind === 'Series') {
-        return item.ChildCount ? 'series · ' + item.ChildCount + ' seasons' : 'series';
+        return item.ChildCount ? 'series · ' + count(item.ChildCount, 'season') : 'series';
     }
     if (kind === 'Collection') {
-        return item.ChildCount ? 'collection · ' + item.ChildCount + ' items' : 'collection';
+        return item.ChildCount ? 'collection · ' + count(item.ChildCount, 'item') : 'collection';
     }
     const minutes = item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : 0;
     const year = item.ProductionYear ? String(item.ProductionYear) : '';
@@ -77,4 +77,12 @@ export async function search(term: string, limit = 20): Promise<SearchHit[]> {
 
 export function toSource(hit: SearchHit): ChannelSource {
     return { Type: hit.kind, ItemId: hit.id, Name: hit.name };
+}
+
+/**
+ * "1 season", "3 seasons". Written out because a series with one season read "1 seasons" on the
+ * shelf, and a page that cannot count to one is not one anybody trusts with a schedule.
+ */
+export function count(howMany: number, noun: string): string {
+    return howMany + ' ' + noun + (howMany === 1 ? '' : 's');
 }
