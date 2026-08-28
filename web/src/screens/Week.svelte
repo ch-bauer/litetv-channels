@@ -676,7 +676,25 @@
 
     .status, .waiting { color: var(--lt-text-dim); }
 
-    .grid-wrap { position: relative; }
+    /*
+        The wrapper has to BE the flex child the grid used to be.
+
+        `.grid` is written to take the column's leftover height and scroll inside itself
+        (`flex-grow: 1; min-height: 0`, with `.body` scrolling). Wrapping it in a plain relative
+        div broke that chain: the wrapper never grew, so the grid took its natural height -
+        8283px of it at one zoom - the page stopped scrolling, and the shelf and the inspector
+        below were pushed somewhere unreachable. They were still rendered; nobody could get to
+        them.
+
+        So the wrapper carries the same three properties, and the grid fills it.
+    */
+    .grid-wrap {
+        position: relative;
+        flex-grow: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
 
     /*
         Over the grid, not in place of it. Centred on the grid so it reads as the grid being

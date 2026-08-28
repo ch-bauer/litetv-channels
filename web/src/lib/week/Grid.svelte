@@ -91,12 +91,34 @@
         return height >= 13;
     }
 
+    /*
+        How tall a bar has to be before it is worth putting the times in it as well as the name.
+
+        Two lines need the room for two lines; below this the name alone is what fits, and above
+        it there is space to say when the programme actually airs without anybody hovering it or
+        clicking it. The times were only ever in the tooltip, which a television cannot show and
+        a mouse has to hunt for.
+    */
+    function timed(height: number): boolean {
+        return height >= 34;
+    }
+
+    /** "20:15 - 21:47", the span an airing occupies. */
+    function spanOf(airing: WeekAiring): string {
+        const from = secondOfDay(airing.StartSecond);
+        return clock(from) + ' – ' + clock(from + airing.DurationSeconds);
+    }
+
     const hours = $derived.by(() => {
         // Labels thin out as the zoom does, or they collide.
         const step = week.zoom >= 260 ? 1 : week.zoom >= 90 ? 2 : week.zoom >= 40 ? 3 : 6;
         const out: { label: string; top: number }[] = [];
         for (let h = 0; h <= 24; h += step) {
-            out.push({ label: String(h).padStart(2, '0'), top: h * week.zoom });
+            // A CLOCK time, not a bare number. The gutter used to read "00 02 04 06", which is
+            // an axis on a chart rather than the time of day a schedule is written in - the
+            // owner's words were that it is not helpful. Everything else on this page says
+            // "20:15", so this does too.
+            out.push({ label: clock(h * 3600), top: h * week.zoom });
         }
         return out;
     });
@@ -478,7 +500,10 @@
                         title="{airing.Name} — {clock(secondOfDay(airing.StartSecond))}, {Math.round(airing.DurationSeconds / 60)} min · drag to move it"
                         onclick={(e) => pick(airing, e)}
                     >
-                        {#if labelled(height)}{airing.Name}{/if}
+                        {#if timed(height)}
+                            <span class="when">{spanOf(airing)}</span>
+                            <span class="what">{airing.Name}</span>
+                        {:else if labelled(height)}{airing.Name}{/if}
                     </button>
                 {/each}
 
@@ -544,6 +569,7 @@
         overflow-x: hidden;
     }
 
+    /* Wide enough for "00:00" now that the ticks are clock times rather than bare hours. */
     .gutter { flex: 0 0 44px; position: relative; border-right: 1px solid var(--lt-line); }
 
     .ticks span {
@@ -588,6 +614,30 @@
             foot - `bottom` rather than height, so nothing has to be subtracted anywhere else.
         */
         box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55), inset 0 1px 0 1px rgba(255, 255, 255, .1);
+    }
+
+    /*
+        When it airs, over what it is - two lines on any bar with room for them.
+
+        The time first and dimmed: the name is what you are looking for, and the time is what
+        you check once you have found it. Both are clipped rather than wrapped, because a bar is
+        as tall as its programme is long and a name that wraps would push the time out of a box
+        that cannot grow.
+    */
+    .bar .when {
+        display: block;
+        font-size: 9.5px;
+        font-weight: 600;
+        opacity: .75;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .bar .what {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     /*

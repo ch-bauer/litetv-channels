@@ -46,6 +46,11 @@ public sealed class YouTubePlaylist
         _logger = logger;
     }
 
+    /// <summary>A playlist: its own name, and the videos in it.</summary>
+    /// <param name="Title">What YouTube calls it; empty when it would not say.</param>
+    /// <param name="Items">The videos, in playlist order.</param>
+    public sealed record Playlist(string Title, IReadOnlyList<Item> Items);
+
     /// <summary>
     /// One video in a playlist.
     /// </summary>
@@ -114,13 +119,30 @@ public sealed class YouTubePlaylist
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>What is in it, in playlist order; empty when it could not be read.</returns>
     public async Task<IReadOnlyList<Item>> ItemsAsync(string? url, CancellationToken cancellationToken)
+        => (await ReadAsync(url, cancellationToken).ConfigureAwait(false)).Items;
+
+    /// <summary>
+    /// The playlist: what it is called, and what is in it.
+    /// <para>
+    /// The title is read because the alternative was inventing one. The page used to name a
+    /// playlist source <c>"16 videos - &lt;first video's title&gt;"</c> - a description, not a
+    /// name - and the schedule then carried that under every programme as though it were the
+    /// series. The owner read the two lines together and reported the schedule as wrong, which
+    /// is what a name that is not a name costs.
+    /// </para>
+    /// </summary>
+    /// <param name="url">The playlist address.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The playlist.</returns>
+    public async Task<Playlist> ReadAsync(string? url, CancellationToken cancellationToken)
     {
         var id = PlaylistId(url);
         if (id is null)
         {
-            return Array.Empty<Item>();
+            return new Playlist(string.Empty, Array.Empty<Item>());
         }
 
+        var title = string.Empty;
         var items = new List<Item>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         string? continuation = null;
@@ -141,6 +163,12 @@ public sealed class YouTubePlaylist
 
                 using (json)
                 {
+                    // Only the first page carries it; a continuation is items and nothing else.
+                    if (title.Length == 0)
+                    {
+                        title = TitleOf(json.RootElement) ?? string.Empty;
+                    }
+
                     var before = items.Count;
                     continuation = Harvest(json.RootElement, items, seen);
                     if (items.Count == before || continuation is null)
@@ -156,7 +184,7 @@ public sealed class YouTubePlaylist
             // playlist with nothing in it, and this project has been bitten by that shape of
             // silence more than once.
             _logger.LogWarning(ex, "LiteTV could not read YouTube playlist {Playlist}.", id);
-            return items;
+            return new Playlist(title, items);
         }
 
         _logger.LogInformation(
@@ -164,7 +192,44 @@ public sealed class YouTubePlaylist
             items.Count,
             id);
 
-        return items;
+        return new Playlist(title, items);
+    }
+
+    /// <summary>
+    /// What the playlist is called.
+    /// <para>
+    /// Looked for in the three places YouTube has put it, newest first, rather than in the one
+    /// that happens to work today - the browse response has been reshaped repeatedly, which is
+    /// why <see cref="Harvest"/> walks rather than indexes.
+    /// </para>
+    /// </summary>
+    /// <param name="root">The browse response.</param>
+    /// <returns>The title, or null.</returns>
+    private static string? TitleOf(JsonElement root)
+    {
+        if (root.TryGetProperty("metadata", out var metadata)
+            && metadata.TryGetProperty("playlistMetadataRenderer", out var meta)
+            && Text(meta, "title") is { Length: > 0 } fromMetadata)
+        {
+            return fromMetadata;
+        }
+
+        if (root.TryGetProperty("header", out var header))
+        {
+            if (header.TryGetProperty("playlistHeaderRenderer", out var old)
+                && Text(old, "title") is { Length: > 0 } fromHeader)
+            {
+                return fromHeader;
+            }
+
+            if (header.TryGetProperty("pageHeaderRenderer", out var page)
+                && Text(page, "pageTitle") is { Length: > 0 } fromPage)
+            {
+                return fromPage;
+            }
+        }
+
+        return null;
     }
 
     private static async Task<JsonDocument?> BrowseAsync(

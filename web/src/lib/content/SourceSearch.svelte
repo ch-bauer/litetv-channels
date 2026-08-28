@@ -49,9 +49,20 @@
             sources.push({
                 Type: 'YouTube',
                 ItemId: '00000000-0000-0000-0000-000000000000',
-                // Named by what is in it, so the row says something. The first title is the one
-                // thing about a playlist a person recognises.
-                Name: found.Items.length + ' videos - ' + found.Items[0].Title,
+                /*
+                    The playlist's OWN name.
+
+                    This used to compose one - "16 videos - <the first video's title>" - which is
+                    a description, not a name. The server then carried it under every programme
+                    on the channel as the series, so the app drew "7 vs. Wild Folge 3" with
+                    "16 videos - 7 vs. Wild - The Beginning | Episode 1" beneath it, and the two
+                    lines together read as a schedule showing the wrong thing. It was reported as
+                    exactly that.
+
+                    The old composition stays as the fallback for a playlist YouTube will not
+                    name, where something is still better than an address.
+                */
+                Name: found.Title || (found.Items.length + ' videos - ' + found.Items[0].Title),
                 Url: url,
             });
             playlistNote = {

@@ -316,11 +316,12 @@ public class LiteTvController : ControllerBase
             return BadRequest("That is not a playlist address.");
         }
 
-        var items = await _playlists.ItemsAsync(url, HttpContext.RequestAborted).ConfigureAwait(false);
+        var playlist = await _playlists.ReadAsync(url, HttpContext.RequestAborted).ConfigureAwait(false);
         return new PlaylistDto
         {
             PlaylistId = id,
-            Items = items.Select(i => new PlaylistItemDto
+            Title = playlist.Title,
+            Items = playlist.Items.Select(i => new PlaylistItemDto
             {
                 VideoId = i.VideoId,
                 Title = i.Title,
@@ -2505,6 +2506,16 @@ public class PlaylistDto
 {
     /// <summary>Gets or sets the playlist's own id.</summary>
     public string PlaylistId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets what YouTube calls the playlist. Empty when it would not say.
+    /// <para>
+    /// The page names the source with this. It used to compose one - "16 videos - &lt;the first
+    /// video's title&gt;" - and the schedule carried that under every programme as its series,
+    /// so a channel read as two contradictory titles and got reported as a wrong schedule.
+    /// </para>
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
 
     /// <summary>Gets or sets the videos, in the playlist's order.</summary>
     public IReadOnlyList<PlaylistItemDto> Items { get; set; } = Array.Empty<PlaylistItemDto>();

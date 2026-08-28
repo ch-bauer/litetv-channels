@@ -21,6 +21,8 @@ export interface PlaylistItem {
 
 export interface Playlist {
     PlaylistId: string;
+    /** What YouTube calls it. Empty when it would not say; the caller then composes one. */
+    Title: string;
     Items: PlaylistItem[];
 }
 
