@@ -752,24 +752,36 @@
     }
 
     /*
-        Which picture each screen ends up drawing, following the app's own order rather than
-        guessing: within a slot it is the chosen picture of that kind, then the other wide kind,
-        then nothing - at which point the app falls back to what is on air, which no preview
-        here can honestly show.
+        Which picture each screen ends up drawing - read off the app's `artFor`, not guessed.
+
+        Its order per slot is: the picture chosen for THIS slot, then what the plugin found in
+        the lineup for this slot, then what it found for the other wide slot, and only last the
+        picture chosen for the other wide slot. Two things follow that this preview had wrong.
+
+        **The poster is not in the wide chain at all.** `ArtKind.Card` is banner, found banner,
+        found backdrop, chosen backdrop - a poster never reaches the list card, so offering it
+        here as "the upright picture is stretched into the card" described something the
+        television does not do.
+
+        **Whatever is on air comes BEFORE the other chosen picture**, and that ordering is not an
+        accident: the app's own note says consulting the other chosen picture earlier meant one
+        custom banner silently took over the background as well. So when the picture below is the
+        other slot's, it is the LAST resort and not the next one, and the words have to say so -
+        what is actually on air cannot be drawn here.
     */
-    const listPicture = $derived(current('Banner') ?? current('Backdrop') ?? current('Poster'));
+    const listPicture = $derived(current('Banner') ?? current('Backdrop'));
     const screenPicture = $derived(current('Backdrop') ?? current('Banner'));
 
     const listWords = $derived(
         current('Banner') ? 'Your banner.'
-            : current('Backdrop') ? 'No banner set, so the backdrop stands in.'
-                : current('Poster') ? 'Only a poster is set, so the upright picture is stretched into the card.'
+            : current('Backdrop') ? 'No banner set. The card takes a wide picture from what is on air first, and falls back to your backdrop only if it finds none.'
+                : current('Poster') ? 'Only a poster is set, and the card never uses one - it wears whatever is on air.'
                     : 'Nothing set - the card wears whatever is on air.',
     );
 
     const screenWords = $derived(
         current('Backdrop') ? 'Your backdrop.'
-            : current('Banner') ? 'No backdrop set, so the banner is blown up to fill the screen.'
+            : current('Banner') ? 'No backdrop set. The screen takes a wide picture from what is on air first, and falls back to your banner only if it finds none.'
                 : 'Nothing set - the screen wears whatever is on air.',
     );
 
@@ -1095,20 +1107,30 @@
             <h3>On the television</h3>
 
             <!--
-                Two screens, because the app has two, and they choose differently:
-                the channel list draws a wide card with the name over it, banner first;
-                the channel's own screen draws a full frame behind it, backdrop first.
-                Both are dimmed hard - channel artwork is whatever is on air, and a banner is
-                the brightest thing Jellyfin holds.
+                Two screens, because the app has two, and they choose differently: the channel
+                list draws a row with the picture BESIDE the words at a banner's shape; the
+                channel's own screen draws a full 16:9 frame behind them.
+
+                Both are drawn to the app's own measurements rather than invented - a preview
+                whose frame is the wrong shape shows a crop the television never makes, which is
+                the one thing this card exists to get right.
             -->
             <div class="tv-label">In the channel list</div>
             <div class="tv">
-                <div class="tv-card-wide">
-                    {#if listPicture}<img src={listPicture} alt="" />{/if}
-                    <div class="tv-dim"></div>
-                    <div class="tv-text">
+                <!--
+                    `ChannelRow`: a 78dp row on a dark ground, the words on the left and the
+                    picture on the right at a Jellyfin banner's 1000:185. No wash over it - the
+                    picture is beside the words, so nothing has to be read on top of it.
+                -->
+                <div class="tv-row">
+                    <div class="tv-row-text">
                         <div class="tv-name">{channel.Name}</div>
                         <div class="tv-now">what is on now</div>
+                        <div class="tv-bar"><span></span></div>
+                        <div class="tv-next">Next&ensp;21:40&ensp;what follows it</div>
+                    </div>
+                    <div class="tv-row-art">
+                        {#if listPicture}<img src={listPicture} alt="" />{/if}
                     </div>
                 </div>
             </div>
@@ -1116,19 +1138,46 @@
 
             <div class="tv-label">The channel&rsquo;s own screen</div>
             <div class="tv">
+                <!--
+                    A television frame, so 16:9. It used to be a fixed 120px band whatever the
+                    column's width, which is nearer four to one - so the picture was cropped to a
+                    shape the app never crops it to, and then judged on it.
+
+                    The wash is the app's, in its two layers: an even 18% over everything, and a
+                    left-to-right gradient from 72% to transparent by the right edge. That
+                    gradient is most of what decides whether a picture works, because the right
+                    of it is NOT dimmed - the guide sits over it - and a flat wash says otherwise.
+                -->
                 <div class="tv-hero">
                     {#if screenPicture}<img src={screenPicture} alt="" />{/if}
                     <div class="tv-dim"></div>
-                    <div class="tv-text">
-                        <div class="tv-name">{channel.Name}</div>
-                        <div class="tv-now">20:15 &ndash; 22:00 &middot; 40 min left</div>
-                        <span class="tv-button">Watch live</span>
+                    <div class="tv-dim-side"></div>
+                    <div class="tv-screen">
+                        <div class="tv-screen-left">
+                            <div class="tv-head">
+                                <div class="tv-cover">
+                                    {#if current('Poster')}<img src={current('Poster')} alt="" />{/if}
+                                </div>
+                                <div class="tv-name">{channel.Name}</div>
+                            </div>
+                            <div class="tv-kicker">NOW</div>
+                            <div class="tv-prog">what is on now</div>
+                            <div class="tv-now">20:15 &ndash; 22:00 &middot; 40 min left</div>
+                            <div class="tv-bar"><span></span></div>
+                            <span class="tv-button">Watch live</span>
+                        </div>
+                        <div class="tv-screen-right">
+                            <div class="tv-kicker">Coming up</div>
+                            <div class="tv-slot"></div>
+                            <div class="tv-slot"></div>
+                            <div class="tv-slot"></div>
+                        </div>
                     </div>
                 </div>
             </div>
             <p class="hint tight">{screenWords}</p>
 
-            <div class="tv-label">Beside the name, where a cover is shown</div>
+            <div class="tv-label">The cover on its own, uncropped</div>
             <div class="tv poster-strip">
                 <div class="tv-poster">
                     {#if current('Poster')}<img src={current('Poster')} alt="" />{/if}
@@ -1604,19 +1653,21 @@
         color: var(--lt-text-dim);
     }
 
-    .tv-hero, .tv-card-wide {
+    /*
+        THE TELEVISION FRAME IS 16:9, and that is not decoration.
+
+        This was a fixed 120px band whatever the column's width - nearer four to one - so every
+        picture was cropped to a shape the app never crops it to and then judged on that crop.
+        The one promise this card makes is "cropped here exactly as the television crops"; a
+        frame of the wrong shape breaks it before anything else can go wrong.
+    */
+    .tv-hero {
         background: linear-gradient(140deg, #33455e, #151d2a);
         position: relative;
-        display: flex;
-        align-items: flex-end;
-        padding: 11px;
+        aspect-ratio: 16 / 9;
     }
 
-    .tv-hero { height: 120px; }
-    /* The overview row's card: wide, with the name over it. */
-    .tv-card-wide { height: 64px; }
-
-    .tv-hero img, .tv-card-wide img {
+    .tv-hero img {
         position: absolute;
         inset: 0;
         width: 100%;
@@ -1625,23 +1676,147 @@
     }
 
     /*
-        The app lays an even wash under its gradient, and the overview row uses a heavier one
-        still, because channel artwork is whatever is on air. Without it, a preview flatters
-        a picture that will be unreadable on the television.
+        The app's wash, in its two layers (`ChannelBackdrop`): an even 18% over the whole frame,
+        and a left-to-right gradient from 72% black to nothing by the right edge.
+
+        The right of the picture is deliberately NOT dimmed - the guide is drawn over it - and a
+        preview with one flat wash hides exactly that. Which half of a picture survives is most
+        of what decides whether it works on this screen.
     */
-    .tv-dim {
+    .tv-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, .18); }
+
+    .tv-dim-side {
         position: absolute;
         inset: 0;
-        background: linear-gradient(90deg, rgba(0, 0, 0, .72) 0%, rgba(0, 0, 0, .35) 70%, rgba(0, 0, 0, .2) 100%);
+        background: linear-gradient(90deg, rgba(0, 0, 0, .72) 0%, rgba(0, 0, 0, .25) 45%, rgba(0, 0, 0, 0) 100%);
     }
 
-    .tv-text { position: relative; }
-    .tv-name { font-size: 14px; font-weight: 700; color: #fff; }
-    .tv-now { font-size: 11px; color: rgba(255, 255, 255, .7); margin-top: 2px; }
+    /*
+        The channel screen's own layout: what is on down the left, the guide down the right, in
+        the app's own 1 : 1.15 split. The guide is three empty slots rather than invented
+        programme names - this card is about the picture, and made-up titles would read as data.
+    */
+    .tv-screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        gap: 4%;
+        padding: 5.5%;
+        color: #fff;
+    }
+
+    .tv-screen-left { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; }
+    .tv-screen-right { flex: 1.15 1 0; min-width: 0; }
+
+    .tv-head { display: flex; align-items: center; gap: 8px; }
+
+    /* The cover the app draws beside the name, at its 2:3. */
+    .tv-cover {
+        flex: 0 0 auto;
+        height: 34px;
+        aspect-ratio: 2 / 3;
+        border-radius: 3px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, .12);
+    }
+
+    .tv-cover img { width: 100%; height: 100%; object-fit: cover; }
+
+    .tv-kicker {
+        margin-top: 8px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        color: #b9a8ff;
+    }
+
+    .tv-prog { font-size: 12.5px; font-weight: 600; margin-top: 1px; }
+
+    .tv-slot {
+        height: 15px;
+        margin-top: 5px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, .14);
+    }
+
+    /*
+        THE LIST ROW, to `ChannelRow`'s measurements: a dark 78dp row with the words on the left
+        and the picture on the right at a banner's 1000:185, its right corners rounded off.
+
+        It used to be drawn as a wide card with the name laid OVER the picture, which is a
+        different screen from the one the app has - the name is never over the artwork there,
+        and the artwork is never full-bleed. The picture keeps its true share of the row's width
+        so the crop shown is the crop made.
+    */
+    .tv-row {
+        display: flex;
+        align-items: stretch;
+        background: #17171C;
+        color: #fff;
+    }
+
+    .tv-row-text {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 6px 10px;
+        overflow: hidden;
+    }
+
+    .tv-row-art {
+        flex: 0 0 48%;
+        aspect-ratio: 1000 / 185;
+        background: linear-gradient(140deg, #33455e, #151d2a);
+    }
+
+    .tv-row-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .tv-next {
+        margin-top: auto;
+        font-size: 9.5px;
+        color: rgba(255, 255, 255, .75);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* The app draws a progress bar under what is on, in both places. */
+    .tv-bar {
+        height: 3px;
+        width: 55%;
+        margin-top: 4px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .22);
+        overflow: hidden;
+    }
+
+    .tv-bar span { display: block; height: 100%; width: 38%; background: var(--lt-accent); }
+
+    .tv-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .tv-now {
+        font-size: 10.5px;
+        color: rgba(255, 255, 255, .72);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 
     .tv-button {
         display: inline-block;
-        margin-top: 7px;
+        align-self: flex-start;
+        margin-top: 8px;
         padding: 3px 10px;
         border-radius: 999px;
         background: rgba(255, 255, 255, .92);

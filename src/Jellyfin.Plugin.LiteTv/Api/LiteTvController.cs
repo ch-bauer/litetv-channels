@@ -412,6 +412,7 @@ public class LiteTvController : ControllerBase
 
         channel.Id = channelId;
         _channels.Save(channel);
+        ForgetUnusedArtwork(channel);
         return Ok(channel);
     }
 
@@ -436,6 +437,11 @@ public class LiteTvController : ControllerBase
         }
 
         _weeks.Delete(channelId);
+        foreach (var kind in ArtworkKinds)
+        {
+            DeleteArtworkFile(channelId, kind);
+        }
+
         return NoContent();
     }
 
@@ -1122,6 +1128,97 @@ public class LiteTvController : ControllerBase
 
     private static string ArtworkFileName(Guid channelId, string kind) =>
         $"{channelId:N}-{kind.ToLowerInvariant()}.img";
+
+    /// <summary>
+    /// Throws away any uploaded picture this channel no longer points at.
+    /// <para>
+    /// An upload writes a file and hands the page an address; clearing the slot, or replacing
+    /// the picture with a borrowed one or an address somewhere else, only changed the address.
+    /// The file stayed on disk with nothing referring to it, and there was no way to remove it
+    /// short of reaching the box - which is how a crop test left a Spongebob banner sitting in
+    /// the plugin folder for a week.
+    /// </para>
+    /// <para>
+    /// Done on the SAVE rather than when the slot is cleared, and that is the whole reason it
+    /// lives here. A page clears a slot long before anybody presses Save, and deleting the file
+    /// then would destroy a picture the stored channel still points at the moment the edit is
+    /// abandoned. What is stored is the only safe thing to compare against.
+    /// </para>
+    /// </summary>
+    /// <param name="channel">The channel as it has just been stored.</param>
+    private static void ForgetUnusedArtwork(TvChannel channel)
+    {
+        foreach (var kind in UnusedArtwork(channel))
+        {
+            DeleteArtworkFile(channel.Id, kind);
+        }
+    }
+
+    /// <summary>
+    /// Which of a channel's three uploaded pictures nothing points at any more.
+    /// <para>
+    /// Separated from the deleting so the decision can be tested without a plugin folder to
+    /// delete things out of, which is the only interesting half.
+    /// </para>
+    /// </summary>
+    /// <param name="channel">The channel as stored.</param>
+    /// <returns>The kinds whose file, if there is one, is now an orphan.</returns>
+    internal static IReadOnlyList<string> UnusedArtwork(TvChannel channel)
+    {
+        var unused = new List<string>();
+        foreach (var kind in ArtworkKinds)
+        {
+            var url = kind switch
+            {
+                "banner" => channel.Artwork.BannerUrl,
+                "backdrop" => channel.Artwork.BackdropUrl,
+                _ => channel.Artwork.PosterUrl
+            };
+
+            // Kept only while the channel still points at OUR file for this slot. Any other
+            // address - a library item, somewhere else entirely, or nothing at all - means the
+            // upload is no longer in use. Compared as a prefix, because the page appends a
+            // cache-buster to the address it has just uploaded to.
+            var ours = $"/LiteTv/Artwork/{channel.Id:N}/{kind}";
+            if (url is null || !url.StartsWith(ours, StringComparison.OrdinalIgnoreCase))
+            {
+                unused.Add(kind);
+            }
+        }
+
+        return unused;
+    }
+
+    /// <summary>
+    /// Removes one stored picture, and does not mind if it was never there.
+    /// </summary>
+    /// <param name="channelId">The channel.</param>
+    /// <param name="kind">Which of the three pictures.</param>
+    private static void DeleteArtworkFile(Guid channelId, string kind)
+    {
+        var directory = ArtworkDirectory();
+        if (directory is null)
+        {
+            return;
+        }
+
+        var path = Path.Combine(directory, ArtworkFileName(channelId, kind));
+        try
+        {
+            if (System.IO.File.Exists(path))
+            {
+                System.IO.File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // A picture that will not delete is not worth failing a save over: the channel is
+            // already stored and correct, and the file is only wasted space.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
 
     private static string? ArtworkDirectory()
     {
