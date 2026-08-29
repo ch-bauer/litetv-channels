@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.91.0",
+        "changelog": "**The zoom scale now reaches the rule \"Zoom to now\" is asked to obey.** With the rule in 1.0.90.0 - a third of the view for the programme on air, and never less than about half an hour of schedule on screen - a short programme asks for about 1500 pixels an hour, and the slider stopped at 1200. So the ask fell off the end of the scale, the slider pinned at its maximum, and a four-minute trailer still got the most zoomed-in view the page had. The scale runs to 2400 now and the wanted zoom is reachable. The three hand-written copies of the slider's bounds - the store, the slider itself and the clamp - are one exported pair.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.91.0/litetv-channels_1.0.91.0.zip",
+        "checksum": "5b788dcf7a9d5bce8433a2e790cd7ce0",
+        "timestamp": "2026-08-29T19:00:00.000Z"
+      },
+      {
         "version": "1.0.90.0",
         "changelog": "**\"Zoom to now\" follows the owner's rule: a third of the view for the programme on air, two thirds for what runs before and after it, and the programme in the middle rather than wherever a fixed offset left it.** It used to give every programme a fixed 55% of the height whatever its length, which for a three-minute advert asked for some seven thousand pixels an hour, pinned the slider at its maximum and left one bar on the screen with nothing around it to say where in the evening it sat. There is a floor on context now - never less than about half an hour of schedule on screen - so a short programme takes less than its third and gets more neighbours than it asked for, which is the right way round. A programme longer than the view is still centred, but not so far that the now line leaves the screen.",
         "targetAbi": "10.11.0.0",
