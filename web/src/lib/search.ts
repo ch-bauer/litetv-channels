@@ -96,15 +96,12 @@ function detailOf(item: RawItem, kind: ChannelSourceType): string {
     return [year, length].filter(Boolean).join(' · ');
 }
 
-export async function search(term: string, limit = 20): Promise<SearchHit[]> {
-    const trimmed = term.trim();
-    if (trimmed.length === 0) { return []; }
-
+/** One request, mapped to rows. Anything that is not a kind a channel can be built from is
+ * dropped rather than guessed at. */
+async function ask(term: string, types: string, limit: number): Promise<SearchHit[]> {
     const answer = await api().getItems<{ Items?: RawItem[] }>(api().getCurrentUserId(), {
-        searchTerm: trimmed,
-        // All four, always. A channel is as likely to be built from a series or a box set as
-        // from a film, and leaving one out is indistinguishable from the library being empty.
-        includeItemTypes: 'Movie,Series,BoxSet,Episode',
+        searchTerm: term,
+        includeItemTypes: types,
         recursive: true,
         limit,
         fields: 'ChildCount,ProductionYear',
@@ -113,8 +110,6 @@ export async function search(term: string, limit = 20): Promise<SearchHit[]> {
     const hits: SearchHit[] = [];
     for (const item of answer.Items ?? []) {
         const kind = kindOf(item.Type);
-        // Anything that is not one of the kinds a channel can be built from is dropped rather
-        // than guessed at.
         if (kind === null) { continue; }
         hits.push({
             id: item.Id,
@@ -127,6 +122,31 @@ export async function search(term: string, limit = 20): Promise<SearchHit[]> {
         });
     }
     return hits;
+}
+
+/**
+ * What the library has that matches.
+ *
+ * **Two requests, not one, and the series come first.** Asking for all four kinds together let
+ * the server decide the order, and it puts episodes wherever relevance lands them - so searching
+ * a series by name listed its episodes above the series itself, and with a limit of twenty a
+ * long-running show could fill the whole answer with episodes and never show the series at all.
+ * That is the one row somebody searching "Simpsons" is looking for.
+ *
+ * Asking separately makes both true regardless of how many episodes match: the films, series and
+ * collections are a list of their own, kept in the server's relevance order, and the episodes
+ * follow after them.
+ */
+export async function search(term: string, limit = 20): Promise<SearchHit[]> {
+    const trimmed = term.trim();
+    if (trimmed.length === 0) { return []; }
+
+    const [containers, episodes] = await Promise.all([
+        ask(trimmed, 'Movie,Series,BoxSet', limit),
+        ask(trimmed, 'Episode', limit),
+    ]);
+
+    return [...containers, ...episodes].slice(0, limit);
 }
 
 /**
@@ -170,11 +190,21 @@ export async function linkHit(url: string): Promise<SearchHit | null> {
     return hit;
 }
 
+/**
+ * The id a source carries when there is no library item behind it.
+ *
+ * `ChannelSource.ItemId` is a **Guid** on the server, and `System.Text.Json` cannot read an
+ * empty string as one: the whole channel body then fails to bind and the save answers **400**
+ * before any code of ours runs. So a link is written with the empty guid, spelled out, which is
+ * what the page has always written and what `isEmptyId` on the way back already understands.
+ */
+const NO_ITEM = '00000000-0000-0000-0000-000000000000';
+
 export function toSource(hit: SearchHit): ChannelSource {
     if (hit.kind === 'Link') {
         // An address has no library item behind it, so it is stored as its URL and expanded
         // afresh every time a week is laid out.
-        return { Type: 'YouTube', ItemId: '', Name: hit.name, Url: hit.url ?? '' };
+        return { Type: 'YouTube', ItemId: NO_ITEM, Name: hit.name, Url: hit.url ?? '' };
     }
     return { Type: hit.kind, ItemId: hit.id, Name: hit.name };
 }

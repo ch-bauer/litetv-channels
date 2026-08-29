@@ -6,10 +6,50 @@
     let { sources, empty = 'Nothing yet - find something below.' }:
         { sources: ChannelSource[]; empty?: string } = $props();
 
-    // Which row the keyboard is on. The owner asked for shortcuts - select a row, press Delete,
-    // it goes; move one with the arrow keys - so a row has to have a notion of being selected
-    // in the first place, which the old page never had.
+    /*
+        Which row the keyboard is on. The owner asked for shortcuts - select a row, press Delete,
+        it goes; move one with the arrow keys - so a row has to have a notion of being selected
+        in the first place, which the old page never had.
+
+        It used to be an index that only a click on the row itself, or on the thin strip of list
+        below the last row, could clear. Clicking anywhere else on the page left a row marked
+        selected with the keyboard nowhere near it - a selection that could not be let go of
+        without hunting the row down again, which is what the owner reported as not being able
+        to unselect. Turning your attention elsewhere is what lets it go now; see below.
+    */
     let selected = $state<number | null>(null);
+    let scope = $state<HTMLElement | null>(null);
+
+    /*
+        Letting go, said in terms of what somebody DID.
+
+        The first attempt at this watched `focusout` from the list, which was almost right and
+        failed on the one case that matters: pressing "Move up" re-draws the list, the focused
+        button goes with it, and a destroyed element reports itself exactly like a focus that
+        left - so the bar threw the selection away in the middle of using it.
+
+        A press outside the list, or the keyboard being put somewhere outside it, are things a
+        person does. Neither can be manufactured by a re-render, and between them they cover
+        every way of turning your attention elsewhere: clicking any other part of the page, and
+        tabbing out of the list. Escape and clicking the row again are still here as well.
+
+        Both `pointerdown` and `mousedown`, because they are not the same reach: a pen or a touch
+        raises the first and not always the second, and anything driving the page - the test
+        suite included - raises the second and not the first. Two listeners for one fact is
+        cheap; clearing an already-clear selection costs nothing.
+    */
+    $effect(() => {
+        const away = (event: Event) => {
+            const target = event.target as Node | null;
+            if (scope && target && !scope.contains(target)) { selected = null; }
+        };
+        const on = ['pointerdown', 'mousedown', 'focusin'];
+        for (const name of on) { document.addEventListener(name, away, true); }
+        return () => {
+            for (const name of on) { document.removeEventListener(name, away, true); }
+        };
+    });
+
     let dragging = $state<number | null>(null);
     let over = $state<number | null>(null);
 
@@ -110,6 +150,12 @@
     and a click that begins on it and drifts a pixel becomes a DRAG rather than a click, which
     is a selection that will not clear however many times it is pressed.
 -->
+<!--
+    The list and the bar under it are ONE place to be: the bar's buttons are the selected row's
+    own actions, so focus moving from a row to "Move up" has not left the selection behind. Focus
+    going anywhere else has, and lets it go.
+-->
+<div class="scope" bind:this={scope}>
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
@@ -188,8 +234,12 @@
         <span class="chosen-keys">or Alt&#8593;/Alt&#8595; to move, Delete to remove, Escape to let go</span>
     </div>
 {/if}
+</div>
 
 <style>
+    /* Grouping only - the card's own flow is what draws this, and a wrapper must not join in. */
+    .scope { display: contents; }
+
     .chosen {
         display: flex;
         align-items: center;

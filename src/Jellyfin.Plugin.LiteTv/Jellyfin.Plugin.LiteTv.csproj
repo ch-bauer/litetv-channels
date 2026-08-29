@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>Jellyfin.Plugin.LiteTv</RootNamespace>
-    <AssemblyVersion>1.0.94.0</AssemblyVersion>
-    <FileVersion>1.0.94.0</FileVersion>
+    <AssemblyVersion>1.0.95.0</AssemblyVersion>
+    <FileVersion>1.0.95.0</FileVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
@@ -47,12 +47,14 @@
     the path separators lean on which machine.
   -->
   <ItemGroup>
-    <!-- index.html is the dev server's entry and inject.js is the tool for looking at the app
-         inside a real dashboard while building it. Neither belongs in a released plugin: the
-         bundle route is anonymous, so shipping them would put a stray page and a development
-         hook on a public URL. -->
+    <!-- index.html is the dev server's entry, inject.js is the tool for looking at the app
+         inside a real dashboard while building it, and suite.js is the test suite that drives
+         it there. None belongs in a released plugin: the bundle route is anonymous, so shipping
+         them would put a stray page, a development hook and a suite that WRITES to channels on
+         a public URL. They are served by the dev server instead, which is where they are used
+         from - against the installed page just as well as against the working copy. -->
     <WebBundleFile Include="$(MSBuildThisFileDirectory)..\..\web\dist\*.*"
-                   Exclude="$(MSBuildThisFileDirectory)..\..\web\dist\index.html;$(MSBuildThisFileDirectory)..\..\web\dist\inject.js" />
+                   Exclude="$(MSBuildThisFileDirectory)..\..\web\dist\index.html;$(MSBuildThisFileDirectory)..\..\web\dist\inject.js;$(MSBuildThisFileDirectory)..\..\web\dist\suite.js" />
     <EmbeddedResource Include="@(WebBundleFile)">
       <LogicalName>litetv.web.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>

@@ -1775,12 +1775,29 @@
         It is a small row at this column's width, and that is simply what a television row
         scaled to fit here IS. The words are scenery; the picture is the point.
     */
+    /*
+        The app's row, to scale - INCLUDING its words.
+
+        The proportions came right before the type did. `aspect-ratio: 11.26` is the app's 78dp
+        row with its banner beside it, and at this column's width that makes the preview about
+        30px tall - into which four lines of 7.5-10.5px text and a bar did not fit. They ran over
+        each other, which is what the owner saw as squished.
+
+        So the row is a size container and every measurement inside it is a share of its height,
+        taken from the app: a 78dp row, 8dp of padding above and below, 16dp in from the left,
+        `titleMedium` (16sp) for the name, `bodyMedium` (14sp) for what is on, `bodySmall` (12sp)
+        for what is next, a 4dp bar across 55%, and 1dp between the lines. 16 of 78 is 20.5% of
+        the height, and that is what `20.5cqh` says. The preview is small because the row IS a
+        sliver - the card exists to show the crop, and a picture judged at the wrong shape is the
+        fault it was built to stop - but nothing in it overlaps at any width now.
+    */
     .tv-row {
         display: flex;
         align-items: stretch;
         aspect-ratio: 11.26;
         background: #17171C;
         color: #fff;
+        container-type: size;
     }
 
     .tv-row-text {
@@ -1789,10 +1806,22 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding: 4px 8px;
+        /* 8dp above and below, 16dp in from the left, 14dp before the picture. */
+        padding: 10.26cqh 17.95cqh 10.26cqh 20.51cqh;
         overflow: hidden;
-        line-height: 1.2;
+        line-height: 1.25;
+        /* Arrangement.spacedBy(1.dp). */
+        gap: 1.28cqh;
     }
+
+    /* titleMedium, bodyMedium, bodySmall - 16, 14 and 12sp of a 78dp row. */
+    .tv-row .tv-name { font-size: 20.51cqh; }
+    .tv-row .tv-now { font-size: 17.95cqh; margin-top: 0; }
+    .tv-row .tv-next { font-size: 15.38cqh; }
+
+    /* A 4dp bar, 3dp below what is on, across 55% - and the gap above "Next" is the app's
+       `Spacer(Modifier.weight(1f))`, which takes whatever is left. */
+    .tv-row .tv-bar { height: 5.13cqh; margin-top: 3.85cqh; width: 55%; }
 
     /* No aspect-ratio here: the row's own ratio and this width already give it 1000:185. */
     .tv-row-art {
