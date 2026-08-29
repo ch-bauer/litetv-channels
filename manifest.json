@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.90.0",
+        "changelog": "**\"Zoom to now\" follows the owner's rule: a third of the view for the programme on air, two thirds for what runs before and after it, and the programme in the middle rather than wherever a fixed offset left it.** It used to give every programme a fixed 55% of the height whatever its length, which for a three-minute advert asked for some seven thousand pixels an hour, pinned the slider at its maximum and left one bar on the screen with nothing around it to say where in the evening it sat. There is a floor on context now - never less than about half an hour of schedule on screen - so a short programme takes less than its third and gets more neighbours than it asked for, which is the right way round. A programme longer than the view is still centred, but not so far that the now line leaves the screen.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.90.0/litetv-channels_1.0.90.0.zip",
+        "checksum": "295df4558371f11ff0c8ca2997b45863",
+        "timestamp": "2026-08-29T18:00:00.000Z"
+      },
+      {
         "version": "1.0.89.0",
         "changelog": "**The zoom really works now.** 1.0.88.0 tidied the zoom into one source and split the toggles, which was worth doing, but it did not fix the bug: the slider still did nothing. The cause was one word. The store held the current channel in a plain field rather than a reactive one, so everything keyed off the channel - the zoom, both toggles, and the grid's own height - was worked out once while there was no channel yet and never worked out again. The slider wrote a real number under a real channel and the grid went on reading a key that had been empty when it last looked. Switching to Week and back \"helped\" because the view *was* reactive, and was the only thing that could make the grid look again.",
         "targetAbi": "10.11.0.0",
