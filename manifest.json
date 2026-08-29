@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.92.0",
+        "changelog": "**The \"On the television\" preview now draws what the television draws.** It was invented rather than measured, and three things about it were wrong. The channel-list card was a wide picture with the name laid over it; the app has no such screen - it draws a row with the words on the left and the picture on the right at a banner's shape, and nothing is ever written over the artwork there. The channel screen's frame was a fixed band about four to one, so every picture was cropped to a shape the television never crops it to, and then judged on that crop; it is 16:9 now, and it shows the app's own two-layer wash, including the fact that the right of the picture is **not** dimmed because the guide sits over it. And the card offered a poster as a stand-in for the wide picture, which the app never does - a poster cannot reach the list card at all. The words under each preview now also say that whatever is on air is tried **before** your other picture, not after, which is the order the app actually uses.\n\n**An uploaded picture nobody points at any more is deleted.** Uploading wrote a file and handed the page an address; clearing the slot, replacing the picture, or borrowing a title's artwork instead only ever changed the address, so the file stayed on the server with nothing referring to it and no way to remove it. Deleting a channel left all three of its pictures behind too. Both are cleaned up now - on the save rather than when a slot is cleared, so an abandoned edit cannot destroy a picture the stored channel still uses.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.92.0/litetv-channels_1.0.92.0.zip",
+        "checksum": "1c22839ede689b129f68735686684fe2",
+        "timestamp": "2026-08-29T20:00:00.000Z"
+      },
+      {
         "version": "1.0.91.0",
         "changelog": "**The zoom scale now reaches the rule \"Zoom to now\" is asked to obey.** With the rule in 1.0.90.0 - a third of the view for the programme on air, and never less than about half an hour of schedule on screen - a short programme asks for about 1500 pixels an hour, and the slider stopped at 1200. So the ask fell off the end of the scale, the slider pinned at its maximum, and a four-minute trailer still got the most zoomed-in view the page had. The scale runs to 2400 now and the wanted zoom is reachable. The three hand-written copies of the slider's bounds - the store, the slider itself and the clamp - are one exported pair.",
         "targetAbi": "10.11.0.0",
