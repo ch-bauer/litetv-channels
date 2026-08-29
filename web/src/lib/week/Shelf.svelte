@@ -62,6 +62,14 @@
 
     const entries = $derived<ShelfEntry[]>(opened !== null ? episodes : [
         ...extra,
+        /*
+            Search results, whatever kind they are. Episodes are among them now: they used to be
+            reachable only by finding the series and opening it, which is fine when you know
+            which series it is and useless when what you remember is the episode's own name.
+
+            Only a SERIES opens - `seriesId` is what puts the "Episodes" button on a row - and an
+            episode is already the thing you wanted, so it drags straight onto the week.
+        */
         ...hits.map((hit) => ({
             key: hit.id,
             label: hit.name,
@@ -283,30 +291,22 @@
             bind:value={term}
             oninput={onInput}
             onkeydown={(e) => { if (e.key === 'Enter' && termIsAddress) { e.preventDefault(); addTypedAddress(); } }}
-            placeholder="Search films, series and episodes…  (or paste a link)"
-            aria-label="Search the library, or paste an address"
+            placeholder="Search films, series, episodes and collections — or paste a link…"
+            aria-label="Search the library, or paste a link"
         />
+        <!--
+            One box, and this button only when there is a link in it.
+
+            There used to be a second field beside this one, for addresses, with its own "Put on
+            the shelf" button standing by whether there was anything to put or not - the owner's
+            point being simply that "there are just 2 search bars currently". The box already
+            knew a link when it saw one; the field beside it was the half that had been left.
+        -->
         {#if termIsAddress}
             <button type="button" class="ghost" onclick={addTypedAddress} disabled={addressBusy}>
-                {addressBusy ? 'Reading…' : 'That is a link — put it on the shelf'}
+                {addressBusy ? 'Reading…' : 'Put this link on the shelf'}
             </button>
         {/if}
-        <input
-            class="address"
-            type="url"
-            bind:value={address}
-            onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAddress(); } }}
-            placeholder="…or paste an address"
-            aria-label="Add an address to the shelf"
-        />
-        <button
-            type="button"
-            class="ghost"
-            onclick={addAddress}
-            disabled={addressBusy || address.trim().length === 0}
-        >
-            {addressBusy ? 'Reading the playlist...' : 'Put on the shelf'}
-        </button>
         <span class="hint">drag onto the week · it snaps flush · hold Alt to drop on the second</span>
         {#if addressNote}<span class="hint bad">{addressNote}</span>{/if}
     </header>
@@ -448,8 +448,8 @@
         color: var(--lt-text);
     }
 
-    .find { flex: 1 1 250px; min-width: 12em; }
-    .address { flex: 1 1 200px; min-width: 10em; }
+    /* The one box, and it gets the room the two used to share. */
+    .find { flex: 1 1 420px; min-width: 16em; }
 
     .ghost {
         background: rgba(255, 255, 255, .05);

@@ -615,7 +615,18 @@ public enum ChannelSourceType
     /// than by a library id. This is what lets a channel play something the library has never
     /// heard of.
     /// </summary>
-    YouTube = 3
+    YouTube = 3,
+
+    /// <summary>
+    /// A single episode.
+    /// <para>
+    /// Needs no expansion of its own: <c>ChannelPlaylistBuilder.Expand</c> switches on the
+    /// library ITEM rather than on this, so an episode falls to the same branch a film does and
+    /// becomes one entry. This value exists so the page can say what it put in the list without
+    /// calling an episode a film.
+    /// </para>
+    /// </summary>
+    Episode = 4
 }
 
 /// <summary>

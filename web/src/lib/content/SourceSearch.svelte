@@ -1,86 +1,10 @@
 <script lang="ts">
     import { failureWords } from '../jellyfin';
-    import { search, toSource, type SearchHit } from '../search';
-    import { fetchPlaylist, looksLikeAddress, looksLikePlaylist } from '../api/playlist';
+    import { linkHit, search, toSource, type SearchHit } from '../search';
+    import { looksLikeAddress } from '../api/playlist';
     import type { ChannelSource } from '../types';
 
     let { sources }: { sources: ChannelSource[] } = $props();
-
-    let playlist = $state('');
-    let fetching = $state(false);
-    let playlistNote = $state<{ text: string; bad: boolean } | null>(null);
-
-    /*
-        A YouTube playlist as CONTENT, not as something inside a break. It has no library item
-        behind it, so it is named by its address; the server expands it to its videos when the
-        queue is built, and never stores that list - so a playlist that gains a video reaches
-        the channel the next time the week is laid out.
-    */
-    /*
-        The playlist is READ before it is added. It used to be taken on trust: a row called
-        "YouTube playlist" appeared whatever the address was, and whether it held four hundred
-        videos or nothing at all was invisible until a week was laid out. The owner reported that
-        as "fetching a YouTube playlist does not work", and they were right - nothing fetched.
-
-        What is stored is still only the address. The server expands it afresh every time a week
-        is laid out, so a playlist that gains a video is picked up then.
-    */
-    async function addPlaylist(): Promise<void> {
-        const url = playlist.trim();
-        if (!looksLikePlaylist(url)) { return; }
-        if (sources.some((s) => s.Url === url)) {
-            playlistNote = { text: 'That playlist is already on the list.', bad: true };
-            return;
-        }
-
-        fetching = true;
-        playlistNote = null;
-        try {
-            const found = await fetchPlaylist(url);
-            if (found.Items.length === 0) {
-                playlistNote = {
-                    text: 'YouTube gave nothing back for that address. A private or deleted '
-                        + 'playlist looks exactly like this.',
-                    bad: true,
-                };
-                return;
-            }
-
-            sources.push({
-                Type: 'YouTube',
-                ItemId: '00000000-0000-0000-0000-000000000000',
-                /*
-                    The playlist's OWN name.
-
-                    This used to compose one - "16 videos - <the first video's title>" - which is
-                    a description, not a name. The server then carried it under every programme
-                    on the channel as the series, so the app drew "7 vs. Wild Folge 3" with
-                    "16 videos - 7 vs. Wild - The Beginning | Episode 1" beneath it, and the two
-                    lines together read as a schedule showing the wrong thing. It was reported as
-                    exactly that.
-
-                    The old composition stays as the fallback for a playlist YouTube will not
-                    name, where something is still better than an address.
-                */
-                Name: found.Title || (found.Items.length + ' videos - ' + found.Items[0].Title),
-                Url: url,
-            });
-            playlistNote = {
-                text: 'Added ' + found.Items.length + ' videos. They are read again every time the '
-                    + 'week is laid out, so the list stays current.',
-                bad: false,
-            };
-            playlist = '';
-        } catch (err) {
-            playlistNote = {
-                text: 'That playlist could not be read: '
-                    + (failureWords(err)),
-                bad: true,
-            };
-        } finally {
-            fetching = false;
-        }
-    }
 
     let term = $state('');
     let hits = $state<SearchHit[]>([]);
@@ -94,7 +18,16 @@
         busy = true;
         failed = null;
         try {
-            const found = await search(asked);
+            /*
+                An address is looked up as an address and a title as a title, and either way the
+                answer is a row in the same list. There used to be a second field beside this
+                one for the address - the owner's point was simply that "there are just 2 search
+                bars currently" - and a link typed here was silently moved into it, which is a
+                box rearranging itself under the hand.
+            */
+            const found = looksLikeAddress(asked)
+                ? [await linkHit(asked)].filter((h): h is SearchHit => h !== null)
+                : await search(asked);
             // A slow answer to an old question must not overwrite a newer one.
             if (asked !== term) { return; }
             hits = found;
@@ -107,25 +40,12 @@
         }
     }
 
-    /*
-        A link pasted into the search box is a link. It is moved into the playlist field rather
-        than searched for, because searching the library for an address can only ever answer
-        "nothing matches" - which reads as the search being broken, not as the box being the
-        wrong one.
-    */
-    const termIsAddress = $derived(looksLikeAddress(term));
-
     function onInput(): void {
         clearTimeout(timer);
-        if (termIsAddress) {
-            hits = [];
-            open = false;
-            playlist = term.trim();
-            term = '';
-            return;
-        }
         if (term.trim().length === 0) { hits = []; open = false; return; }
-        timer = setTimeout(run, 250);
+        // A link is read rather than typed-ahead: the wait is a request to YouTube, not a
+        // keystroke, so it gets a little longer before it fires.
+        timer = setTimeout(run, looksLikeAddress(term) ? 500 : 250);
     }
 
     /*
@@ -138,12 +58,28 @@
     }
 
     function add(hit: SearchHit): void {
-        if (sources.some((s) => s.ItemId === hit.id)) { return; }
+        if (already(hit)) { return; }
         sources.push(toSource(hit));
+        // The box is cleared on a link, because an address is a thing you add once and there is
+        // nothing else in the answer to pick from. A title search is left alone: adding three
+        // episodes of one series in a row should not be three searches.
+        if (hit.kind === 'Link') { term = ''; hits = []; open = false; }
     }
 
+    /** Already on the list - by address for a link, by library id for anything else. */
     function already(hit: SearchHit): boolean {
-        return sources.some((s) => s.ItemId === hit.id);
+        return hit.kind === 'Link'
+            ? sources.some((s) => s.Url === hit.url)
+            : sources.some((s) => s.ItemId === hit.id);
+    }
+
+    /** What the tag on a row reads. */
+    function tagFor(hit: SearchHit): string {
+        if (hit.kind === 'Series') { return 'SERIES'; }
+        if (hit.kind === 'Collection') { return 'COLLECTION'; }
+        if (hit.kind === 'Episode') { return 'EPISODE'; }
+        if (hit.kind === 'Link') { return hit.videoCount === undefined ? 'LINK' : 'PLAYLIST'; }
+        return 'FILM';
     }
 </script>
 
@@ -154,36 +90,14 @@
         oninput={onInput}
         onfocus={onFocus}
         onkeydown={(e) => { if (e.key === 'Escape') { open = false; } }}
-        placeholder="Search films, series and collections…"
-        aria-label="Search films, series and collections"
+        placeholder="Search films, series, episodes and collections — or paste a link…"
+        aria-label="Search the library, or paste a link"
     />
     {#if busy}<span class="busy">searching…</span>{/if}
     {#if open && hits.length > 0}
         <button class="hide" type="button" onclick={() => (open = false)}>hide</button>
     {/if}
 </div>
-
-<div class="search playlist-row">
-    <input
-        type="url"
-        bind:value={playlist}
-        onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPlaylist(); } }}
-        placeholder="…or a YouTube playlist address"
-        aria-label="Add a YouTube playlist as content"
-    />
-    <button
-        class="add-playlist"
-        type="button"
-        onclick={addPlaylist}
-        disabled={fetching || !looksLikePlaylist(playlist)}
-    >
-        {fetching ? 'Reading it...' : 'Add playlist'}
-    </button>
-</div>
-
-{#if playlistNote}
-    <p class="playlist-note" class:bad={playlistNote.bad}>{playlistNote.text}</p>
-{/if}
 
 {#if open}
     <div class="results">
@@ -192,12 +106,18 @@
         {:else if hits.length === 0 && !busy}
             <p class="none">Nothing in the library matches “{term}”.</p>
         {:else}
-            {#each hits as hit (hit.id)}
+            {#each hits as hit (hit.kind + '|' + hit.id + '|' + (hit.url ?? ''))}
                 <button class="hit" type="button" onclick={() => add(hit)} disabled={already(hit)}>
                     <span class="name">{hit.name}</span>
                     <span class="detail">{hit.detail}</span>
-                    <span class="kind" class:series={hit.kind === 'Series'} class:collection={hit.kind === 'Collection'}>
-                        {hit.kind === 'Series' ? 'SERIES' : hit.kind === 'Collection' ? 'COLLECTION' : 'FILM'}
+                    <span
+                        class="kind"
+                        class:series={hit.kind === 'Series'}
+                        class:collection={hit.kind === 'Collection'}
+                        class:episode={hit.kind === 'Episode'}
+                        class:link={hit.kind === 'Link'}
+                    >
+                        {tagFor(hit)}
                     </span>
                     <span class="verb">{already(hit) ? 'added' : '+'}</span>
                 </button>
@@ -236,30 +156,6 @@
         cursor: pointer;
         font-family: inherit;
     }
-
-    .playlist-row { padding-top: 0; }
-
-    .add-playlist {
-        flex: 0 0 auto;
-        background: rgba(255, 255, 255, .05);
-        border: 1px solid var(--lt-line-strong);
-        border-radius: var(--lt-radius-small);
-        padding: 7px 12px;
-        font-size: 12.5px;
-        font-family: inherit;
-        color: var(--lt-text-body);
-        cursor: pointer;
-    }
-
-    .add-playlist:disabled { opacity: .45; cursor: default; }
-
-    .playlist-note {
-        margin: 6px 0 0;
-        font-size: 12px;
-        color: var(--lt-text-muted);
-    }
-
-    .playlist-note.bad { color: #e08585; }
 
     .results {
         max-height: 15em;
@@ -309,6 +205,8 @@
 
     .kind.series { background: var(--lt-series-bg); color: var(--lt-series); }
     .kind.collection { background: var(--lt-collection-bg); color: var(--lt-collection); }
+    .kind.episode { background: var(--lt-episode-bg); color: var(--lt-episode); }
+    .kind.link { background: var(--lt-link-bg); color: var(--lt-link); }
 
     .verb { flex: 0 0 auto; font-size: 12px; color: var(--lt-text-dim); }
 

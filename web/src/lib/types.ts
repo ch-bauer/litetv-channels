@@ -17,7 +17,7 @@ export type PlayOrder = 'Sequential' | 'Shuffle';
  * unsaveable, and that is worth a compile error.
  */
 export type TrailerMode = 'Off' | 'Preview' | 'Manual' | 'Both';
-export type ChannelSourceType = 'Movie' | 'Series' | 'Collection' | 'YouTube';
+export type ChannelSourceType = 'Movie' | 'Series' | 'Episode' | 'Collection' | 'YouTube';
 
 export interface ChannelSource {
     Type: ChannelSourceType;

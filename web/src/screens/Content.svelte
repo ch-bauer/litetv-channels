@@ -27,9 +27,11 @@
             things the library holds.
         */
         const playlists = sources.filter((s) => s.Type === 'YouTube').length;
+        const episodes = sources.filter((s) => s.Type === 'Episode').length;
         return [
             films ? films + (films === 1 ? ' film' : ' films') : '',
             series ? series + (series === 1 ? ' series' : ' series') : '',
+            episodes ? episodes + (episodes === 1 ? ' episode' : ' episodes') : '',
             collections ? collections + (collections === 1 ? ' collection' : ' collections') : '',
             playlists ? playlists + (playlists === 1 ? ' playlist' : ' playlists') : '',
         ].filter(Boolean).join(' · ');

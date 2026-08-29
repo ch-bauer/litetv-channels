@@ -42,6 +42,14 @@
     --lt-series-bg: rgba(91, 110, 225, 0.2);
     --lt-collection: #e0b463;
     --lt-collection-bg: rgba(217, 154, 58, 0.2);
+    /*
+        An episode and a link are kinds a search can turn up now, and a tag whose colour says
+        nothing is a tag nobody reads. Kept in the same family as the two above.
+    */
+    --lt-episode: #7fd0b6;
+    --lt-episode-bg: rgba(63, 179, 145, 0.2);
+    --lt-link: #d59ae4;
+    --lt-link-bg: rgba(180, 90, 205, 0.2);
     --lt-queue: #5b6ee1;
 
     --lt-radius: 8px;

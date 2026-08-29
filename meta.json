@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "**The backdrop preview was showing the poster.** Yesterday's rebuilt \"On the television\" card added the cover beside the channel's name, inside the television frame - and the rule that stretches the backdrop across that frame was written loosely enough to catch it too. So the poster was blown up over the whole preview, the words were hidden underneath it, and the picture sitting under \"your backdrop\" was not the backdrop at all. The owner saw it immediately: \"what is the giant poster crop doing there on the backdrop place\". It draws the backdrop now, with the channel's name, what is on, the Watch live button and the guide column over it, as the television does.\n\n**And the channel-list row shows the banner at a banner's shape.** The row let its words decide how tall it was and stretched the picture to match, which came out at about three to one - a crop the television never makes, in the one preview whose whole job is the crop. The row now has the app's own proportions, the picture takes its true share of the width, and what you see cut off is what will be cut off.",
+  "changelog": "**One search bar, not two, and it finds all five kinds.** The shelf and the Content list each had a box for titles and a second box beside it for addresses — and on the shelf the second one carried a \"Put on the shelf\" button that stood there whether there was anything to put or not. There is one box on each screen now. Type a title and it searches; paste a link and it reads it, says whether it is a playlist and how many videos are in it, and offers it as a row in the same list.\n\n**Episodes can be found by name.** Searching only ever looked at films, series and collections, so the only way to reach an episode was to know which series it was in, find that, and open it. Type \"Bärengebiet\" now and you get the episode, with the series it belongs to and its season and episode number beside it so a list of episodes from four different series is still readable. On the shelf it drags straight onto the week; on the Content list it can be the channel's content on its own. A series still opens if browsing is what you want.\n\nNothing about scheduling changed to allow that: an episode was always playable, it simply had no name of its own in the list of things a source can be, so the page had to call it a film or leave it out.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-29T21:00:00.000Z",
-  "version": "1.0.93.0",
+  "timestamp": "2026-08-29T22:30:00.000Z",
+  "version": "1.0.94.0",
   "status": "Active",
   "autoUpdate": false
 }
