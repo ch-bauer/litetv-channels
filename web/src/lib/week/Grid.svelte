@@ -144,8 +144,34 @@
         // The evening, wherever the grid is: a week of the cycle that is not the current one
         // has no "now" in it, and opening it at midnight is the absurdity the now-scroll was
         // written to fix in the first place.
-        const at = week.weekIndex === week.currentWeek ? secondOfDay(nowInCycle) : 19 * 3600;
-        const target = at * pxPerSecond - body.clientHeight / 3;
+        if (week.weekIndex !== week.currentWeek) {
+            body.scrollTop = Math.max(0, 19 * 3600 * pxPerSecond - body.clientHeight / 3);
+            return;
+        }
+
+        const view = body.clientHeight;
+        const line = secondOfDay(nowInCycle);
+
+        /*
+            The programme on air goes in the MIDDLE, with what it followed above it and what
+            follows below - which is the other half of the owner's rule for this: a third of the
+            view for the programme, two thirds for its neighbours, and the programme between
+            them rather than wherever a fixed offset happened to leave it.
+        */
+        let target = onNow
+            ? (secondOfDay(onNow.StartSecond) + onNow.DurationSeconds / 2) * pxPerSecond - view / 2
+            : line * pxPerSecond - view / 3;
+
+        /*
+            Except that centring a programme LONGER than the view pushes the now line off the
+            screen - a three-hour film centred at a readable zoom puts its middle in the middle
+            and "now" an hour above the fold. The line is the point of following, so it is kept
+            inside the view whatever the centring asked for.
+        */
+        const linePx = line * pxPerSecond;
+        target = Math.min(target, linePx - view * 0.15);
+        target = Math.max(target, linePx - view * 0.85);
+
         body.scrollTop = Math.max(0, target);
     }
 
@@ -158,26 +184,42 @@
     });
 
     /*
-        The zoom that shows what is on now properly.
+        The least schedule that may be on screen, however short the programme on air is.
 
-        A bar is worth looking at when it is big enough to read and still has its neighbours
-        around it for context, so the programme on air is given a bit over half the height and
-        the rest of the view shows what it ran after and what follows. Anything shorter than a
-        few minutes would ask for a zoom past the slider's end, so it is clamped there and the
-        programme simply fills what it can.
+        Without a floor the rule below is a runaway: a three-minute advert asks for a nine-minute
+        view, which is some seven thousand pixels an hour, and the screen becomes one bar with
+        nothing around it to say where in the evening it sits. Half an hour is the owner's
+        number and it is a floor on CONTEXT, not on the zoom - a short programme simply takes
+        less than its third and gets more neighbours than it asked for, which is the right way
+        round.
+    */
+    const MIN_VIEW_SECONDS = 1800;
+
+    /*
+        The zoom that shows what is on now properly - the owner's rule, in one line.
+
+        A third of the view for the programme on air, two thirds for what runs before and after
+        it. So the view spans three times the programme, and the zoom is whatever makes that
+        much schedule fit the body's height. The whole programme is always in view, because a
+        third of the view is a third of the view whether it is a three-minute advert or a
+        three-hour film - which is what the old fixed 55% could not do once it was clamped.
+
+        Clamped to the slider's own range at the end, so ticking the toggle can never ask for a
+        zoom the slider could not be dragged to.
     */
     function framedZoom(): number | null {
         if (!body || !onNow || onNow.DurationSeconds <= 0) { return null; }
-        const perSecond = (0.55 * body.clientHeight) / onNow.DurationSeconds;
+        const span = Math.max(3 * onNow.DurationSeconds, MIN_VIEW_SECONDS);
+        const perSecond = body.clientHeight / span;
         return Math.min(1200, Math.max(8, Math.round(perSecond * 3600)));
     }
 
     /*
         TOGGLE ONE - "Zoom to now": how BIG things are.
 
-        While it is ticked the zoom is sized so the programme on air fills a good half of the
-        view, in the week as well as the day. That is what makes a channel of forty short bars
-        and a channel of four films both open readable, which no fixed number can.
+        While it is ticked the zoom is sized so the programme on air fills a third of the view,
+        in the week as well as the day. That is what makes a channel of forty short bars and a
+        channel of four films both open readable, which no fixed number can.
 
         Only when the programme CHANGES, or the window is resized. Re-deciding on every draw
         would fight the layout it just caused and never settle. A hand on the slider unticks
