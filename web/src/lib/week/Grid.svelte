@@ -16,7 +16,7 @@
            inside itself, so the grid works from a narrow dashboard to a very wide one.
          - **Zoom** runs the range the slider offers, and each view remembers its own.
     */
-    import { week } from './weekStore.svelte';
+    import { week, ZOOM_MIN, ZOOM_MAX } from './weekStore.svelte';
     import {
         DAY_SHORT, KIND_FILL, SECONDS_PER_DAY, clock, dayOf, nowSecond, secondOfDay,
         type WeekAiring,
@@ -211,7 +211,7 @@
         if (!body || !onNow || onNow.DurationSeconds <= 0) { return null; }
         const span = Math.max(3 * onNow.DurationSeconds, MIN_VIEW_SECONDS);
         const perSecond = body.clientHeight / span;
-        return Math.min(1200, Math.max(8, Math.round(perSecond * 3600)));
+        return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(perSecond * 3600)));
     }
 
     /*

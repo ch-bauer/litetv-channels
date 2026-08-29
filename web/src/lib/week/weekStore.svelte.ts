@@ -37,9 +37,19 @@ const DEFAULT_ZOOM: Record<View, number> = { week: 46, day: 170 };
     The slider's own bounds. A remembered zoom outside them would be clamped away on the way to
     the screen, and the setting would look like it had not stuck - so they are checked here, on
     the way in, and the slider must not disagree with them.
+
+    Exported, because they were written out by hand in three places - here, the slider's own
+    `min`/`max`, and the clamp on the zoom "Zoom to now" works out - and three copies of a
+    bound is two chances for them to drift apart.
+
+    The ceiling is 2400 rather than 1200 because 1200 was not high enough to reach the rule
+    "Zoom to now" is asked to obey. It keeps at least half an hour of schedule on screen, which
+    on a 750-pixel grid is 1500 pixels an hour and on a taller window is more - so the ask fell
+    off the end of the scale, the slider pinned at its maximum, and a short programme still got
+    the most zoomed-in view the page had. It is reachable now.
 */
-const ZOOM_MIN = 8;
-const ZOOM_MAX = 1200;
+export const ZOOM_MIN = 8;
+export const ZOOM_MAX = 2400;
 
 function sane(value: number): boolean {
     return Number.isFinite(value) && value >= ZOOM_MIN && value <= ZOOM_MAX;

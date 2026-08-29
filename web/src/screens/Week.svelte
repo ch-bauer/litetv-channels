@@ -5,7 +5,7 @@
     */
     import Grid from '../lib/week/Grid.svelte';
     import Shelf from '../lib/week/Shelf.svelte';
-    import { week } from '../lib/week/weekStore.svelte';
+    import { week, ZOOM_MIN, ZOOM_MAX } from '../lib/week/weekStore.svelte';
     import { store } from '../lib/config.svelte';
     import { resolveDuration } from '../lib/api/duration';
     import {
@@ -266,8 +266,8 @@
             Zoom
             <input
                 type="range"
-                min="8"
-                max="1200"
+                min={ZOOM_MIN}
+                max={ZOOM_MAX}
                 step="2"
                 value={week.zoom}
                 oninput={(e) => {
