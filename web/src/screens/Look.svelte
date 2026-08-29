@@ -1667,7 +1667,17 @@
         aspect-ratio: 16 / 9;
     }
 
-    .tv-hero img {
+    /*
+        THE DIRECT CHILD, and the `>` is the whole of it.
+
+        Written as `.tv-hero img` this caught the cover's picture as well - the cover lives
+        inside the frame, beside the channel's name - and handed it `position: absolute; inset:
+        0; width: 100%; height: 100%`. So the poster was stretched across the entire backdrop
+        preview and painted over the words, and what the card showed under "your backdrop" was
+        the poster. The owner spotted it in one look: "what is the giant poster crop doing there
+        on the backdrop place".
+    */
+    .tv-hero > img {
         position: absolute;
         inset: 0;
         width: 100%;
@@ -1706,6 +1716,9 @@
     }
 
     .tv-screen-left { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; }
+    .tv-screen .tv-name { font-size: 13px; }
+    .tv-screen .tv-now { font-size: 10.5px; margin-top: 2px; }
+    .tv-screen .tv-bar { height: 3px; margin-top: 5px; }
     .tv-screen-right { flex: 1.15 1 0; min-width: 0; }
 
     .tv-head { display: flex; align-items: center; gap: 8px; }
@@ -1749,9 +1762,23 @@
         and the artwork is never full-bleed. The picture keeps its true share of the row's width
         so the crop shown is the crop made.
     */
+    /*
+        The row's shape is the app's, and it has to be stated rather than left to the words.
+
+        `align-items: stretch` let the text column decide the height, and the picture - which
+        asked for 1000:185 - was stretched to whatever that came to: measured at 3.11:1, so the
+        banner was shown at a crop the television never makes, in the preview whose one job is
+        the crop. The row is given the app's own proportions instead (a 78dp row whose picture
+        is 78 x 5.405 wide is 11.26 to one), the picture takes its true 48% of the width, and
+        the height falls out of the two - which is what makes the crop exact.
+
+        It is a small row at this column's width, and that is simply what a television row
+        scaled to fit here IS. The words are scenery; the picture is the point.
+    */
     .tv-row {
         display: flex;
         align-items: stretch;
+        aspect-ratio: 11.26;
         background: #17171C;
         color: #fff;
     }
@@ -1762,13 +1789,14 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding: 6px 10px;
+        padding: 4px 8px;
         overflow: hidden;
+        line-height: 1.2;
     }
 
+    /* No aspect-ratio here: the row's own ratio and this width already give it 1000:185. */
     .tv-row-art {
         flex: 0 0 48%;
-        aspect-ratio: 1000 / 185;
         background: linear-gradient(140deg, #33455e, #151d2a);
     }
 
@@ -1776,7 +1804,7 @@
 
     .tv-next {
         margin-top: auto;
-        font-size: 9.5px;
+        font-size: 7.5px;
         color: rgba(255, 255, 255, .75);
         white-space: nowrap;
         overflow: hidden;
@@ -1785,9 +1813,9 @@
 
     /* The app draws a progress bar under what is on, in both places. */
     .tv-bar {
-        height: 3px;
+        height: 2px;
         width: 55%;
-        margin-top: 4px;
+        margin-top: 3px;
         border-radius: 999px;
         background: rgba(255, 255, 255, .22);
         overflow: hidden;
@@ -1796,7 +1824,7 @@
     .tv-bar span { display: block; height: 100%; width: 38%; background: var(--lt-accent); }
 
     .tv-name {
-        font-size: 13px;
+        font-size: 10.5px;
         font-weight: 700;
         color: #fff;
         white-space: nowrap;
@@ -1805,9 +1833,9 @@
     }
 
     .tv-now {
-        font-size: 10.5px;
+        font-size: 8.5px;
         color: rgba(255, 255, 255, .72);
-        margin-top: 2px;
+        margin-top: 1px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
