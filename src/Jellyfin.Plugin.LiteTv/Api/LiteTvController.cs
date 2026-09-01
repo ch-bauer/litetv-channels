@@ -1122,8 +1122,43 @@ public class LiteTvController : ControllerBase
 
         var path = Path.Combine(directory, ArtworkFileName(channelId, kind));
         return System.IO.File.Exists(path)
-            ? PhysicalFile(path, "image/jpeg")
+            ? PhysicalFile(path, ArtworkContentType(path))
             : NotFound();
+    }
+
+    private static string ArtworkContentType(string path)
+    {
+        Span<byte> header = stackalloc byte[12];
+        try
+        {
+            using var file = System.IO.File.OpenRead(path);
+            var read = file.Read(header);
+            if (read >= 8 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47)
+            {
+                return "image/png";
+            }
+
+            if (read >= 3 && header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF)
+            {
+                return "image/jpeg";
+            }
+
+            if (read >= 6 && header[0] == 'G' && header[1] == 'I' && header[2] == 'F')
+            {
+                return "image/gif";
+            }
+
+            if (read >= 12 && header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F'
+                && header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P')
+            {
+                return "image/webp";
+            }
+        }
+        catch (IOException)
+        {
+        }
+
+        return "application/octet-stream";
     }
 
     private static string ArtworkFileName(Guid channelId, string kind) =>
@@ -1170,9 +1205,9 @@ public class LiteTvController : ControllerBase
         {
             var url = kind switch
             {
-                "banner" => channel.Artwork.BannerUrl,
-                "backdrop" => channel.Artwork.BackdropUrl,
-                _ => channel.Artwork.PosterUrl
+                "banner" => channel.Artwork?.BannerUrl,
+                "backdrop" => channel.Artwork?.BackdropUrl,
+                _ => channel.Artwork?.PosterUrl
             };
 
             // Kept only while the channel still points at OUR file for this slot. Any other
@@ -1577,10 +1612,18 @@ public class LiteTvController : ControllerBase
             // together or ending the window on one.
             TrailsItemId = airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.ItemId : null,
             TrailsName = airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.Name : null,
-            // PlayUrl, so a programme that is a YouTube video hands over its address the same
-            // way a trailer always has.
-            TrailerUrl = airing.PlayUrl
+            // A playlist video is a programme, not a preview. Keep its playback address in the
+            // programme field; TrailerUrl is reserved for actual interstitials so clients such
+            // as Wholphin do not label every YouTube item "Preview".
+            PlayUrl = entry?.Url,
+            TrailerUrl = airing.Kind == AiringKind.Interstitial ? airing.PlayUrl : null,
+            IsYouTube = entry?.IsAddress == true
         };
+
+        if (entry?.IsAddress == true && YouTubeStreamResolver.VideoId(entry.Url) is { Length: > 0 } videoId)
+        {
+            dto.ImageUrl = "https://i.ytimg.com/vi/" + videoId + "/hqdefault.jpg";
+        }
 
         // An interstitial wears the artwork of the programme it is trailing, which is what a
         // trailer looks like on television anyway. A dark stretch has nothing to wear.
@@ -2459,6 +2502,15 @@ public class ProgramDto
     /// <summary>Gets or sets the address to play in this interstitial, when the schedule names
     /// one outright rather than leaving the client to find a trailer for the next programme.</summary>
     public string? TrailerUrl { get; set; }
+
+    /// <summary>Gets or sets the direct playback address of a programme without a library item.</summary>
+    public string? PlayUrl { get; set; }
+
+    /// <summary>Gets or sets whether this programme came from a YouTube source.</summary>
+    public bool IsYouTube { get; set; }
+
+    /// <summary>Gets or sets a stable thumbnail address for a YouTube programme.</summary>
+    public string? ImageUrl { get; set; }
 
     /// <summary>Gets or sets the item to draw the portrait image from - the programme itself,
     /// or the series it belongs to. Null when neither has one.</summary>

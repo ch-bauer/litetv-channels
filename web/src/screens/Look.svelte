@@ -498,15 +498,29 @@
         uploading = true;
         bar.showLoadingMsg();
         try {
-            // Fetched to the server rather than linked: a picture chosen from elsewhere is kept
-            // here so it cannot stop working later.
-            await api().fetch({
-                url: api().getUrl('LiteTv/Artwork/' + channel.Id + '/' + slot + '/Fetch'),
-                type: 'POST',
-                data: JSON.stringify({ url }),
-                contentType: 'application/json',
-                dataType: 'json',
-            });
+            // Library images are protected by Jellyfin and cannot be downloaded by the server
+            // without the viewer's token. Fetch them in the dashboard and upload the bytes.
+            // Remote provider images can still be copied server-side, which also avoids making
+            // the browser depend on their CORS policy.
+            if (source === 'library' || url.startsWith(api().serverAddress())) {
+                const picture = await fetch(url, { headers: authHeaders() });
+                if (!picture.ok) { throw new Error(picture.status + ' ' + picture.statusText); }
+                const bytes = await picture.blob();
+                const uploaded = await fetch(api().getUrl('LiteTv/Artwork/' + channel.Id + '/' + slot), {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: bytes,
+                });
+                if (!uploaded.ok) { throw new Error(uploaded.status + ' ' + uploaded.statusText); }
+            } else {
+                await api().fetch({
+                    url: api().getUrl('LiteTv/Artwork/' + channel.Id + '/' + slot + '/Fetch'),
+                    type: 'POST',
+                    data: JSON.stringify({ url }),
+                    contentType: 'application/json',
+                    dataType: 'json',
+                });
+            }
             artwork[slot + 'Url'] = '/LiteTv/Artwork/' + channel.Id + '/' + slot + '?t=' + Date.now();
             offering = null;
         } catch (err) {

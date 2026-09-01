@@ -170,7 +170,8 @@ const $$ = (sel) => Array.from(app().querySelectorAll(sel));
 
 /** The tab strip along the top, by the word on it. */
 async function openTab(word) {
-    const button = $$('button').find((b) => b.textContent.trim() === word);
+    const german = { Week: 'Woche', Content: 'Inhalt', Breaks: 'Pausen', Look: 'Aussehen', Settings: 'Einstellungen' };
+    const button = $$('button').find((b) => [word, german[word]].includes(b.textContent.trim()));
     ok(button, 'no tab called ' + word);
     clickLike(button);
     await new Promise((r) => setTimeout(r, 120));
@@ -248,6 +249,27 @@ async function serverChecks(state) {
         is(await statusOf(post('LiteTv/Definitions/' + made.Id, made)), 200, 'creating the temporary channel');
         const back = byId(await api().getJSON(api().getUrl('LiteTv/Definitions')), made.Id);
         ok(back, 'the temporary channel was not there when read back');
+    });
+
+    await check('server', 'channel artwork survives upload, save and reload', async () => {
+        // A real browser upload catches the failure mode that a JSON-only round trip cannot:
+        // the picture is stored first, then the channel definition points at it.
+        const png = new Uint8Array([
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0,
+        ]);
+        const response = await fetch(api().getUrl('LiteTv/Artwork/' + state.tempId + '/banner'), {
+            method: 'POST',
+            headers: {
+                'Authorization': 'MediaBrowser Token="' + api().accessToken() + '"',
+                'X-Emby-Token': api().accessToken(),
+            },
+            body: new Blob([png], { type: 'image/png' }),
+        });
+        ok(response.ok, 'uploading channel artwork');
+        const body = { ...state.temp, Artwork: { BannerUrl: '/LiteTv/Artwork/' + state.tempId + '/banner' } };
+        is(await statusOf(post('LiteTv/Definitions/' + body.Id, body)), 200, 'saving artwork selection');
+        const back = byId(await api().getJSON(api().getUrl('LiteTv/Definitions')), body.Id);
+        is(back.Artwork.BannerUrl, body.Artwork.BannerUrl, 'the selected picture did not survive reload');
     });
 
     /*
@@ -536,11 +558,17 @@ async function pageChecks(state) {
 
     await check('page', 'every tab shows exactly one screen, and none scrolls sideways', async () => {
         const wide = [];
-        for (const tab of ['Week', 'Content', 'Breaks', 'Look', 'Settings']) {
-            await openTab(tab);
+        for (const tab of [
+            ['Week', 'Woche'], ['Content', 'Inhalt'], ['Breaks', 'Pausen'],
+            ['Look', 'Aussehen'], ['Settings', 'Einstellungen'],
+        ]) {
+            await openTab(tab[0]);
+            if (!document.querySelector('.tab.on')?.textContent.match(new RegExp(tab[0] + '|' + tab[1]))) {
+                throw new Error('the active tab has no expected label');
+            }
             await new Promise((r) => setTimeout(r, 200));
-            ok(app().textContent.trim().length > 0, 'the ' + tab + ' screen drew nothing');
-            if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) { wide.push(tab); }
+            ok(app().textContent.trim().length > 0, 'the ' + tab[0] + ' screen drew nothing');
+            if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) { wide.push(tab[0]); }
         }
         is(wide, [], 'these screens make the page scroll sideways');
         await openTab('Content');

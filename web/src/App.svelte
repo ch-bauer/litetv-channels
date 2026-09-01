@@ -29,6 +29,18 @@
     if (connected) { void store.load(); }
 
     const channel = $derived(store.channel);
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto'
+            && typeof navigator !== 'undefined'
+            && navigator.language.toLowerCase().startsWith('de')));
+
+    const tabLabel = (id: Tab): string => german
+        ? ({ week: 'Woche', content: 'Inhalt', breaks: 'Pausen', look: 'Aussehen', settings: 'Einstellungen' }[id])
+        : ({ week: 'Week', content: 'Content', breaks: 'Breaks', look: 'Look', settings: 'Settings' }[id]);
+
+    $effect(() => {
+        if (typeof document !== 'undefined') { document.documentElement.lang = german ? 'de' : 'en'; }
+    });
 
     /*
         One Save, covering everything on the page.
@@ -41,12 +53,14 @@
     const unsaved = $derived(store.dirty || week.dirty);
 
     const saved = $derived.by(() => {
-        if (store.dirty && week.dirty) { return 'unsaved changes, schedule included'; }
-        if (week.dirty) { return 'unsaved schedule changes'; }
-        if (store.dirty) { return 'unsaved changes'; }
+        if (store.dirty && week.dirty) { return german ? 'ungespeicherte Änderungen inkl. Programmplan' : 'unsaved changes, schedule included'; }
+        if (week.dirty) { return german ? 'ungespeicherter Programmplan' : 'unsaved schedule changes'; }
+        if (store.dirty) { return german ? 'ungespeicherte Änderungen' : 'unsaved changes'; }
         if (!store.savedAt) { return ''; }
         const seconds = Math.round((Date.now() - store.savedAt.getTime()) / 1000);
-        return seconds < 60 ? 'saved a moment ago' : 'saved ' + Math.round(seconds / 60) + ' min ago';
+        return seconds < 60
+            ? (german ? 'gerade gespeichert' : 'saved a moment ago')
+            : (german ? 'vor ' + Math.round(seconds / 60) + ' Min. gespeichert' : 'saved ' + Math.round(seconds / 60) + ' min ago');
     });
 
     /*
@@ -69,9 +83,9 @@
     {#if !connected}
         <p class="fatal">{new NoDashboardError().message}</p>
     {:else if store.error}
-        <p class="fatal">The configuration could not be loaded: {store.error}</p>
+                    <p class="fatal">{german ? 'Die Konfiguration konnte nicht geladen werden: ' : 'The configuration could not be loaded: '}{store.error}</p>
     {:else if store.loading}
-        <p class="waiting">Loading…</p>
+                <p class="waiting">{german ? 'Wird geladen…' : 'Loading…'}</p>
     {:else}
         <Rail bind:destination />
 
@@ -106,8 +120,8 @@
                 </header>
                 <p class="unported">
                     {store.dirty
-                        ? 'Nothing is left. Press Save to write that down, or use + in the rail to make another.'
-                        : 'This server has no channels yet. Use + in the rail to make one.'}
+                        ? (german ? 'Keine Kanäle übrig. Speichere oder lege mit + einen neuen an.' : 'Nothing is left. Press Save to write that down, or use + in the rail to make another.')
+                        : (german ? 'Dieser Server hat noch keine Kanäle. Lege mit + einen an.' : 'This server has no channels yet. Use + in the rail to make one.')}
                 </p>
             {:else}
                 <header>
@@ -126,7 +140,7 @@
                             class:unbuilt={!item.ready}
                             aria-pressed={tab === item.id}
                             onclick={() => (tab = item.id)}
-                        >{item.label}</button>
+                        >{tabLabel(item.id)}</button>
                     {/each}
                 </nav>
 

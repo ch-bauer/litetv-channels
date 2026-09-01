@@ -99,4 +99,12 @@ public class UnusedArtworkTests
 
         Assert.Contains("poster", unused);
     }
+
+    [Fact]
+    public void MissingArtworkObjectIsSafeToCleanUp()
+    {
+        var channel = new TvChannel { Id = Channel, Name = "A channel", Artwork = null! };
+
+        Assert.Equal(new[] { "banner", "backdrop", "poster" }, LiteTvController.UnusedArtwork(channel));
+    }
 }

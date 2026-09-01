@@ -689,9 +689,9 @@ public class ChannelPlaylistBuilder
 
     private void AddCollection(List<ScheduledEntry> entries, BoxSet boxSet)
     {
-        var children = boxSet.GetLinkedChildren()
-            .OrderBy(c => c.PremiereDate ?? DateTime.MaxValue)
-            .ThenBy(c => c.SortName, StringComparer.OrdinalIgnoreCase);
+        // GetLinkedChildren is already the collection owner's order. Sorting here silently
+        // turned a deliberately ordered collection into an alphabetical/premiere-date list.
+        var children = CollectionChildrenInStoredOrder(boxSet.GetLinkedChildren());
 
         foreach (var child in children)
         {
@@ -705,6 +705,9 @@ public class ChannelPlaylistBuilder
             }
         }
     }
+
+    internal static IReadOnlyList<T> CollectionChildrenInStoredOrder<T>(IReadOnlyList<T> children)
+        => children;
 
     private void AddIfPlayable(List<ScheduledEntry> entries, BaseItem item, Series? series = null)
     {

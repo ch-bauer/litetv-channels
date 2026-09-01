@@ -312,6 +312,16 @@
                 </div>
 
                 <div class="field">
+                    <span class="label">Configuration page language</span>
+                    <select class="text" bind:value={config.PageLanguage}>
+                        <option value="auto">Automatic / automatisch</option>
+                        <option value="en">English</option>
+                        <option value="de">Deutsch</option>
+                    </select>
+                    <p class="note">The LiteTV configuration page uses this language after the next visit.</p>
+                </div>
+
+                <div class="field">
                     <span class="label">Ask YouTube in</span>
                     <!--
                         A free field, not a list of two. YouTube takes any language tag, and
