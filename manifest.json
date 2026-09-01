@@ -13,7 +13,7 @@
         "changelog": "Restores the stable v1.0.97 baseline while retaining trailer scheduling, remote trailers, playlist previews and collection order. Uses a simple direct German/English language switch.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.103.0/litetv-channels_1.0.103.0.zip",
-        "checksum": "",
+        "checksum": "f4d3e1e8d62c8ae0551918e0f8dbdfc6",
         "timestamp": "2026-09-01T18:00:00.000Z"
       },
       {
