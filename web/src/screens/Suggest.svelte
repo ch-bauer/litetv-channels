@@ -28,6 +28,7 @@
     let term = $state('');
     let hits = $state<SearchHit[]>([]);
     let seeds = $state<SearchHit[]>([]);
+    let collectionSeed = $state<SearchHit | null>(null);
     let answer = $state<ScoredSuggestions | null>(null);
 
     /*
@@ -102,6 +103,7 @@
     */
     const anotherLineupExists = $derived.by(() => {
         if (half === 'titles') {
+            if (collectionSeed) { return false; }
             return answer !== null && answer.Results.filter((r) => r.Score >= cutoff).length > WINDOW;
         }
         return matching.length > 60;
@@ -130,6 +132,19 @@
     }
 
     function addSeed(hit: SearchHit): void {
+        if (hit.kind === 'Collection') {
+            collectionSeed = hit;
+            seeds = [];
+            answer = null;
+            chosen = {};
+            hiddenTicks = {};
+            scoreError = null;
+            cutoff = 0;
+            term = '';
+            hits = [];
+            return;
+        }
+        if (collectionSeed) { collectionSeed = null; }
         if (seeds.some((s) => s.id === hit.id)) { return; }
         seeds = [...seeds, hit];
         term = '';
@@ -210,6 +225,8 @@
     let folders = $state<Folder[]>([]);
     let folderId = $state<string | null>(null);
     let items = $state<LibItem[]>([]);
+    let collections = $state<LibItem[]>([]);
+    let collectionTerm = $state('');
     let loadingLibrary = $state(false);
     let pickedGenres = $state<string[]>([]);
     let pickedCollection = $state<LibItem | null>(null);
@@ -226,15 +243,28 @@
         loadingLibrary = true;
         pickedGenres = [];
         pickedCollection = null;
+        collectionTerm = '';
         try {
-            const a = await api().getItems<{ Items?: LibItem[] }>(api().getCurrentUserId(), {
-                parentId: id,
-                includeItemTypes: 'Movie,Series,BoxSet',
-                recursive: true,
-                limit: 2000,
-                fields: 'Genres,ParentId,RunTimeTicks,ChildCount',
-            });
-            items = a.Items ?? [];
+            const [titles, boxes] = await Promise.all([
+                api().getItems<{ Items?: LibItem[] }>(api().getCurrentUserId(), {
+                    parentId: id,
+                    includeItemTypes: 'Movie,Series',
+                    recursive: true,
+                    limit: 2000,
+                    fields: 'Genres,ParentId,RunTimeTicks,ChildCount',
+                }),
+                api().getItems<{ Items?: LibItem[] }>(api().getCurrentUserId(), {
+                    parentId: id,
+                    includeItemTypes: 'BoxSet',
+                    recursive: true,
+                    sortBy: 'SortName,Name',
+                    sortOrder: 'Ascending',
+                    limit: 10000,
+                    fields: 'ChildCount',
+                }),
+            ]);
+            items = titles.Items ?? [];
+            collections = boxes.Items ?? [];
         } finally {
             loadingLibrary = false;
         }
@@ -263,7 +293,11 @@
             pickedGenres.every((genre) => (item.Genres ?? []).includes(genre)));
     });
 
-    const collections = $derived(items.filter((item) => item.Type === 'BoxSet'));
+    const filteredCollections = $derived.by(() => {
+        const query = collectionTerm.trim().toLocaleLowerCase();
+        if (!query) { return collections; }
+        return collections.filter((collection) => collection.Name.toLocaleLowerCase().includes(query));
+    });
 
     function toggleGenre(genre: string): void {
         pickedGenres = pickedGenres.includes(genre)
@@ -274,6 +308,9 @@
     // --- what gets made ------------------------------------------------------------------
     const proposed = $derived.by<ChannelSource[]>(() => {
         if (half === 'titles') {
+            if (collectionSeed) {
+                return [{ Type: 'Collection', ItemId: collectionSeed.id, Name: collectionSeed.name }];
+            }
             if (!answer) { return []; }
             // Only what is both ticked AND above the cut-off: hiding something must not leave
             // it in the channel.
@@ -364,6 +401,7 @@
         round = 0;
         if (half === 'titles') {
             seeds = [];
+            collectionSeed = null;
             hits = [];
             term = '';
             answer = null;
@@ -376,6 +414,8 @@
             pickedCollection = null;
             folderId = null;
             items = [];
+            collections = [];
+            collectionTerm = '';
         }
         name = 'New channel';
     }
@@ -406,8 +446,8 @@
                         class="text"
                         bind:value={term}
                         oninput={find}
-                        placeholder="Name a film or series…"
-                        aria-label="Find a title to start from"
+                        placeholder={german ? 'Name eines Films, einer Serie oder Sammlung…' : 'Name a film, series or collection…'}
+                        aria-label={german ? 'Film, Serie oder Sammlung zum Start suchen' : 'Find a film, series or collection to start from'}
                     />
                     {#if hits.length > 0}
                         <div class="hits">
@@ -425,6 +465,14 @@
                                     <button type="button" onclick={() => { seeds = seeds.filter((s) => s.id !== seed.id); void rescore(); }} aria-label="Remove {seed.name}">✕</button>
                                 </span>
                             {/each}
+                        </div>
+                    {/if}
+                    {#if collectionSeed}
+                        <div class="seeds">
+                            <span class="seed collection-seed">
+                                {collectionSeed.name} <small>{german ? 'Sammlung' : 'Collection'}</small>
+                                <button type="button" onclick={() => { collectionSeed = null; }} aria-label="Remove {collectionSeed.name}">✕</button>
+                            </span>
                         </div>
                     {/if}
                 </Card>
@@ -505,16 +553,24 @@
 
                 {#if loadingLibrary}
                     <p class="none">{german ? 'Inhalte werden gezählt…' : 'Counting what is in there…'}</p>
-                {:else if items.length > 0}
+                {:else if items.length > 0 || collections.length > 0}
                     <Card>
                         <h3>{german ? 'Und einige Genres' : 'And some genres'}</h3>
                         {#if collections.length > 0}
                             <p class="hint">{german ? 'Oder direkt eine Sammlung verwenden.' : 'Or use a collection directly.'}</p>
+                            <input
+                                class="text collection-search"
+                                bind:value={collectionTerm}
+                                placeholder={german ? 'Sammlungen durchsuchen…' : 'Search collections…'}
+                                aria-label={german ? 'Sammlungen durchsuchen' : 'Search collections'}
+                            />
                             <div class="genres collections">
-                                {#each collections as collection (collection.Id)}
+                                {#each filteredCollections as collection (collection.Id)}
                                     <button type="button" class:on={pickedCollection?.Id === collection.Id} onclick={() => { pickedCollection = pickedCollection?.Id === collection.Id ? null : collection; pickedGenres = []; }}>
                                         {collection.Name} <span>{collection.ChildCount ?? 0}</span>
                                     </button>
+                                {:else}
+                                    <p class="none">{german ? 'Keine passende Sammlung.' : 'No matching collection.'}</p>
                                 {/each}
                             </div>
                         {/if}
@@ -683,6 +739,8 @@
     }
 
     .seed button { background: none; border: none; color: inherit; cursor: pointer; font-size: 10px; }
+    .collection-seed small { opacity: .75; font-size: 10px; }
+    .collection-search { margin: 8px 0; }
 
     .engine {
         padding: 8px 12px;
