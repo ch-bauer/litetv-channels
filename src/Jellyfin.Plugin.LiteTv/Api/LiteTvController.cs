@@ -1612,8 +1612,12 @@ public class LiteTvController : ControllerBase
             // client filling the break has to be told which. Working it out from what follows
             // is right until the schedule does something ordinary, like putting two breaks
             // together or ending the window on one.
-            TrailsItemId = airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.ItemId : null,
-            TrailsName = airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.Name : null,
+            TrailsItemId = airing.Kind == AiringKind.Trailer
+                ? entry?.TrailerForItemId
+                : airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.ItemId : null,
+            TrailsName = airing.Kind == AiringKind.Trailer
+                ? entry?.TrailerForName
+                : airing.Kind == AiringKind.Interstitial ? airing.NextProgram?.Name : null,
             // A playlist video is a programme, not a preview. Keep its playback address in the
             // programme field; TrailerUrl is reserved for actual interstitials so clients such
             // as Wholphin do not label every YouTube item "Preview".

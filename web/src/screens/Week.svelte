@@ -14,6 +14,8 @@
     import type { TvChannel } from '../lib/types';
 
     let { channel }: { channel: TvChannel } = $props();
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     $effect(() => {
         /*
@@ -32,7 +34,7 @@
     const status = $derived.by(() => {
         if (!week.week) { return ''; }
         if (!week.week.Curated) {
-            return 'No week laid out — this channel airs from its content and settings.';
+            return german ? 'Keine Woche erstellt — dieser Kanal spielt seine Inhalte und Einstellungen ab.' : 'No week laid out — this channel airs from its content and settings.';
         }
 
         /*
@@ -48,27 +50,27 @@
             const to = from + SECONDS_PER_DAY;
             const onDay = week.airings.filter((a) => a.Kind !== 'Gap'
                 && a.StartSecond < to && a.StartSecond + a.DurationSeconds > from);
-            if (onDay.length === 0) { return 'Nothing scheduled · ' + dayWords(from); }
+            if (onDay.length === 0) { return (german ? 'Nichts geplant · ' : 'Nothing scheduled · ') + dayWords(from); }
 
             // Clamped to the day, so a programme running over midnight is reported by the part
             // of it that is on this day rather than by where it started or ended.
             const first = Math.min(...onDay.map((a) => Math.max(a.StartSecond, from)));
             const last = Math.max(...onDay.map((a) => Math.min(a.StartSecond + a.DurationSeconds, to)));
-            const until = last >= to ? 'midnight' : clock(secondOfDay(last));
-            return onDay.length + ' scheduled · ' + dayWords(from)
+            const until = last >= to ? (german ? 'Mitternacht' : 'midnight') : clock(secondOfDay(last));
+            return onDay.length + (german ? ' geplant · ' : ' scheduled · ') + dayWords(from)
                 + ' ' + clock(secondOfDay(first)) + '–' + until;
         }
 
         const placed = week.airings.filter((a) => a.Kind !== 'Gap').length;
-        const over = week.weeks === 1 ? '' : ' over ' + week.weeks + ' weeks';
-        return placed + ' scheduled' + over;
+        const over = week.weeks === 1 ? '' : (german ? ' über ' + week.weeks + ' Wochen' : ' over ' + week.weeks + ' weeks');
+        return placed + (german ? ' geplant' : ' scheduled') + over;
     });
 
     /** "Thursday", or "week 2 · Thursday" when the schedule runs longer than a week. */
     function dayWords(second: number): string {
         const day = dayOf(second);
         const name = DAY_NAMES[day % 7];
-        return week.weeks === 1 ? name : 'week ' + (Math.floor(day / 7) + 1) + ' · ' + name;
+        return week.weeks === 1 ? name : (german ? 'Woche ' : 'week ') + (Math.floor(day / 7) + 1) + ' · ' + name;
     }
 
     function describe(): string {
@@ -232,8 +234,8 @@
 <div class="screen" onclick={() => (week.selectedId = null)}>
     <div class="toolbar" onclick={(e) => e.stopPropagation()}>
         <div class="segmented" role="group" aria-label="Week or day">
-            <button type="button" class:on={week.view === 'week'} onclick={() => (week.view = 'week')}>Week</button>
-            <button type="button" class:on={week.view === 'day'} onclick={() => (week.view = 'day')}>Day</button>
+            <button type="button" class:on={week.view === 'week'} onclick={() => (week.view = 'week')}>{german ? 'Woche' : 'Week'}</button>
+            <button type="button" class:on={week.view === 'day'} onclick={() => (week.view = 'day')}>{german ? 'Tag' : 'Day'}</button>
         </div>
 
         {#if week.weeks > 1}
@@ -250,7 +252,7 @@
                     aria-label="The week before"
                 >&lsaquo;</button>
                 <span class="which">
-                    Week {week.weekIndex + 1} of {week.weeks}
+                    {german ? 'Woche' : 'Week'} {week.weekIndex + 1} {german ? 'von' : 'of'} {week.weeks}
                     {#if week.weekIndex === week.currentWeek}<i class="onair">on air</i>{/if}
                 </span>
                 <button
@@ -263,7 +265,7 @@
         {/if}
 
         <label class="zoom">
-            Zoom
+            {german ? 'Zoom' : 'Zoom'}
             <input
                 type="range"
                 min={ZOOM_MIN}
@@ -279,7 +281,7 @@
                 }}
                 aria-label="Zoom"
             />
-            <span class="reading">names from {Math.max(1, Math.round(13 / (week.zoom / 60)))} min</span>
+            <span class="reading">{german ? 'Namen ab ' : 'names from '}{Math.max(1, Math.round(13 / (week.zoom / 60)))} {german ? 'Min.' : 'min'}</span>
         </label>
 
         <!--
@@ -298,7 +300,7 @@
                 checked={week.frameNow}
                 onchange={(e) => week.setFrameNow(e.currentTarget.checked)}
             />
-            Follow what's on
+            {german ? 'Aktuelles verfolgen' : "Follow what's on"}
         </label>
 
         <label class="follow" title="Size the grid so the programme on air now is properly visible, rather than a sliver">
@@ -307,7 +309,7 @@
                 checked={week.zoomToNow}
                 onchange={(e) => week.setZoomToNow(e.currentTarget.checked)}
             />
-            Zoom to now
+            {german ? 'Auf jetzt zoomen' : 'Zoom to now'}
         </label>
 
         <div class="spacer"></div>
@@ -325,7 +327,7 @@
             pending edit like everything else here - Undo takes it back.
         -->
         <label class="length" title="Shortening this throws away the weeks past the new end.">
-            Repeats every
+            {german ? 'Wiederholt sich alle' : 'Repeats every'}
             <input
                 type="number"
                 min="1"
@@ -353,14 +355,14 @@
             disabled={week.busy || !week.week?.Curated}
             title="Works out how long this channel takes to play everything once, makes the schedule that long, and lays it out - so every episode airs before it starts again."
         ><span class="lt-swap">
-                <span class="lt-ghost">As long as the content</span>
-                <span>{week.busy ? 'Working…' : 'As long as the content'}</span>
+                <span class="lt-ghost">{german ? 'So lang wie der Inhalt' : 'As long as the content'}</span>
+                <span>{week.busy ? (german ? 'Wird bearbeitet…' : 'Working…') : (german ? 'So lang wie der Inhalt' : 'As long as the content')}</span>
             </span></button>
 
         <div class="legend">
-            <span><i style="background: {KIND_FILL.Programme}"></i>Programme</span>
+            <span><i style="background: {KIND_FILL.Programme}"></i>{german ? 'Programm' : 'Programme'}</span>
             <span><i style="background: {KIND_FILL.Trailer}"></i>Trailer</span>
-            <span><i style="background: {KIND_FILL.Advert}"></i>Advert</span>
+            <span><i style="background: {KIND_FILL.Advert}"></i>{german ? 'Werbung' : 'Advert'}</span>
         </div>
 
         <!--
@@ -379,7 +381,7 @@
             onclick={() => week.undo()}
             disabled={week.busy || !week.dirty}
             title={week.dirty ? 'Takes back ' + week.undoWords : 'Nothing to take back yet'}
-        >Undo</button>
+        >{german ? 'Rückgängig' : 'Undo'}</button>
         <button
             type="button"
             class="chip quiet"
@@ -406,15 +408,14 @@
                     That is what fixes the width - a number of pixels would be a guess about a
                     font the dashboard chooses, and would be wrong in German.
                 -->
-                <span class="lt-ghost">Save and lay this week out</span>
-                <span>{week.busy ? 'Working…' : store.dirty ? 'Save and lay this week out' : 'Lay this week out'}</span>
+                <span class="lt-ghost">{german ? 'Speichern und Woche erstellen' : 'Save and lay this week out'}</span>
+                <span>{week.busy ? (german ? 'Wird bearbeitet…' : 'Working…') : store.dirty ? (german ? 'Speichern und Woche erstellen' : 'Save and lay this week out') : (german ? 'Woche erstellen' : 'Lay this week out')}</span>
             </span></button>
     </div>
 
     {#if week.unsaved}
         <p class="waiting">
-            This channel has not been saved yet, so it has no schedule on the server. Press
-            <b>Save</b> — or <b>Save and lay this week out</b> above — and its week appears here.
+            {german ? 'Dieser Kanal wurde noch nicht gespeichert und hat daher keinen Zeitplan auf dem Server. Drücke oben auf ' : 'This channel has not been saved yet, so it has no schedule on the server. Press '}<b>{german ? 'Speichern' : 'Save'}</b>{german ? ' — oder auf ' : ' — or '}<b>{german ? 'Speichern und Woche erstellen' : 'Save and lay this week out'}</b>{german ? ', dann erscheint die Woche hier.' : ' above — and its week appears here.'}
         </p>
     {:else if week.error}
         <p class="bad">{week.error}</p>
@@ -436,7 +437,7 @@
     <div class="grid-wrap">
         <Grid {onDropItem} />
         {#if week.loading}
-            <p class="waiting over">Loading the week…</p>
+            <p class="waiting over">{german ? 'Woche wird geladen…' : 'Loading the week…'}</p>
         {/if}
     </div>
 
@@ -451,7 +452,7 @@
                 </div>
 
                 <label class="exact">
-                    Starts
+                    {german ? 'Start' : 'Starts'}
                     <select
                         value={String(dayOf(selected.StartSecond))}
                         onchange={(e) => setDay(e.currentTarget.value)}
@@ -470,7 +471,7 @@
                     />
                 </label>
                 <button type="button" class="chip" onclick={sameTimeTomorrow} disabled={week.busy}>
-                    Same time tomorrow
+                    {german ? 'Morgen zur gleichen Zeit' : 'Same time tomorrow'}
                 </button>
                 <button
                     type="button"
@@ -479,7 +480,7 @@
                     disabled={week.busy}
                 >Take it off</button>
                 <button type="button" class="chip quiet" onclick={() => (week.selectedId = null)}>
-                    Clear selection
+                    {german ? 'Auswahl aufheben' : 'Clear selection'}
                 </button>
             </div>
         {:else}

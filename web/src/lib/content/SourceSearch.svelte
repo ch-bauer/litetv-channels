@@ -3,8 +3,11 @@
     import { linkHit, search, toSource, type SearchHit } from '../search';
     import { looksLikeAddress } from '../api/playlist';
     import type { ChannelSource } from '../types';
+    import { store } from '../config.svelte';
 
     let { sources }: { sources: ChannelSource[] } = $props();
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     let term = $state('');
     let hits = $state<SearchHit[]>([]);
@@ -90,21 +93,21 @@
         oninput={onInput}
         onfocus={onFocus}
         onkeydown={(e) => { if (e.key === 'Escape') { open = false; } }}
-        placeholder="Search films, series, episodes and collections — or paste a link…"
-        aria-label="Search the library, or paste a link"
+        placeholder={german ? 'Filme, Serien, Episoden und Sammlungen suchen — oder Link einfügen…' : 'Search films, series, episodes and collections — or paste a link…'}
+        aria-label={german ? 'Bibliothek durchsuchen oder Link einfügen' : 'Search the library, or paste a link'}
     />
-    {#if busy}<span class="busy">searching…</span>{/if}
+    {#if busy}<span class="busy">{german ? 'suche…' : 'searching…'}</span>{/if}
     {#if open && hits.length > 0}
-        <button class="hide" type="button" onclick={() => (open = false)}>hide</button>
+        <button class="hide" type="button" onclick={() => (open = false)}>{german ? 'ausblenden' : 'hide'}</button>
     {/if}
 </div>
 
 {#if open}
     <div class="results">
         {#if failed}
-            <p class="bad">That search failed: {failed}</p>
+            <p class="bad">{german ? 'Suche fehlgeschlagen: ' : 'That search failed: '}{failed}</p>
         {:else if hits.length === 0 && !busy}
-            <p class="none">Nothing in the library matches “{term}”.</p>
+            <p class="none">{german ? 'Keine passenden Titel in der Bibliothek für „' : 'Nothing in the library matches “'}{term}{german ? '“.' : '”.'}</p>
         {:else}
             {#each hits as hit (hit.kind + '|' + hit.id + '|' + (hit.url ?? ''))}
                 <button class="hit" type="button" onclick={() => add(hit)} disabled={already(hit)}>
@@ -119,7 +122,7 @@
                     >
                         {tagFor(hit)}
                     </span>
-                    <span class="verb">{already(hit) ? 'added' : '+'}</span>
+                    <span class="verb">{already(hit) ? (german ? 'hinzugefügt' : 'added') : '+'}</span>
                 </button>
             {/each}
         {/if}

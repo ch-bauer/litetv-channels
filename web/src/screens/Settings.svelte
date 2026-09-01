@@ -11,6 +11,11 @@
 
     let { channel }: { channel: TvChannel } = $props();
 
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto'
+            && typeof navigator !== 'undefined'
+            && navigator.language.toLowerCase().startsWith('de')));
+
     /*
         Deleting a channel. The old page had this and the rebuilt one lost it, which left a
         configuration you could only ever add to.
@@ -33,16 +38,16 @@
 
 <div class="screen">
     <div class="left">
-        <div class="eyebrow">THE CHANNEL</div>
+        <div class="eyebrow">{german ? 'DER KANAL' : 'THE CHANNEL'}</div>
 
         <div class="field">
-            <label class="label" for="channel-name">Name</label>
+            <label class="label" for="channel-name">{german ? 'Name' : 'Name'}</label>
             <input
                 id="channel-name"
                 class="text"
                 bind:value={channel.Name}
             />
-            <p class="note">What the guide calls it on the television.</p>
+            <p class="note">{german ? 'So wird der Kanal im TV-Programm genannt.' : 'What the guide calls it on the television.'}</p>
         </div>
 
         <button
@@ -60,8 +65,8 @@
                 {/if}
             </span>
             <span class="onair-text">
-                <span class="label">On air</span>
-                <span class="note-inline">A channel that is off stays in this list and shows on no client.</span>
+                <span class="label">{german ? 'Aktiv' : 'On air'}</span>
+                <span class="note-inline">{german ? 'Ein deaktivierter Kanal bleibt in dieser Liste, wird aber auf keinem Client angezeigt.' : 'A channel that is off stays in this list and shows on no client.'}</span>
             </span>
         </button>
 
@@ -74,42 +79,53 @@
                 <path d="M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
             </svg>
             <div>
-                <div class="warn-title">These only shape a new week</div>
+                <div class="warn-title">{german ? 'Gilt nur für eine neue Woche' : 'These only shape a new week'}</div>
                 <p class="warn-text">
-                    This channel’s week is written down, so changing anything here does nothing to
-                    what is already scheduled. It takes effect when you lay the week out again — a
-                    button on the Week tab, which discards what you arranged by hand.
+                    {german
+                        ? 'Die Woche dieses Kanals ist bereits gespeichert. Änderungen hier wirken daher nicht auf den aktuellen Zeitplan. Sie gelten erst, wenn du die Woche im Tab „Woche“ neu erstellst — dabei wird die manuelle Anordnung verworfen.'
+                        : 'This channel’s week is written down, so changing anything here does nothing to what is already scheduled. It takes effect when you lay the week out again — a button on the Week tab, which discards what you arranged by hand.'}
                 </p>
             </div>
         </div>
 
         <div class="danger-card">
-            <div class="danger-title">Remove this channel</div>
+            <div class="danger-title">{german ? 'Diesen Kanal entfernen' : 'Remove this channel'}</div>
             <p class="danger-note">
-                Takes the channel and its schedule away. <strong>Nothing in your library is
-                touched</strong> &mdash; a channel is only ever a schedule over titles you already
-                have.
+                {german ? 'Entfernt den Kanal und seinen Zeitplan. ' : 'Takes the channel and its schedule away. '}<strong>{german ? 'Deine Bibliothek bleibt unverändert' : 'Nothing in your library is touched'}</strong>{german ? ' — ein Kanal ist nur ein Zeitplan für bereits vorhandene Titel.' : ' — a channel is only ever a schedule over titles you already have.'}
             </p>
             {#if confirming}
                 <div class="danger-row">
-                    <span class="asking">Delete &ldquo;{channel.Name}&rdquo;?</span>
+                    <span class="asking">{german ? `„${channel.Name}“ löschen?` : `Delete “${channel.Name}”?`}</span>
                     <button type="button" class="really" onclick={() => store.removeChannel(channel.Id)}>
-                        Yes, delete it
+                        {german ? 'Ja, löschen' : 'Yes, delete it'}
                     </button>
-                    <button type="button" class="keep" onclick={() => (confirming = false)}>Keep it</button>
+                    <button type="button" class="keep" onclick={() => (confirming = false)}>{german ? 'Behalten' : 'Keep it'}</button>
                 </div>
-                <p class="danger-note">It goes for good when you press Save.</p>
+                <p class="danger-note">{german ? 'Beim Speichern wird der Kanal endgültig entfernt.' : 'It goes for good when you press Save.'}</p>
             {:else}
-                <button type="button" class="delete" onclick={() => (confirming = true)}>Delete channel</button>
+                <button type="button" class="delete" onclick={() => (confirming = true)}>{german ? 'Kanal löschen' : 'Delete channel'}</button>
             {/if}
         </div>
+
+        {#if store.config}
+            <div class="field language-field">
+                <span class="label">{german ? 'Sprache der Konfigurationsseite' : 'Configuration page language'}</span>
+                <select class="text" bind:value={store.config.PageLanguage}>
+                    <option value="auto">{german ? 'Automatisch' : 'Automatic'}</option>
+                    <option value="de">Deutsch</option>
+                    <option value="en">English</option>
+                </select>
+                <p class="note">{german ? 'Die Sprache wird nach dem Speichern sofort verwendet und beim nächsten Öffnen beibehalten.' : 'The selected language is used immediately and kept the next time the page is opened.'}</p>
+            </div>
+        {/if}
 
         <div class="footnote">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
                 <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" />
             </svg>
-            Anchor, episode interleaving and shuffle live under Content, beside the sources they
-            act on; how often the channel breaks lives under Breaks, beside what goes in one.
+            {german
+                ? 'Anker, Episoden-Reihenfolge und Zufallswiedergabe findest du unter Inhalt. Die Pausen-Einstellungen liegen unter Pausen, direkt neben deren Inhalt.'
+                : 'Anchor, episode interleaving and shuffle live under Content, beside the sources they act on; how often the channel breaks lives under Breaks, beside what goes in one.'}
         </div>
     </div>
 </div>

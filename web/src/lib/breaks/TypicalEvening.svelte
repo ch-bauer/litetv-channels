@@ -6,8 +6,11 @@
     */
     import Card from '../ui/Card.svelte';
     import type { TvChannel } from '../types';
+    import { store } from '../config.svelte';
 
     let { channel }: { channel: TvChannel } = $props();
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     const preview = $derived.by(() => {
         const rows: { clock: string; label: string; fill: string }[] = [];
@@ -17,14 +20,14 @@
 
         const names = channel.Sources.length > 0
             ? channel.Sources.map((s) => s.Name)
-            : ['Something from this channel'];
+            : [german ? 'Etwas aus diesem Kanal' : 'Something from this channel'];
         const every = channel.TrailerEveryPrograms;
 
         for (let i = 0; i < 4; i++) {
             rows.push({ clock: clock(minutes), label: names[i % names.length], fill: '#5b6ee1' });
             minutes += 105;
             if (every > 0 && (i + 1) % every === 0) {
-                rows.push({ clock: clock(minutes), label: 'Break — adverts, then a trailer', fill: '#d99a3a' });
+                rows.push({ clock: clock(minutes), label: german ? 'Pause — Werbung, dann ein Trailer' : 'Break — adverts, then a trailer', fill: '#d99a3a' });
                 minutes += 5;
             }
         }
@@ -33,8 +36,8 @@
 </script>
 
 <Card>
-    <h3>What this adds up to</h3>
-    <p class="sub">A typical evening with the settings as they stand.</p>
+    <h3>{german ? 'Das ergibt sich daraus' : 'What this adds up to'}</h3>
+    <p class="sub">{german ? 'Ein typischer Abend mit den aktuellen Einstellungen.' : 'A typical evening with the settings as they stand.'}</p>
     <div class="preview">
         {#each preview as row, index (index)}
             <div class="prow">

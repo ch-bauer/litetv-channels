@@ -1,10 +1,13 @@
 <script lang="ts">
     import { absolute } from '../jellyfin';
     import type { ChannelSource } from '../types';
+    import { store } from '../config.svelte';
 
     // The array itself, not the channel: a block's sources are edited with the same list.
     let { sources, empty = 'Nothing yet - find something below.' }:
         { sources: ChannelSource[]; empty?: string } = $props();
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     /*
         Which row the keyboard is on. The owner asked for shortcuts - select a row, press Delete,
@@ -61,17 +64,17 @@
     }
 
     function kindLabel(source: ChannelSource): string {
-        if (source.Type === 'Series') { return 'SERIES'; }
-        if (source.Type === 'Collection') { return 'COLLECTION'; }
+        if (source.Type === 'Series') { return german ? 'SERIE' : 'SERIES'; }
+        if (source.Type === 'Collection') { return german ? 'SAMMLUNG' : 'COLLECTION'; }
         if (source.Type === 'YouTube') { return 'YOUTUBE'; }
-        return 'FILM';
+        return german ? 'FILM' : 'FILM';
     }
 
     function detailOf(source: ChannelSource): string {
-        if (source.Type === 'Series') { return 'series'; }
-        if (source.Type === 'Collection') { return 'collection'; }
+        if (source.Type === 'Series') { return german ? 'Serie' : 'series'; }
+        if (source.Type === 'Collection') { return german ? 'Sammlung' : 'collection'; }
         if (source.Type === 'YouTube') { return source.Url ?? 'playlist'; }
-        return 'film';
+        return german ? 'Film' : 'film';
     }
 
     function move(from: number, to: number): void {
@@ -207,7 +210,7 @@
                 class:youtube={source.Type === 'YouTube'}
             >{kindLabel(source)}</span>
 
-            <button class="bin" type="button" title="Remove from this channel" onclick={(e) => { e.stopPropagation(); remove(index); }}>
+            <button class="bin" type="button" title={german ? 'Aus diesem Kanal entfernen' : 'Remove from this channel'} onclick={(e) => { e.stopPropagation(); remove(index); }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <path d="M5 7h14M10 11v6M14 11v6M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9.5 7V4.5A1.5 1.5 0 0 1 11 3h2a1.5 1.5 0 0 1 1.5 1.5V7" />
                 </svg>
@@ -221,17 +224,17 @@
 {#if chosen}
     <div class="chosen">
         <span class="chosen-name" title={chosen.Name}>{chosen.Name}</span>
-        <span class="chosen-what">is selected &mdash;</span>
+        <span class="chosen-what">{german ? 'ist ausgewählt —' : 'is selected —'}</span>
         <button type="button" onclick={() => selected !== null && move(selected, selected - 1)} disabled={selected === 0}>
-            Move up
+            {german ? 'Nach oben' : 'Move up'}
         </button>
         <button
             type="button"
             onclick={() => selected !== null && move(selected, selected + 1)}
             disabled={selected === sources.length - 1}
-        >Move down</button>
-        <button type="button" class="danger" onclick={() => selected !== null && remove(selected)}>Remove</button>
-        <span class="chosen-keys">or Alt&#8593;/Alt&#8595; to move, Delete to remove, Escape to let go</span>
+        >{german ? 'Nach unten' : 'Move down'}</button>
+        <button type="button" class="danger" onclick={() => selected !== null && remove(selected)}>{german ? 'Entfernen' : 'Remove'}</button>
+        <span class="chosen-keys">{german ? 'oder Alt↑/Alt↓ zum Verschieben, Entf zum Entfernen, Esc zum Aufheben' : 'or Alt↑/Alt↓ to move, Delete to remove, Escape to let go'}</span>
     </div>
 {/if}
 </div>

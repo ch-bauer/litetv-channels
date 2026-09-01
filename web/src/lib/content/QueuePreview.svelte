@@ -7,6 +7,7 @@
         dealing is done in the page. See lib/deal.ts.
     */
     import { failureWords } from '../jellyfin';
+    import { store } from '../config.svelte';
     import Card from '../ui/Card.svelte';
     import { deal, type DealtItem } from '../deal';
     import type { TvChannel } from '../types';
@@ -16,6 +17,8 @@
     let queue = $state<DealtItem[]>([]);
     let busy = $state(false);
     let failed = $state<string | null>(null);
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     // Everything the dealing depends on, named so the effect re-runs when any of it changes -
     // including the sources' own order, which is the whole point of being able to drag them.
@@ -46,12 +49,12 @@
 </script>
 
 <Card>
-    <h3>The first few, as they would fall</h3>
+    <h3>{german ? 'Die ersten Titel in ihrer Reihenfolge' : 'The first few, as they would fall'}</h3>
 
     {#if failed}
-        <p class="bad">The queue could not be worked out: {failed}</p>
+        <p class="bad">{german ? 'Die Vorschau konnte nicht erstellt werden: ' : 'The queue could not be worked out: '}{failed}</p>
     {:else if queue.length === 0}
-        <p class="none">{busy ? 'Working it out…' : 'Nothing to lay out yet.'}</p>
+        <p class="none">{busy ? (german ? 'Wird berechnet…' : 'Working it out…') : (german ? 'Noch nichts zum Einplanen.' : 'Nothing to lay out yet.')}</p>
     {:else}
         <div class="queue" class:stale={busy}>
             {#each queue as item, index (item.id + ':' + index)}

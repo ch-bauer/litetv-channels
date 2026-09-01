@@ -73,6 +73,8 @@
     let siblings = $state<SiblingPlugin[] | null>(null);
 
     const config = $derived(store.config);
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     /*
         Which of the sibling plugins are there.
@@ -238,14 +240,14 @@
 
 <div class="screen">
     <header>
-        <h1>Server settings</h1>
+        <h1>{german ? 'Servereinstellungen' : 'Server settings'}</h1>
         <div class="spacer"></div>
-        <button type="button" class="save" disabled={!store.dirty} onclick={() => store.save()}>Save</button>
+        <button type="button" class="save" disabled={!store.dirty} onclick={() => store.save()}>{german ? 'Speichern' : 'Save'}</button>
     </header>
 
     <nav class="subtabs">
-        <button type="button" class:on={pane === 'playback'} onclick={() => (pane = 'playback')}>Playback &amp; trailers</button>
-        <button type="button" class:on={pane === 'updates'} onclick={() => (pane = 'updates')}>App updates</button>
+        <button type="button" class:on={pane === 'playback'} onclick={() => (pane = 'playback')}>{german ? 'Wiedergabe &amp; Trailer' : 'Playback &amp; trailers'}</button>
+        <button type="button" class:on={pane === 'updates'} onclick={() => (pane = 'updates')}>{german ? 'App-Updates' : 'App updates'}</button>
     </nav>
 
     {#if !config}
@@ -255,7 +257,7 @@
             <div class="left">
                 <div class="field">
                     <div class="label-row">
-                        <span class="label">Channel playback account</span>
+                        <span class="label">{german ? 'Wiedergabekonto des Kanals' : 'Channel playback account'}</span>
                         <button type="button" class="help" class:on={accountHelp} onclick={() => (accountHelp = !accountHelp)} aria-label="About the playback account">?</button>
                     </div>
                     {#if users.length === 0}
@@ -284,10 +286,10 @@
                             {#each users as user (user.Id)}
                                 <option value={user.Name}>{user.Name}</option>
                             {/each}
-                            <option value={NEW_ACCOUNT}>Another name...</option>
+                            <option value={NEW_ACCOUNT}>{german ? 'Anderen Namen…' : 'Another name...'}</option>
                         </select>
                     {/if}
-                    <p class="note">Channel viewing is recorded against this account, never yours.</p>
+                    <p class="note">{german ? 'Die Kanalwiedergabe wird diesem Konto zugeordnet, niemals deinem.' : 'Channel viewing is recorded against this account, never yours.'}</p>
                     {#if accountHelp}
                         <p class="deeper">A channel plays with this account's token, so what it watches lands on its watch history and not on the account of whoever is looking. That is the whole reason it exists.</p>
                     {/if}
@@ -295,7 +297,7 @@
 
                 <div class="field">
                     <div class="label-row">
-                        <span class="label">Skip the parts of a trailer that are not the trailer</span>
+                        <span class="label">{german ? 'Trailerteile überspringen, die nicht zum Trailer gehören' : 'Skip the parts of a trailer that are not the trailer'}</span>
                         <button type="button" class="help" class:on={skipHelp} onclick={() => (skipHelp = !skipHelp)} aria-label="About skipping">?</button>
                     </div>
                     <label class="check">
@@ -304,7 +306,7 @@
                             checked={config.SkipTrailerSegments}
                             onchange={(e) => { config.SkipTrailerSegments = e.currentTarget.checked; }}
                         />
-                        <span>Ask SponsorBlock and skip what it names</span>
+                        <span>{german ? 'SponsorBlock fragen und markierte Teile überspringen' : 'Ask SponsorBlock and skip what it names'}</span>
                     </label>
                     {#if skipHelp}
                         <p class="deeper">The uploader's branded card and the plea to subscribe are not the trailer. With this on, they are skipped and a break is sized by what actually plays.</p>
@@ -312,17 +314,17 @@
                 </div>
 
                 <div class="field">
-                    <span class="label">Configuration page language</span>
+                    <span class="label">{german ? 'Sprache der Konfigurationsseite' : 'Configuration page language'}</span>
                     <select class="text" bind:value={config.PageLanguage}>
-                        <option value="auto">Automatic / automatisch</option>
+                        <option value="auto">{german ? 'Automatisch' : 'Automatic'}</option>
                         <option value="en">English</option>
                         <option value="de">Deutsch</option>
                     </select>
-                    <p class="note">The LiteTV configuration page uses this language after the next visit.</p>
+                    <p class="note">{german ? 'Die LiteTV-Konfigurationsseite verwendet diese Sprache beim nächsten Aufruf.' : 'The LiteTV configuration page uses this language after the next visit.'}</p>
                 </div>
 
                 <div class="field">
-                    <span class="label">Ask YouTube in</span>
+                    <span class="label">{german ? 'YouTube-Sprache' : 'Ask YouTube in'}</span>
                     <!--
                         A free field, not a list of two. YouTube takes any language tag, and
                         offering "English or German" here would be an answer dressed up as a
@@ -343,12 +345,12 @@
                 </div>
 
                 <div class="field">
-                    <span class="label">Ask YouTube as</span>
+                    <span class="label">{german ? 'YouTube-Client' : 'Ask YouTube as'}</span>
                     {#if clients.length === 0}
                         <input class="text" bind:value={config.YouTubeClient} placeholder="default" />
                     {:else}
                         <select class="text" bind:value={config.YouTubeClient}>
-                            <option value="">Try them all, in order</option>
+                            <option value="">{german ? 'Alle der Reihe nach versuchen' : 'Try them all, in order'}</option>
                             {#each clients as client (client)}
                                 <option value={client}>{client}</option>
                             {/each}
@@ -420,17 +422,17 @@
 
             <div class="right">
                 <Card>
-                    <h3>Trailer quality</h3>
+                    <h3>{german ? 'Trailerqualität' : 'Trailer quality'}</h3>
                     <div class="pair">
-                        <span class="key">Proof of origin</span>
+                        <span class="key">{german ? 'Herkunftsnachweis' : 'Proof of origin'}</span>
                         <span class="value">{poLine}</span>
                     </div>
                     <div class="pair">
-                        <span class="key">Last resolved</span>
+                        <span class="key">{german ? 'Letzte Auflösung' : 'Last resolved'}</span>
                         {#if po?.LastResolved}
                             <span class="value" class:low={po.LastResolvedLow}>{po.LastResolved}</span>
                         {:else}
-                            <span class="value dim">nothing resolved since this server started</span>
+                            <span class="value dim">{german ? 'seit dem Serverstart nichts aufgelöst' : 'nothing resolved since this server started'}</span>
                         {/if}
                     </div>
 
@@ -445,7 +447,7 @@
                 </Card>
 
                 <Card>
-                    <h3>Where channels play</h3>
+                    <h3>{german ? 'Wo die Kanäle abgespielt werden' : 'Where channels play'}</h3>
                     <p class="prose">
                         Channels are handed to the television by this server. Nothing here changes
                         what a client shows — that is the app's own business.
@@ -456,7 +458,7 @@
     {:else}
         <div class="body">
             <div class="left">
-                <h2>Builds this server hands the television</h2>
+                <h2>{german ? 'Vom Server bereitgestellte TV-Versionen' : 'Builds this server hands the television'}</h2>
 
                 {#if buildsError}
                     <p class="bad">The store could not be read: {buildsError}</p>

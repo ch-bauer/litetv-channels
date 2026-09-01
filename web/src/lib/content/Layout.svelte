@@ -14,6 +14,8 @@
 
     let helpOpen = $state(false);
     let cycle = $state<string | null>(null);
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     /*
         How long the channel takes to play everything once.
@@ -46,12 +48,11 @@
         const nothing = cycle.startsWith('Nothing to play');
         if (nothing && channel.Sources.length > 0) {
             return store.dirty
-                ? 'Nothing saved to play yet - this content has not been saved. Save, and the '
-                    + 'channel says how long it takes to play through.'
-                : 'Nothing here can be played: the library gave no runtime for any of it.';
+                ? (german ? 'Noch nichts zum Abspielen gespeichert — dieser Inhalt wurde noch nicht gespeichert. Speichere ihn, dann zeigt der Kanal seine Laufzeit.' : 'Nothing saved to play yet - this content has not been saved. Save, and the channel says how long it takes to play through.')
+                : (german ? 'Hier kann nichts abgespielt werden: Die Bibliothek liefert für keinen Titel eine Laufzeit.' : 'Nothing here can be played: the library gave no runtime for any of it.');
         }
         if (store.dirty) {
-            return cycle + ' Counted from what is saved, so it does not include your changes yet.';
+            return cycle + (german ? ' Gezählt anhand der gespeicherten Daten — deine Änderungen sind noch nicht enthalten.' : ' Counted from what is saved, so it does not include your changes yet.');
         }
         return cycle;
     });
@@ -71,16 +72,16 @@ With two, it plays two before moving on - which is what makes a channel that air
 
     const orderNote = $derived(
         channel.Order === 'Shuffle'
-            ? 'Shuffled once, and kept. A schedule that re-draws itself is not a schedule.'
-            : 'Each source in turn, in the order of the list.',
+            ? (german ? 'Einmal gemischt und beibehalten. Ein Zeitplan, der sich neu mischt, ist kein Zeitplan.' : 'Shuffled once, and kept. A schedule that re-draws itself is not a schedule.')
+            : (german ? 'Jede Quelle nacheinander, in der Reihenfolge der Liste.' : 'Each source in turn, in the order of the list.'),
     );
 
     const interleaveNote = $derived(
         rightThrough
-            ? 'Each source in full — a whole series plays through before the next begins.'
+            ? (german ? 'Jede Quelle vollständig — eine ganze Serie läuft, bevor die nächste beginnt.' : 'Each source in full — a whole series plays through before the next begins.')
             : (channel.EpisodesPerBlock === 1
-                ? 'One from each source before moving to the next.'
-                : channel.EpisodesPerBlock + ' from each source before moving to the next.'),
+                ? (german ? 'Ein Titel aus jeder Quelle, bevor es zur nächsten geht.' : 'One from each source before moving to the next.')
+                : channel.EpisodesPerBlock + (german ? ' Titel aus jeder Quelle, bevor es zur nächsten geht.' : ' from each source before moving to the next.')),
     );
 
     function pick(order: PlayOrder): void {
@@ -91,35 +92,35 @@ With two, it plays two before moving on - which is what makes a channel that air
 
 <Card>
     <div class="stack">
-        <h3>How they are laid out</h3>
+        <h3>{german ? 'Wiedergabereihenfolge' : 'How they are laid out'}</h3>
 
         <div class="group">
-            <div class="label">Order</div>
-            <div class="segmented" role="group" aria-label="Play order">
+            <div class="label">{german ? 'Reihenfolge' : 'Order'}</div>
+            <div class="segmented" role="group" aria-label={german ? 'Wiedergabereihenfolge' : 'Play order'}>
                 <button
                     type="button"
                     class:on={channel.Order !== 'Shuffle'}
                     aria-pressed={channel.Order !== 'Shuffle'}
                     onclick={() => pick('Sequential')}
-                >In order</button>
+                >{german ? 'In Reihenfolge' : 'In order'}</button>
                 <button
                     type="button"
                     class:on={channel.Order === 'Shuffle'}
                     aria-pressed={channel.Order === 'Shuffle'}
                     onclick={() => pick('Shuffle')}
-                >Shuffled</button>
+                >{german ? 'Zufällig' : 'Shuffled'}</button>
             </div>
             <p class="note">{orderNote}</p>
         </div>
 
         <div class="group">
-            <div class="label">How far through</div>
-            <div class="segmented" role="group" aria-label="How far through each source">
+            <div class="label">{german ? 'Wie weit abspielen' : 'How far through'}</div>
+            <div class="segmented" role="group" aria-label={german ? 'Wie weit aus jeder Quelle abspielen' : 'How far through each source'}>
                 <button type="button" class:on={rightThrough} aria-pressed={rightThrough} onclick={() => setRightThrough(true)}>
-                    Right through
+                    {german ? 'Komplett' : 'Right through'}
                 </button>
                 <button type="button" class:on={!rightThrough} aria-pressed={!rightThrough} onclick={() => setRightThrough(false)}>
-                    A few at a time
+                    {german ? 'Einige auf einmal' : 'A few at a time'}
                 </button>
             </div>
             {#if cycleLine}
@@ -130,13 +131,13 @@ With two, it plays two before moving on - which is what makes a channel that air
         {#if !rightThrough}
         <div class="group">
             <div class="row">
-                <div class="label">Interleave</div>
+                <div class="label">{german ? 'Abwechseln' : 'Interleave'}</div>
                 <button
                     type="button"
                     class="help"
                     class:on={helpOpen}
                     aria-expanded={helpOpen}
-                    aria-label="What interleaving does"
+                    aria-label={german ? 'Was das Abwechseln bewirkt' : 'What interleaving does'}
                     onclick={() => (helpOpen = !helpOpen)}
                 >?</button>
             </div>
@@ -151,9 +152,9 @@ With two, it plays two before moving on - which is what makes a channel that air
                         const n = Number(event.currentTarget.value);
                         channel.EpisodesPerBlock = Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
                     }}
-                    aria-label="How many at a time"
+                    aria-label={german ? 'Wie viele auf einmal' : 'How many at a time'}
                 />
-                <span class="at">at a time</span>
+                <span class="at">{german ? 'auf einmal' : 'at a time'}</span>
             </div>
 
             <p class="note">{interleaveNote}</p>

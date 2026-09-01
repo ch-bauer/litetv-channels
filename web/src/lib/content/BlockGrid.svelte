@@ -12,8 +12,11 @@
     import SourceList from './SourceList.svelte';
     import SourceSearch from './SourceSearch.svelte';
     import type { ProgramBlock, TvChannel } from '../types';
+    import { store } from '../config.svelte';
 
     let { channel }: { channel: TvChannel } = $props();
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const HEADS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -62,7 +65,7 @@
 
     function addBlock(): void {
         channel.Blocks.push({
-            Name: 'New block',
+            Name: german ? 'Neuer Block' : 'New block',
             Enabled: true,
             StartMinutes: 20 * 60,
             DurationMinutes: 180,
@@ -133,7 +136,7 @@
             </span>
             <span class="how-long">{spanWords(block.DurationMinutes)}</span>
             <span class="on-days">{daysWords(block)}</span>
-            {#if !block.Enabled}<span class="off">off</span>{/if}
+            {#if !block.Enabled}<span class="off">{german ? 'aus' : 'off'}</span>{/if}
         </button>
     {/each}
 </div>
@@ -144,7 +147,7 @@
         <div class="line">
             <input class="name" bind:value={current.Name} aria-label="Block name" />
             <label>
-                Starts
+                {german ? 'Start' : 'Starts'}
                 <input
                     type="time"
                     value={clock(current.StartMinutes)}
@@ -152,15 +155,15 @@
                 />
             </label>
             <label>
-                For
+                {german ? 'Dauer' : 'For'}
                 <input type="number" min="15" step="15" bind:value={current.DurationMinutes} />
-                min
+                {german ? 'Min.' : 'min'}
             </label>
             <button type="button" class="ghost" onclick={fitToContent} disabled={fitting}>
-                {fitting ? 'Measuring…' : 'Fit to content'}
+                {fitting ? (german ? 'Wird gemessen…' : 'Measuring…') : (german ? 'An Inhalt anpassen' : 'Fit to content')}
             </button>
-            <button type="button" class="ghost" onclick={addBlock}>New block</button>
-            <button type="button" class="ghost danger" onclick={removeBlock}>Delete</button>
+            <button type="button" class="ghost" onclick={addBlock}>{german ? 'Neuer Block' : 'New block'}</button>
+            <button type="button" class="ghost danger" onclick={removeBlock}>{german ? 'Löschen' : 'Delete'}</button>
         </div>
 
         {#if account}<p class="account">{account}</p>{/if}
@@ -174,7 +177,7 @@
         </div>
 
         <div class="block-content">
-            <div class="sub">What this block plays instead</div>
+            <div class="sub">{german ? 'Was dieser Block stattdessen abspielt' : 'What this block plays instead'}</div>
             <div class="inset">
                 <SourceList sources={current.Sources} empty="Nothing yet — this block would play the channel's own list." />
                 <SourceSearch sources={current.Sources} />
@@ -185,8 +188,8 @@
             <!-- The only empty state. The list above used to carry one as well, so with no
                  blocks the same sentence was printed twice, once with a button and once
                  without. -->
-            <span class="empty">No blocks &mdash; the whole week plays the list above.</span>
-            <button type="button" class="ghost" onclick={addBlock}>New block</button>
+            <span class="empty">{german ? 'Keine Blöcke — die ganze Woche spielt die Liste oben.' : 'No blocks — the whole week plays the list above.'}</span>
+            <button type="button" class="ghost" onclick={addBlock}>{german ? 'Neuer Block' : 'New block'}</button>
         </div>
     {/if}
 </div>

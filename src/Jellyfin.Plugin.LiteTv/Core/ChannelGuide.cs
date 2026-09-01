@@ -487,12 +487,15 @@ public sealed class ChannelGuide
     /// </para>
     /// <para>
     /// Near the end of the window there may be nothing that far ahead to point at; the search
-    /// then settles for the furthest programme it can see, and finally for the next one.
+    /// then settles for the furthest programme it can see, but never falls back to the programme
+    /// immediately following the break. A direct lead-in is not a preview.
     /// </para>
     /// </summary>
     private ScheduledEntry? TrailedProgram(TvChannel channel, List<Airing> window, int index)
     {
-        var wanted = Math.Max(1, channel.TrailerLookahead);
+        // Never place a preview directly before the programme it announces. Older channel
+        // files may still contain 1, so enforce the broadcast rule at read time as well.
+        var wanted = Math.Max(2, channel.TrailerLookahead);
         ScheduledEntry? furthest = null;
         var seen = 0;
 
@@ -528,7 +531,7 @@ public sealed class ChannelGuide
             }
         }
 
-        return furthest;
+        return seen >= 2 ? furthest : null;
     }
 
     /// <summary>

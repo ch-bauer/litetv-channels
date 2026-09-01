@@ -20,6 +20,7 @@
     import SectionTitle from '../lib/ui/SectionTitle.svelte';
     import { mmss, resolveDuration, skipNote, type Duration } from '../lib/api/duration';
     import type { TvChannel } from '../lib/types';
+    import { store } from '../lib/config.svelte';
 
     interface Advert {
         Name: string;
@@ -30,6 +31,8 @@
     }
 
     let { channel }: { channel: TvChannel } = $props();
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     const adverts = $derived(channel.Adverts as Advert[]);
 
@@ -149,7 +152,7 @@
 <div class="screen">
     <div class="left">
         <div>
-            <SectionTitle>How often</SectionTitle>
+            <SectionTitle>{german ? 'Wie oft' : 'How often'}</SectionTitle>
             <div class="spaced">
                 <Note>
                     Both of these were on Settings, which is not where anyone looks for them.
@@ -162,12 +165,12 @@
         <Cadence {channel} />
 
         <div class="mode-field">
-            <label class="label" for="trailer-mode">Work trailers into the schedule</label>
+            <label class="label" for="trailer-mode">{german ? 'Trailer in den Zeitplan einfügen' : 'Work trailers into the schedule'}</label>
             <select id="trailer-mode" class="mode-select" bind:value={channel.Trailers}>
-                <option value="Off">Off</option>
-                <option value="Preview">Preview trailers for upcoming programmes</option>
-                <option value="Manual">Trailers from the selected titles</option>
-                <option value="Both">Preview and selected-title trailers</option>
+                <option value="Off">{german ? 'Aus' : 'Off'}</option>
+                <option value="Preview">{german ? 'Trailer für kommende Programme' : 'Preview trailers for upcoming programmes'}</option>
+                <option value="Manual">{german ? 'Trailer aus ausgewählten Titeln' : 'Trailers from the selected titles'}</option>
+                <option value="Both">{german ? 'Vorschau- und ausgewählte Trailer' : 'Preview and selected-title trailers'}</option>
             </select>
             <p class="note">
                 This inserts locally available trailer files after the configured number of
@@ -177,7 +180,7 @@
 
         {#if channel.Trailers === 'Manual' || channel.Trailers === 'Both'}
             <div>
-                <SectionTitle>Trailer titles</SectionTitle>
+                <SectionTitle>{german ? 'Trailer-Titel' : 'Trailer titles'}</SectionTitle>
                 <div class="spaced">
                     <Note>
                         Choose library films, series or collections whose trailers may be used
@@ -195,7 +198,7 @@
         {/if}
 
         <div>
-            <SectionTitle>Adverts</SectionTitle>
+                <SectionTitle>{german ? 'Werbung' : 'Adverts'}</SectionTitle>
             <div class="spaced">
                 <Note>
                     Addresses the television resolves and plays. They go at the front of a break,
@@ -227,7 +230,7 @@
                     </button>
                 </div>
             {:else}
-                <p class="none">No adverts — breaks are just the trailer.</p>
+                <p class="none">{german ? 'Keine Werbung — die Pause besteht nur aus dem Trailer.' : 'No adverts — breaks are just the trailer.'}</p>
             {/each}
 
             <div class="add">
@@ -264,7 +267,7 @@
 
         {#if stepThrough}
             <Card>
-                <h3>What happens while it works it out</h3>
+        <h3>{german ? 'Was während der Ermittlung passiert' : 'What happens while it works it out'}</h3>
                 {#each adverts as advert (advert.Url)}
                     {@const answer = measured[advert.Url]}
                     <div class="step">
@@ -291,7 +294,7 @@
                         {/if}
                     </div>
                 {:else}
-                    <p class="none">Nothing to work out yet.</p>
+                    <p class="none">{german ? 'Noch nichts zu ermitteln.' : 'Nothing to work out yet.'}</p>
                 {/each}
             </Card>
         {/if}
@@ -299,7 +302,7 @@
 
     <div class="right">
         <Card>
-            <h3>Why there is no length to type</h3>
+            <h3>{german ? 'Warum keine Länge eingegeben wird' : 'Why there is no length to type'}</h3>
             <p class="prose">
                 A trailer from YouTube is rarely only the trailer. The uploader wraps it in a
                 branded card and a plea to subscribe, and the television skips both — so the
@@ -312,7 +315,7 @@
         </Card>
 
         <Card>
-            <h3>A break, made of that</h3>
+            <h3>{german ? 'Eine Pause daraus' : 'A break, made of that'}</h3>
             {#if adverts.length === 0}
                 <!--
                     The card used to draw the trailer row on its own, which reads as a card that

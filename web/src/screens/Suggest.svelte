@@ -19,6 +19,8 @@
     import type { ChannelSource } from '../lib/types';
 
     let { onDone, onBlank }: { onDone: () => void; onBlank: () => void } = $props();
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     let half = $state<'titles' | 'library'>('titles');
 
@@ -375,21 +377,21 @@
 
 <div class="screen">
     <header>
-        <h1>A new channel</h1>
+        <h1>{german ? 'Neuer Kanal' : 'A new channel'}</h1>
         <div class="spacer"></div>
-        <button type="button" class="quiet" onclick={onBlank}>Start from nothing instead</button>
+        <button type="button" class="quiet" onclick={onBlank}>{german ? 'Stattdessen ohne Inhalte starten' : 'Start from nothing instead'}</button>
     </header>
 
     <nav class="halves">
-        <button type="button" class:on={half === 'titles'} onclick={() => (half = 'titles')}>From titles I like</button>
-        <button type="button" class:on={half === 'library'} onclick={() => (half = 'library')}>From a library and genres</button>
+        <button type="button" class:on={half === 'titles'} onclick={() => (half = 'titles')}>{german ? 'Aus Lieblingstiteln' : 'From titles I like'}</button>
+        <button type="button" class:on={half === 'library'} onclick={() => (half = 'library')}>{german ? 'Aus Bibliothek und Genres' : 'From a library and genres'}</button>
     </nav>
 
     <div class="body">
         <div class="left">
             {#if half === 'titles'}
                 <Card>
-                    <h3>Start from a few titles</h3>
+                    <h3>{german ? 'Mit einigen Titeln starten' : 'Start from a few titles'}</h3>
                     <input
                         class="text"
                         bind:value={term}
@@ -423,7 +425,7 @@
                         {words.text}
                         {#if answer.Engine === 'Rough' && smartSimilar}
                             {#if !smartSimilar.Installed}
-                                &mdash; <a class="install" href="#/dashboard/plugins">Install it</a>
+                                &mdash; <a class="install" href="#/dashboard/plugins">{german ? 'Installieren' : 'Install it'}</a>
                                 and these get sharper.
                             {:else if !smartSimilar.Usable}
                                 &mdash; it <b>is</b> installed{smartSimilar.Version ? ' (' + smartSimilar.Version + ')' : ''}
@@ -436,7 +438,7 @@
 
                 {#if answer && answer.Results.length > 0}
                     <div class="cutoff">
-                        <span class="cutoff-label">Only show titles scoring at least</span>
+                        <span class="cutoff-label">{german ? 'Nur Titel anzeigen mit mindestens' : 'Only show titles scoring at least'}</span>
                         <input
                             type="range"
                             min="0"
@@ -454,7 +456,7 @@
                 {#if scoreError}
                     <p class="bad">{scoreError}</p>
                 {:else if scoring}
-                    <p class="none">Scoring…</p>
+                    <p class="none">{german ? 'Bewertung läuft…' : 'Scoring…'}</p>
                 {:else if answer}
                     <div class="results">
                         {#each kept as result (result.Id)}
@@ -479,24 +481,24 @@
                 {/if}
             {:else}
                 <Card>
-                    <h3>Pick a library</h3>
+                    <h3>{german ? 'Bibliothek auswählen' : 'Pick a library'}</h3>
                     <div class="folders">
                         {#each folders as folder (folder.Id)}
                             <button type="button" class:on={folderId === folder.Id} onclick={() => loadLibrary(folder.Id)}>
                                 {folder.Name}
                             </button>
                         {:else}
-                            <p class="none">No libraries found.</p>
+                            <p class="none">{german ? 'Keine Bibliotheken gefunden.' : 'No libraries found.'}</p>
                         {/each}
                     </div>
                 </Card>
 
                 {#if loadingLibrary}
-                    <p class="none">Counting what is in there…</p>
+                    <p class="none">{german ? 'Inhalte werden gezählt…' : 'Counting what is in there…'}</p>
                 {:else if items.length > 0}
                     <Card>
-                        <h3>And some genres</h3>
-                        <p class="hint">Ticking two means titles in both.</p>
+                        <h3>{german ? 'Und einige Genres' : 'And some genres'}</h3>
+                        <p class="hint">{german ? 'Zwei Häkchen bedeuten: Titel aus beiden Genres.' : 'Ticking two means titles in both.'}</p>
                         <div class="genres">
                             {#each genreCounts as [genre, count] (genre)}
                                 <button type="button" class:on={pickedGenres.includes(genre)} onclick={() => toggleGenre(genre)}>
@@ -513,7 +515,7 @@
         <div class="right">
             {#if half === 'titles' && common.length > 0}
                 <Card>
-                    <h3>What they have in common</h3>
+                    <h3>{german ? 'Was sie gemeinsam haben' : 'What they have in common'}</h3>
                     <div class="common">
                         {#each common as signal (signal.label)}
                             <div class="crow">
@@ -527,9 +529,9 @@
             {/if}
 
             <Card>
-                <h3>A typical evening</h3>
+                <h3>{german ? 'Ein typischer Abend' : 'A typical evening'}</h3>
                 {#if evening.length === 0}
-                    <p class="none">Nothing chosen yet.</p>
+                    <p class="none">{german ? 'Noch nichts ausgewählt.' : 'Nothing chosen yet.'}</p>
                 {:else}
                     <div class="evening">
                         {#each evening as row, index (index)}
@@ -544,11 +546,11 @@
             </Card>
 
             <Card>
-                <h3>Make it</h3>
+                <h3>{german ? 'Erstellen' : 'Make it'}</h3>
                 <input class="text" bind:value={name} aria-label="Name for the new channel" />
                 <p class="hint">{proposed.length} titles would go on it.</p>
                 <div class="actions">
-                    <button type="button" class="go" disabled={proposed.length === 0} onclick={create}>Create</button>
+                    <button type="button" class="go" disabled={proposed.length === 0} onclick={create}>{german ? 'Erstellen' : 'Create'}</button>
                     <button
                         type="button"
                         class="quiet"
@@ -557,13 +559,13 @@
                         title={anotherLineupExists
                             ? 'Keeps what you told it and offers the next lineup'
                             : 'There is no other lineup to offer: everything that qualifies is already on this one.'}
-                    >Not that &mdash; show me another</button>
+                    >{german ? 'Nicht das — andere Vorschläge' : 'Not that — show me another'}</button>
                     <button
                         type="button"
                         class="quiet"
                         onclick={startOver}
                         title="Clears the seeds and the genres and starts again"
-                    >Start over</button>
+                    >{german ? 'Neu beginnen' : 'Start over'}</button>
                 </div>
                 {#if !anotherLineupExists && proposed.length > 0}
                     <p class="hint">

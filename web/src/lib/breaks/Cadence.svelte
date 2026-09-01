@@ -9,8 +9,11 @@
         them.
     */
     import type { TvChannel } from '../types';
+    import { store } from '../config.svelte';
 
     let { channel }: { channel: TvChannel } = $props();
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     interface Setting {
         key: string;
@@ -27,16 +30,18 @@
 
     let open = $state<Record<string, boolean>>({});
 
-    const settings: Setting[] = [
+    const settings = $derived<Setting[]>([
         {
             key: 'trailerEvery',
-            label: 'A break every',
-            unit: 'programmes',
+            label: german ? 'Eine Pause alle' : 'A break every',
+            unit: german ? 'Programme' : 'programmes',
             width: '90px',
             min: 0,
             max: 20,
-            oneLine: 'How often the channel stops for a trailer.',
-            deeper: `Zero means never: the channel runs one programme straight into the next.
+            oneLine: german ? 'Wie oft der Kanal für einen Trailer pausiert.' : 'How often the channel stops for a trailer.',
+            deeper: german ? `Null bedeutet nie: Der Kanal läuft direkt von einem Programm ins nächste.
+
+Eine Pause enthält zuerst die Werbung und zuletzt den Trailer — sie endet also mit dem, was als Nächstes kommt. Der Inhalt dieser Pause steht auf dieser Seite.` : `Zero means never: the channel runs one programme straight into the next.
 
 A break carries the channel's adverts first and the trailer last, so it ends on what is about to be shown. What goes in one is the list on this screen.`,
             get: () => channel.TrailerEveryPrograms,
@@ -44,19 +49,21 @@ A break carries the channel's adverts first and the trailer last, so it ends on 
         },
         {
             key: 'lookahead',
-            label: 'Trail something up to',
-            unit: 'programmes ahead',
+            label: german ? 'Trailer ankündigen bis zu' : 'Trail something up to',
+            unit: german ? 'Programme im Voraus' : 'programmes ahead',
             width: '90px',
-            min: 1,
+            min: 2,
             max: 12,
-            oneLine: 'How far ahead the trailer is allowed to look.',
-            deeper: `A trailer announces something the channel has not shown yet, and it is rarely the very next thing - the next thing is minutes away, which is no announcement at all.
+            oneLine: german ? 'Wie weit der Trailer vorausblicken darf; 2 hält ihn vom nächsten Programm fern.' : 'How far ahead the trailer is allowed to look; 2 keeps it away from the next programme.',
+            deeper: german ? `Ein Trailer kündigt etwas an, das der Kanal noch nicht gezeigt hat — selten ist es direkt das Nächste, denn das wäre keine echte Ankündigung.
+
+So weit darf der Zeitplan nach einem passenden Trailer durchsucht werden.` : `A trailer announces something the channel has not shown yet, and it is rarely the very next thing - the next thing is minutes away, which is no announcement at all.
 
 This is how far down the schedule it may reach to find something worth trailing.`,
             get: () => channel.TrailerLookahead,
             set: (v) => { channel.TrailerLookahead = v; },
         },
-    ];
+    ]);
 
     function change(setting: Setting, raw: string): void {
         const value = Number(raw);
@@ -75,7 +82,7 @@ This is how far down the schedule it may reach to find something worth trailing.
                     class="help"
                     class:on={open[setting.key]}
                     aria-expanded={!!open[setting.key]}
-                    aria-label="More about {setting.label}"
+                    aria-label={german ? 'Mehr über ' + setting.label : 'More about ' + setting.label}
                     onclick={() => (open[setting.key] = !open[setting.key])}
                 >?</button>
             </div>

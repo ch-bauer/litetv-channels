@@ -9,11 +9,19 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.103.0",
+        "changelog": "Restores the stable v1.0.97 baseline while retaining trailer scheduling, remote trailers, playlist previews and collection order. Uses a simple direct German/English language switch.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.103.0/litetv-channels_1.0.103.0.zip",
+        "checksum": "",
+        "timestamp": "2026-09-01T18:00:00.000Z"
+      },
+      {
         "version": "1.0.97.0",
         "changelog": "**Trailer scheduling is configurable again in the new Breaks screen.** Preview, manual-title and combined modes are available, with a library search for the titles used by Manual and Both. Zero really means no automatic trailer insertion.\n\n**Trailer settings now apply to programme blocks as well as the base lineup.** Scheduled local trailers retain their trailer identity through week generation and are shown as trailers in the stored schedule. Collections can supply their children's local trailer files when the collection itself has none.\n\n**The configuration app was rebuilt and the existing trailer behaviour is covered by the release checks.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.97.0/litetv-channels_1.0.97.0.zip",
-        "checksum": "3bc21bea8b588ecf029d8501992c91dc",
+        "checksum": "f4d0adac19e4f25598758ea806905828",
         "timestamp": "2026-09-01T12:00:00.000Z"
       },
       {
