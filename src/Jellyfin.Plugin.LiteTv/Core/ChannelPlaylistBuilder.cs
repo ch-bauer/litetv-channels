@@ -19,6 +19,7 @@ namespace Jellyfin.Plugin.LiteTv.Core;
 public class ChannelPlaylistBuilder
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly long LinkedTrailerRuntimeTicks = TimeSpan.FromSeconds(150).Ticks;
 
     private readonly ILibraryManager _libraryManager;
     private readonly ILogger<ChannelPlaylistBuilder> _logger;
@@ -146,8 +147,10 @@ public class ChannelPlaylistBuilder
 
     /// <summary>
     /// Gets the trailers held in the library for an item, as things a channel can actually
-    /// air. Only local ones: a trailer that lives on YouTube is not a file the server can
-    /// schedule, so those are left to the web client, which can embed them.
+    /// air. Local extras carry their real runtime. A linked trailer is represented by the
+    /// programme item itself and a bounded reservation; the client resolves its RemoteTrailer
+    /// through LiteTV/Trailer immediately before playback, so a short-lived YouTube stream URL
+    /// is never written into the week.
     /// </summary>
     /// <param name="itemId">The library item.</param>
     /// <returns>The trailers, longest last; empty when the library has none.</returns>
@@ -171,6 +174,25 @@ public class ChannelPlaylistBuilder
             }
         }
 
+        if (trailers.Count == 0)
+        {
+            foreach (var remote in RemoteTrailersFor(item))
+            {
+                if (!string.IsNullOrWhiteSpace(remote.Url))
+                {
+                    trailers.Add(new ScheduledEntry(
+                        item.Id,
+                        string.IsNullOrWhiteSpace(remote.Name) ? "Trailer" : remote.Name,
+                        item is Episode episode ? episode.SeriesName : null,
+                        item is Episode episodeWithSeries ? episodeWithSeries.SeriesId : null,
+                        LinkedTrailerRuntimeTicks)
+                    {
+                        IsTrailer = true
+                    });
+                }
+            }
+        }
+
         // Collections commonly keep their trailers on the films inside them.
         if (trailers.Count == 0 && item is BoxSet boxSet)
         {
@@ -181,6 +203,23 @@ public class ChannelPlaylistBuilder
         }
 
         return trailers;
+    }
+
+    private IEnumerable<(string? Name, string? Url)> RemoteTrailersFor(BaseItem item)
+    {
+        if (item.RemoteTrailers.Any(t => !string.IsNullOrWhiteSpace(t.Url)))
+        {
+            return item.RemoteTrailers.Select(t => (Name: (string?)t.Name, Url: (string?)t.Url));
+        }
+
+        if (item is Episode episode && episode.SeriesId != Guid.Empty)
+        {
+            var series = _libraryManager.Find(episode.SeriesId);
+            return series?.RemoteTrailers.Select(t => (Name: (string?)t.Name, Url: (string?)t.Url))
+                ?? Array.Empty<(string? Name, string? Url)>();
+        }
+
+        return Array.Empty<(string? Name, string? Url)>();
     }
 
     /// <summary>
