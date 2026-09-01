@@ -8,8 +8,11 @@ public class ChannelScheduleTests
     /// <summary>A Monday, so the block windows below line up with the week the timeline counts in.</summary>
     private static readonly DateTime Anchor = new(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc);
 
-    private static ScheduledEntry Entry(string name, int minutes)
-        => new(Guid.NewGuid(), name, null, null, TimeSpan.FromMinutes(minutes).Ticks);
+    private static ScheduledEntry Entry(string name, int minutes, bool trailer = false)
+        => new(Guid.NewGuid(), name, null, null, TimeSpan.FromMinutes(minutes).Ticks)
+        {
+            IsTrailer = trailer
+        };
 
     private static Lineup Queue(int slotMinutes, params (string Name, int Minutes)[] entries)
         => new(entries.Select(e => Entry(e.Name, e.Minutes)).ToList(), TimeSpan.FromMinutes(slotMinutes).Ticks);
@@ -44,6 +47,20 @@ public class ChannelScheduleTests
         Assert.Equal("A", airing.Entry!.Name);
         Assert.Equal(0, airing.OffsetTicks);
         Assert.Equal(Anchor, airing.StartUtc);
+    }
+
+    [Fact]
+    public void ScheduledTrailer_IsReportedAsTrailer()
+    {
+        var schedule = Simple(new Lineup(
+            new[] { Entry("Film", 30), Entry("Trailer", 2, trailer: true) },
+            0));
+
+        var airing = schedule.At(Anchor.AddMinutes(30));
+
+        Assert.NotNull(airing);
+        Assert.Equal(AiringKind.Trailer, airing!.Kind);
+        Assert.Equal("Trailer", airing.Entry!.Name);
     }
 
     [Fact]

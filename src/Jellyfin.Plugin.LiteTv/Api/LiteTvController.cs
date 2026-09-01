@@ -197,7 +197,9 @@ public class LiteTvController : ControllerBase
         var following = window.Skip(1).Where(a => a.Kind == AiringKind.Program).ToList();
         var next = following.FirstOrDefault();
         var listed = breaks
-            ? window.Skip(1).Where(a => a.Kind == AiringKind.Program || a.Kind == AiringKind.Interstitial).ToList()
+            ? window.Skip(1).Where(a => a.Kind == AiringKind.Program
+                || a.Kind == AiringKind.Trailer
+                || a.Kind == AiringKind.Interstitial).ToList()
             : following;
 
         var artwork = NewArtworkCache();

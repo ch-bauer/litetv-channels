@@ -13,6 +13,8 @@
     */
     import Card from '../lib/ui/Card.svelte';
     import Cadence from '../lib/breaks/Cadence.svelte';
+    import SourceList from '../lib/content/SourceList.svelte';
+    import SourceSearch from '../lib/content/SourceSearch.svelte';
     import TypicalEvening from '../lib/breaks/TypicalEvening.svelte';
     import Note from '../lib/ui/Note.svelte';
     import SectionTitle from '../lib/ui/SectionTitle.svelte';
@@ -158,6 +160,39 @@
         </div>
 
         <Cadence {channel} />
+
+        <div class="mode-field">
+            <label class="label" for="trailer-mode">Work trailers into the schedule</label>
+            <select id="trailer-mode" class="mode-select" bind:value={channel.Trailers}>
+                <option value="Off">Off</option>
+                <option value="Preview">Preview trailers for upcoming programmes</option>
+                <option value="Manual">Trailers from the selected titles</option>
+                <option value="Both">Preview and selected-title trailers</option>
+            </select>
+            <p class="note">
+                This inserts locally available trailer files after the configured number of
+                programmes. YouTube playlist items do not provide local trailer files.
+            </p>
+        </div>
+
+        {#if channel.Trailers === 'Manual' || channel.Trailers === 'Both'}
+            <div>
+                <SectionTitle>Trailer titles</SectionTitle>
+                <div class="spaced">
+                    <Note>
+                        Choose library films, series or collections whose trailers may be used
+                        for these breaks. The order is the order in which the trailers are used.
+                    </Note>
+                </div>
+                <Card flush>
+                    <SourceList
+                        sources={channel.TrailerTitles}
+                        empty="No trailer titles yet - find one below."
+                    />
+                    <SourceSearch sources={channel.TrailerTitles} />
+                </Card>
+            </div>
+        {/if}
 
         <div>
             <SectionTitle>Adverts</SectionTitle>
@@ -312,6 +347,21 @@
 </div>
 
 <style>
+    .mode-field { display: flex; flex-direction: column; gap: 6px; }
+
+    .mode-select {
+        width: 100%;
+        max-width: 460px;
+        appearance: auto;
+        background: var(--lt-field-solid);
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+        padding: 8px 11px;
+        font-size: 13px;
+        font-family: inherit;
+        color: var(--lt-text);
+    }
+
     .len.about { color: var(--lt-text-dim); font-style: italic; }
 
     .prose.small { font-size: 12px; margin-top: 10px; }

@@ -164,7 +164,19 @@ public class ChannelPlaylistBuilder
         {
             if ((extra.RunTimeTicks ?? 0) > 0)
             {
-                trailers.Add(new ScheduledEntry(extra.Id, extra.Name ?? string.Empty, item.Name, item.Id, extra.RunTimeTicks!.Value));
+                trailers.Add(new ScheduledEntry(extra.Id, extra.Name ?? string.Empty, item.Name, item.Id, extra.RunTimeTicks!.Value)
+                {
+                    IsTrailer = true
+                });
+            }
+        }
+
+        // Collections commonly keep their trailers on the films inside them.
+        if (trailers.Count == 0 && item is BoxSet boxSet)
+        {
+            foreach (var child in boxSet.GetLinkedChildren())
+            {
+                trailers.AddRange(TrailersFor(child.Id));
             }
         }
 
@@ -314,7 +326,9 @@ public class ChannelPlaylistBuilder
             windows.Add(new BlockWindow(i, block.StartMinutes, block.DurationMinutes, block.Days));
             names[i] = block.Name;
             lineups[i] = new Lineup(
-                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i),
+                WithScheduledTrailers(
+                    Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i),
+                    channel),
                 slotTicks);
         }
 
@@ -362,7 +376,9 @@ public class ChannelPlaylistBuilder
     /// <returns>The queue with trailers worked in.</returns>
     private IReadOnlyList<ScheduledEntry> WithScheduledTrailers(IReadOnlyList<ScheduledEntry> queue, TvChannel channel)
     {
-        if (channel.Trailers == TrailerMode.Off || queue.Count == 0)
+        if (channel.Trailers == TrailerMode.Off
+            || channel.TrailerEveryPrograms <= 0
+            || queue.Count == 0)
         {
             return queue;
         }

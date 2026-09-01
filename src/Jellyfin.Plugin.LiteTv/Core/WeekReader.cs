@@ -72,6 +72,7 @@ public static class WeekReader
                 && kind == AiringKind.Program
                 && !string.IsNullOrWhiteSpace(row.Url);
 
+            var isStoredTrailer = kind == AiringKind.Trailer;
             var entry = row.ItemId != Guid.Empty || isAddressProgramme
                 ? new ScheduledEntry(
                     row.ItemId,
@@ -80,13 +81,14 @@ public static class WeekReader
                     row.SeriesId,
                     row.OffsetTicks + (row.DurationSeconds * TimeSpan.TicksPerSecond))
                 {
-                    Url = isAddressProgramme ? row.Url : null
+                    Url = isAddressProgramme ? row.Url : null,
+                    IsTrailer = isStoredTrailer
                 }
                 : null;
 
                 yield return new Airing(
                     kind,
-                    kind == AiringKind.Program ? entry : null,
+                    kind == AiringKind.Program || kind == AiringKind.Trailer ? entry : null,
                     ToUtc(startLocal, timeZone),
                     ToUtc(endLocal, timeZone),
                     kind == AiringKind.Program ? row.OffsetTicks : 0,
@@ -189,6 +191,7 @@ public static class WeekReader
             var kind = row.Kind switch
             {
                 StoredAiringKind.Programme => AiringKind.Program,
+                StoredAiringKind.Trailer => AiringKind.Trailer,
                 StoredAiringKind.Gap when row.DurationSeconds >= DarkAfter.TotalSeconds => AiringKind.OffAir,
                 _ => AiringKind.Interstitial
             };

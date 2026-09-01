@@ -15,7 +15,10 @@ public enum AiringKind
     Interstitial,
 
     /// <summary>Nothing at all - the channel has no lineup for this part of the week.</summary>
-    OffAir
+    OffAir,
+
+    /// <summary>A trailer inserted into the channel's queue as a scheduled item.</summary>
+    Trailer
 }
 
 /// <summary>
@@ -249,7 +252,9 @@ public sealed class ChannelSchedule
             var phaseEnd = Min(phaseStart + TimeSpan.FromTicks(phaseLength - offsetAtStart), spanEnd);
 
             yield return new Airing(
-                inProgram ? AiringKind.Program : AiringKind.Interstitial,
+                inProgram
+                    ? (entry.IsTrailer ? AiringKind.Trailer : AiringKind.Program)
+                    : AiringKind.Interstitial,
                 inProgram ? entry : null,
                 ToUtc(phaseStart),
                 ToUtc(phaseEnd),
