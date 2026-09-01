@@ -1,5 +1,6 @@
 <script lang="ts">
     import { absolute } from '../jellyfin';
+    import { fetchPlaylist } from '../api/playlist';
     import type { ChannelSource } from '../types';
     import { store } from '../config.svelte';
 
@@ -55,6 +56,40 @@
 
     let dragging = $state<number | null>(null);
     let over = $state<number | null>(null);
+    const youtubeArt = $state<Record<string, string>>({});
+    const youtubeAsked = new Set<string>();
+
+    function youtubeVideoId(value: string): string | null {
+        try {
+            const url = new URL(value);
+            if (url.hostname === 'youtu.be') { return url.pathname.slice(1).split('/')[0] || null; }
+            const watched = url.searchParams.get('v');
+            if (watched) { return watched; }
+            const match = url.pathname.match(/\/(?:shorts|embed|live)\/([^/?]+)/i);
+            return match?.[1] ?? null;
+        } catch { return null; }
+    }
+
+    function youtubeImage(source: ChannelSource): string | null {
+        if (source.Type !== 'YouTube' || !source.Url) { return null; }
+        const id = youtubeVideoId(source.Url);
+        return id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg` : youtubeArt[source.Url] ?? null;
+    }
+
+    // A playlist has no single video id. Use its first resolved item as the source preview;
+    // direct video links can use YouTube's thumbnail URL immediately.
+    $effect(() => {
+        for (const source of sources) {
+            if (source.Type !== 'YouTube' || !source.Url || youtubeAsked.has(source.Url)) { continue; }
+            youtubeAsked.add(source.Url);
+            const direct = youtubeImage(source);
+            if (direct) { youtubeArt[source.Url] = direct; continue; }
+            void fetchPlaylist(source.Url).then((playlist) => {
+                const id = youtubeVideoId(playlist.Items[0]?.Url ?? '');
+                if (id) { youtubeArt[source.Url!] = `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`; }
+            }).catch(() => { /* the placeholder remains if YouTube is unavailable */ });
+        }
+    });
 
     function art(source: ChannelSource): string | null {
         // A YouTube source has no library item, so there is no library picture to ask for -
@@ -192,8 +227,8 @@
                 <circle cx="15" cy="5" r="1.7" /><circle cx="15" cy="12" r="1.7" /><circle cx="15" cy="19" r="1.7" />
             </svg>
 
-            {#if art(source)}
-                <img class="art" src={art(source)} alt="" loading="lazy" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.visibility = 'hidden')} />
+            {#if youtubeImage(source) ?? art(source)}
+                <img class="art" src={youtubeImage(source) ?? art(source) ?? undefined} alt="" loading="lazy" onerror={(e) => ((e.currentTarget as HTMLImageElement).style.visibility = 'hidden')} />
             {:else}
                 <span class="art placeholder" aria-hidden="true">▶</span>
             {/if}

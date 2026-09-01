@@ -205,13 +205,14 @@
 
     // --- from a library and genres -------------------------------------------------------
     interface Folder { Id: string; Name: string; }
-    interface LibItem { Id: string; Name: string; Type: string; Genres?: string[]; RunTimeTicks?: number; }
+    interface LibItem { Id: string; Name: string; Type: string; ChildCount?: number; Genres?: string[]; RunTimeTicks?: number; }
 
     let folders = $state<Folder[]>([]);
     let folderId = $state<string | null>(null);
     let items = $state<LibItem[]>([]);
     let loadingLibrary = $state(false);
     let pickedGenres = $state<string[]>([]);
+    let pickedCollection = $state<LibItem | null>(null);
 
     $effect(() => {
         if (half !== 'library' || folders.length > 0) { return; }
@@ -224,13 +225,14 @@
         folderId = id;
         loadingLibrary = true;
         pickedGenres = [];
+        pickedCollection = null;
         try {
             const a = await api().getItems<{ Items?: LibItem[] }>(api().getCurrentUserId(), {
                 parentId: id,
-                includeItemTypes: 'Movie,Series',
+                includeItemTypes: 'Movie,Series,BoxSet',
                 recursive: true,
                 limit: 2000,
-                fields: 'Genres,ParentId,RunTimeTicks',
+                fields: 'Genres,ParentId,RunTimeTicks,ChildCount',
             });
             items = a.Items ?? [];
         } finally {
@@ -254,10 +256,14 @@
 
     /** Ticking two genres means titles in BOTH, which is the useful reading. */
     const matching = $derived.by(() => {
-        if (pickedGenres.length === 0) { return items; }
-        return items.filter((item) =>
+        if (pickedCollection) { return []; }
+        const titles = items.filter((item) => item.Type === 'Movie' || item.Type === 'Series');
+        if (pickedGenres.length === 0) { return titles; }
+        return titles.filter((item) =>
             pickedGenres.every((genre) => (item.Genres ?? []).includes(genre)));
     });
+
+    const collections = $derived(items.filter((item) => item.Type === 'BoxSet'));
 
     function toggleGenre(genre: string): void {
         pickedGenres = pickedGenres.includes(genre)
@@ -278,6 +284,9 @@
                     ItemId: r.Id,
                     Name: r.Name,
                 } satisfies ChannelSource));
+        }
+        if (pickedCollection) {
+            return [{ Type: 'Collection', ItemId: pickedCollection.Id, Name: pickedCollection.Name }];
         }
         /*
             A window into what matches, so "not that" can offer the next sixty rather than
@@ -364,6 +373,7 @@
             cutoff = 0;
         } else {
             pickedGenres = [];
+            pickedCollection = null;
             folderId = null;
             items = [];
         }
@@ -498,10 +508,20 @@
                 {:else if items.length > 0}
                     <Card>
                         <h3>{german ? 'Und einige Genres' : 'And some genres'}</h3>
+                        {#if collections.length > 0}
+                            <p class="hint">{german ? 'Oder direkt eine Sammlung verwenden.' : 'Or use a collection directly.'}</p>
+                            <div class="genres collections">
+                                {#each collections as collection (collection.Id)}
+                                    <button type="button" class:on={pickedCollection?.Id === collection.Id} onclick={() => { pickedCollection = pickedCollection?.Id === collection.Id ? null : collection; pickedGenres = []; }}>
+                                        {collection.Name} <span>{collection.ChildCount ?? 0}</span>
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
                         <p class="hint">{german ? 'Zwei Häkchen bedeuten: Titel aus beiden Genres.' : 'Ticking two means titles in both.'}</p>
-                        <div class="genres">
+                        <div class="genres" class:disabled={pickedCollection !== null}>
                             {#each genreCounts as [genre, count] (genre)}
-                                <button type="button" class:on={pickedGenres.includes(genre)} onclick={() => toggleGenre(genre)}>
+                                <button type="button" disabled={pickedCollection !== null} class:on={pickedGenres.includes(genre)} onclick={() => toggleGenre(genre)}>
                                     {genre} <span>{count}</span>
                                 </button>
                             {/each}

@@ -248,7 +248,7 @@
     </header>
 
     <nav class="subtabs">
-        <button type="button" class:on={pane === 'playback'} onclick={() => (pane = 'playback')}>{german ? 'Wiedergabe &amp; Trailer' : 'Playback &amp; trailers'}</button>
+        <button type="button" class:on={pane === 'playback'} onclick={() => (pane = 'playback')}>{german ? 'Wiedergabe & Trailer' : 'Playback & trailers'}</button>
         <button type="button" class:on={pane === 'updates'} onclick={() => (pane = 'updates')}>{german ? 'App-Updates' : 'App updates'}</button>
     </nav>
 
