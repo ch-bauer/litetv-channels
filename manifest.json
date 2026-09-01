@@ -13,7 +13,7 @@
         "changelog": "**Artwork selections now survive a save and reload.** Library images are fetched with the dashboard token before being stored locally, external images are copied permanently, and the stored image format is preserved when it is served. Selecting a picture does not require cropping; cropping remains optional.\n\n**Collections keep their configured order.** Items are no longer rearranged alphabetically or by premiere date.\n\n**YouTube playlist programmes are normal programmes.** They now expose a direct playback address and a stable thumbnail, so Wholphin does not label them Preview or show blank artwork.\n\n**German configuration UI.** The page language can be set to automatic, English or German, with the main navigation and status text following the selected language. This release also adds regression coverage for artwork persistence and collection order.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.96.0/litetv-channels_1.0.96.0.zip",
-        "checksum": "",
+        "checksum": "3c54e55886dc648837fc31576702fbf0",
         "timestamp": "2026-09-01T00:00:00.000Z"
       },
       {
