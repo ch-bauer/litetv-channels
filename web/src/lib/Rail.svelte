@@ -23,11 +23,18 @@
 
     const count = $derived.by(() => {
         const all = store.channels.length;
+        const german = store.config?.PageLanguage === 'de'
+            || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de'));
         if (filter.trim().length === 0) {
-            return all + (all === 1 ? ' channel' : ' channels');
+            return all + (all === 1 ? (german ? ' Kanal' : ' channel') : (german ? ' Kanäle' : ' channels'));
         }
-        return shown.length + ' of ' + all;
+        return german ? shown.length + ' von ' + all : shown.length + ' of ' + all;
     });
+
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto'
+            && typeof navigator !== 'undefined'
+            && navigator.language.toLowerCase().startsWith('de')));
 
     function pick(channel: TvChannel): void {
         store.channelId = channel.Id;
@@ -54,7 +61,7 @@
             <rect x="2" y="7" width="20" height="14" rx="2.5" /><path d="m7 7 5-4 5 4" />
         </svg>
         <span class="name">LiteTV</span>
-        <button type="button" class="add" onclick={add} title="New channel" aria-label="New channel">
+        <button type="button" class="add" onclick={add} title={german ? 'Neuer Kanal' : 'New channel'} aria-label={german ? 'Neuer Kanal' : 'New channel'}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9b8bf7" stroke-width="2.2" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
             </svg>
@@ -65,9 +72,9 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.9" aria-hidden="true">
             <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
         </svg>
-        <input bind:value={filter} placeholder="Filter channels" aria-label="Filter channels" />
+        <input bind:value={filter} placeholder={german ? 'Kanäle filtern' : 'Filter channels'} aria-label={german ? 'Kanäle filtern' : 'Filter channels'} />
         {#if filter.length > 0}
-            <button type="button" class="clear" onclick={() => (filter = '')} aria-label="Clear the filter">✕</button>
+            <button type="button" class="clear" onclick={() => (filter = '')} aria-label={german ? 'Filter löschen' : 'Clear the filter'}>✕</button>
         {/if}
     </div>
 
@@ -83,12 +90,12 @@
                 <span class="who">
                     <span class="label">{channel.Name}</span>
                     <span class="sub">{channel.Sources.length
-                        ? channel.Sources.length + (channel.Sources.length === 1 ? ' source' : ' sources')
-                        : 'nothing to play'}</span>
+                        ? channel.Sources.length + (channel.Sources.length === 1 ? (german ? ' Quelle' : ' source') : (german ? ' Quellen' : ' sources'))
+                        : (german ? 'nichts abzuspielen' : 'nothing to play')}</span>
                 </span>
             </button>
         {:else}
-            <p class="none">{store.channels.length === 0 ? 'No channels yet.' : 'Nothing matches.'}</p>
+            <p class="none">{store.channels.length === 0 ? (german ? 'Noch keine Kanäle.' : 'No channels yet.') : (german ? 'Keine Treffer.' : 'Nothing matches.')}</p>
         {/each}
     </div>
 
@@ -100,7 +107,7 @@
                 <circle cx="12" cy="12" r="2.8" />
                 <path d="M9.7 3h4.6l.5 2.6 2.3 1.3 2.4-1 2.3 4-2 1.7v2.6l2 1.7-2.3 4-2.4-1-2.3 1.3-.5 2.8H9.7l-.5-2.8-2.3-1.3-2.4 1-2.3-4 2-1.7v-2.6l-2-1.7 2.3-4 2.4 1 2.3-1.3z" />
             </svg>
-            Server settings
+            {german ? 'Servereinstellungen' : 'Server settings'}
         </button>
     </div>
 </nav>

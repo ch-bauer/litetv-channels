@@ -169,7 +169,9 @@ public class ChannelPlaylistBuilder
             {
                 trailers.Add(new ScheduledEntry(extra.Id, extra.Name ?? string.Empty, item.Name, item.Id, extra.RunTimeTicks!.Value)
                 {
-                    IsTrailer = true
+                    IsTrailer = true,
+                    TrailerForItemId = item.Id,
+                    TrailerForName = item.Name
                 });
             }
         }
@@ -187,7 +189,9 @@ public class ChannelPlaylistBuilder
                         item is Episode episodeWithSeries ? episodeWithSeries.SeriesId : null,
                         LinkedTrailerRuntimeTicks)
                     {
-                        IsTrailer = true
+                        IsTrailer = true,
+                        TrailerForItemId = item.Id,
+                        TrailerForName = item.Name
                     });
                 }
             }
@@ -423,7 +427,10 @@ public class ChannelPlaylistBuilder
         }
 
         var every = Math.Max(1, channel.TrailerEveryPrograms);
-        var lookahead = Math.Max(1, channel.TrailerLookahead);
+        // A preview immediately before the advertised programme is not a preview at all: the
+        // viewer is already about to see it. Keep one programme between the trailer and its
+        // target, even when an older configuration still contains lookahead = 1.
+        var lookahead = Math.Max(2, channel.TrailerLookahead);
         var wantsPreview = channel.Trailers is TrailerMode.Preview or TrailerMode.Both;
         var wantsManual = channel.Trailers is TrailerMode.Manual or TrailerMode.Both;
 

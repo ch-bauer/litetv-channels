@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "**Remote YouTube trailers are now inserted into the real schedule.** Preview, manual-title and combined trailer modes use linked RemoteTrailers when no local trailer file exists. The schedule marks them as Trailer entries, reserves a bounded duration, and Wholphin resolves the fresh stream immediately before playback.\n\n**Trailer discovery works for episodes and their series as well as films and collections.** The actual trailer endpoint was verified against the live Jellyfin library.",
+  "changelog": "**The configuration page now supports German and English.** The selected language applies across navigation, channel settings and the content preview and is saved with the plugin configuration.\n\n**Collection previews keep Jellyfin's saved order.** They no longer sort collection titles alphabetically.\n\n**Trailer previews stay away from the immediately following programme.**",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-08-29T23:45:00.000Z",
-  "version": "1.0.98.0",
+  "timestamp": "2026-09-01T16:00:00.000Z",
+  "version": "1.0.99.0",
   "status": "Active",
   "autoUpdate": false
 }

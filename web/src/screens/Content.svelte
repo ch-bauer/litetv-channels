@@ -10,10 +10,12 @@
     import { store } from '../lib/config.svelte';
 
     const channel = $derived(store.channel);
+    const german = $derived(store.config?.PageLanguage === 'de'
+        || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
     const poolSummary = $derived.by(() => {
         const sources = channel?.Sources ?? [];
-        if (sources.length === 0) { return 'nothing yet'; }
+        if (sources.length === 0) { return german ? 'noch nichts' : 'nothing yet'; }
         const films = sources.filter((s) => s.Type === 'Movie').length;
         const series = sources.filter((s) => s.Type === 'Series').length;
         const collections = sources.filter((s) => s.Type === 'Collection').length;
@@ -29,11 +31,11 @@
         const playlists = sources.filter((s) => s.Type === 'YouTube').length;
         const episodes = sources.filter((s) => s.Type === 'Episode').length;
         return [
-            films ? films + (films === 1 ? ' film' : ' films') : '',
-            series ? series + (series === 1 ? ' series' : ' series') : '',
-            episodes ? episodes + (episodes === 1 ? ' episode' : ' episodes') : '',
-            collections ? collections + (collections === 1 ? ' collection' : ' collections') : '',
-            playlists ? playlists + (playlists === 1 ? ' playlist' : ' playlists') : '',
+            films ? films + (films === 1 ? (german ? ' Film' : ' film') : (german ? ' Filme' : ' films')) : '',
+            series ? series + (german ? ' Serien' : ' series') : '',
+            episodes ? episodes + (episodes === 1 ? (german ? ' Episode' : ' episode') : (german ? ' Episoden' : ' episodes')) : '',
+            collections ? collections + (collections === 1 ? (german ? ' Sammlung' : ' collection') : (german ? ' Sammlungen' : ' collections')) : '',
+            playlists ? playlists + (playlists === 1 ? (german ? ' Playlist' : ' playlist') : (german ? ' Playlists' : ' playlists')) : '',
         ].filter(Boolean).join(' · ');
     });
 </script>
@@ -41,25 +43,22 @@
 {#if channel}
     <div class="content">
         <div class="left">
-            <SectionTitle aside={poolSummary}>What this channel plays</SectionTitle>
+            <SectionTitle aside={poolSummary}>{german ? 'Was dieser Kanal abspielt' : 'What this channel plays'}</SectionTitle>
             <Note>
-                A series is every episode of it, a collection is everything in it.
-                Order here is the order they are laid out in.
+                {german ? 'Eine Serie umfasst alle ihre Episoden, eine Sammlung alle enthaltenen Titel. Die Reihenfolge entspricht der späteren Wiedergabe.' : 'A series is every episode of it, a collection is everything in it. Order here is the order they are laid out in.'}
             </Note>
 
             <Card flush>
                 <SourceList sources={channel.Sources} />
                 <!--
-                    Below the list, as the board has it. It was above in the old page, which put
-                    the thing you use once between the title and the thing you read every time.
+                    {german ? 'Unter der Liste — dort, wo diese Ansicht sie erwartet.' : 'Below the list, as the board has it. It was above in the old page, which put the thing you use once between the title and the thing you read every time.'}
                 -->
                 <SourceSearch sources={channel.Sources} />
             </Card>
 
-            <SectionTitle>Parts of the week that play something else</SectionTitle>
+            <SectionTitle>{german ? 'Abschnitte der Woche mit anderem Inhalt' : 'Parts of the week that play something else'}</SectionTitle>
             <Note>
-                The kids’ hour until noon, the film on Saturday.
-                Whatever no block covers plays the list above.
+                {german ? 'Zum Beispiel Kinderprogramm bis Mittag oder ein Film am Samstag. Was kein Block abdeckt, spielt die Liste oben.' : 'The kids’ hour until noon, the film on Saturday. Whatever no block covers plays the list above.'}
             </Note>
 
             <BlockGrid {channel} />
@@ -73,13 +72,12 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
                     <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" />
                 </svg>
-                Changing any of this leaves the stored week alone.
-                It applies when you lay the week out again.
+                {german ? 'Änderungen lassen die gespeicherte Woche unverändert. Sie gelten erst beim erneuten Erstellen der Woche.' : 'Changing any of this leaves the stored week alone. It applies when you lay the week out again.'}
             </div>
         </div>
     </div>
 {:else}
-    <p class="empty">This server has no channels yet.</p>
+    <p class="empty">{german ? 'Dieser Server hat noch keine Kanäle.' : 'This server has no channels yet.'}</p>
 {/if}
 
 <style>

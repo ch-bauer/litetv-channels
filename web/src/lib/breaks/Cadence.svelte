@@ -47,9 +47,9 @@ A break carries the channel's adverts first and the trailer last, so it ends on 
             label: 'Trail something up to',
             unit: 'programmes ahead',
             width: '90px',
-            min: 1,
+            min: 2,
             max: 12,
-            oneLine: 'How far ahead the trailer is allowed to look.',
+            oneLine: 'How far ahead the trailer is allowed to look; 2 keeps it away from the next programme.',
             deeper: `A trailer announces something the channel has not shown yet, and it is rarely the very next thing - the next thing is minutes away, which is no announcement at all.
 
 This is how far down the schedule it may reach to find something worth trailing.`,

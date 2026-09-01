@@ -30,7 +30,7 @@
 
     const channel = $derived(store.channel);
     const german = $derived(store.config?.PageLanguage === 'de'
-        || (store.config?.PageLanguage === 'auto'
+        || (store.config?.PageLanguage !== 'en'
             && typeof navigator !== 'undefined'
             && navigator.language.toLowerCase().startsWith('de')));
 
@@ -113,10 +113,10 @@
                     the removal down.
                 -->
                 <header>
-                    <h1>No channels</h1>
+                    <h1>{german ? 'Keine Kanäle' : 'No channels'}</h1>
                     <div class="spacer"></div>
                     <span class="saved" class:dirty={unsaved}>{saved}</span>
-                    <button type="button" class="save" disabled={!unsaved} onclick={saveAll}>Save</button>
+                    <button type="button" class="save" disabled={!unsaved} onclick={saveAll}>{german ? 'Speichern' : 'Save'}</button>
                 </header>
                 <p class="unported">
                     {store.dirty
@@ -128,7 +128,7 @@
                     <h1>{channel.Name}</h1>
                     <div class="spacer"></div>
                     <span class="saved" class:dirty={unsaved}>{saved}</span>
-                    <button type="button" class="save" disabled={!unsaved} onclick={saveAll}>Save</button>
+                    <button type="button" class="save" disabled={!unsaved} onclick={saveAll}>{german ? 'Speichern' : 'Save'}</button>
                 </header>
 
                 <nav class="tabs">

@@ -34,9 +34,15 @@ export interface DealtItem {
 interface LibraryItem {
     Id: string;
     Name: string;
+    Type?: string;
     IndexNumber?: number;
     ParentIndexNumber?: number;
     SeriesName?: string;
+}
+
+interface LinkedChild {
+    ItemId?: string;
+    ItemName?: string;
 }
 
 /** An episode reads as "Miami Vice - S02E14", which is how the design labels it. */
@@ -69,6 +75,37 @@ async function expand(source: ChannelSource, cap: number): Promise<DealtItem[]> 
 
     if (source.Type === 'Movie') {
         return [{ id: source.ItemId, label: source.Name, sourceIndex: 0 }];
+    }
+
+    if (source.Type === 'Collection') {
+        /*
+            A collection is not an alphabetic folder. Jellyfin stores the deliberate order in
+            LinkedChildren, while an Items(parentId=...) query defaults to SortName. The latter
+            made this preview disagree with the actual channel schedule, especially for film
+            franchises such as Fast & Furious.
+
+            Fetch linked children one by one so the order of the response cannot reorder them.
+            The server's collection expansion does the same conceptually through
+            GetLinkedChildren().
+        */
+        try {
+            const collection = await api().getJSON<{ LinkedChildren?: LinkedChild[] }>(
+                api().getUrl('Items/' + source.ItemId, { fields: 'LinkedChildren' }),
+            );
+            const linked = (collection.LinkedChildren ?? [])
+                .filter((child) => Boolean(child.ItemId))
+                .slice(0, cap);
+            const children = await Promise.all(linked.map((child) =>
+                api().getJSON<LibraryItem>(api().getUrl('Items/' + child.ItemId)),
+            ));
+            return children.map((item) => ({
+                id: item.Id,
+                label: item.Name,
+                sourceIndex: 0,
+            }));
+        } catch {
+            return [{ id: source.ItemId, label: source.Name, sourceIndex: 0 }];
+        }
     }
 
     const query = source.Type === 'Series'
