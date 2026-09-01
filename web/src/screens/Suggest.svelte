@@ -580,7 +580,7 @@
                 {#if round > 0}
                     <p class="hint">Lineup {round + 1}. The titles you started from are kept.</p>
                 {/if}
-                <p class="hint warn">Nothing is written to the server until you press Save.</p>
+                <p class="hint warn">The new channel is saved automatically.</p>
                 <p class="hint">Pick a channel in the rail to leave without making one.</p>
             </Card>
         </div>

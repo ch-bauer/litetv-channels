@@ -96,28 +96,16 @@
             {#if confirming}
                 <div class="danger-row">
                     <span class="asking">{german ? `„${channel.Name}“ löschen?` : `Delete “${channel.Name}”?`}</span>
-                    <button type="button" class="really" onclick={() => store.removeChannel(channel.Id)}>
+                    <button type="button" class="really" onclick={() => void store.removeChannel(channel.Id)}>
                         {german ? 'Ja, löschen' : 'Yes, delete it'}
                     </button>
                     <button type="button" class="keep" onclick={() => (confirming = false)}>{german ? 'Behalten' : 'Keep it'}</button>
                 </div>
-                <p class="danger-note">{german ? 'Beim Speichern wird der Kanal endgültig entfernt.' : 'It goes for good when you press Save.'}</p>
+                <p class="danger-note">{german ? 'Der Kanal wird sofort endgültig entfernt.' : 'The channel is removed immediately.'}</p>
             {:else}
                 <button type="button" class="delete" onclick={() => (confirming = true)}>{german ? 'Kanal löschen' : 'Delete channel'}</button>
             {/if}
         </div>
-
-        {#if store.config}
-            <div class="field language-field">
-                <span class="label">{german ? 'Sprache der Konfigurationsseite' : 'Configuration page language'}</span>
-                <select class="text" bind:value={store.config.PageLanguage}>
-                    <option value="auto">{german ? 'Automatisch' : 'Automatic'}</option>
-                    <option value="de">Deutsch</option>
-                    <option value="en">English</option>
-                </select>
-                <p class="note">{german ? 'Die Sprache wird nach dem Speichern sofort verwendet und beim nächsten Öffnen beibehalten.' : 'The selected language is used immediately and kept the next time the page is opened.'}</p>
-            </div>
-        {/if}
 
         <div class="footnote">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">

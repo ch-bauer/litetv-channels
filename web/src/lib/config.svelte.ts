@@ -1,9 +1,8 @@
 /*
  * The plugin configuration, held once for the whole app.
  *
- * Nothing here saves as you type. The old page's rule is kept because it is the right one: an
- * edit changes what is on this screen, and **Save** is what reaches the server. `dirty` is what
- * the header reads, so "saved a moment ago" can never be a lie.
+ * Configuration edits are saved automatically. A session baseline is kept separately so the
+ * owner can revert several automatic saves at once.
  *
  * `dirty` is MEASURED, not announced. It used to be a flag every edit had to remember to set,
  * and an edit that forgot left Save greyed out over a real change - the owner hit exactly that.
@@ -32,8 +31,15 @@ class ConfigStore {
     error = $state<string | null>(null);
     savedAt = $state<Date | null>(null);
 
-    /** The configuration as the server last stated it - what `dirty` is measured against. */
+    /** The configuration as the server last stated it. */
     private settled = $state<string>('');
+
+    /** The state from when this page session was opened, used by Revert. */
+    private sessionBaseline = $state<string>('');
+
+    private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    private autoSaveRunning = false;
+    loaded = $state(false);
 
     /*
         The channel ids the SERVER holds, which is not the same list as the one on screen.
@@ -70,6 +76,14 @@ class ConfigStore {
 
     /** True while what is on screen differs from what the server holds. */
     readonly dirty = $derived(this.config !== null && stamp(this.config) !== this.settled);
+
+    /** A reactive stamp used by the app to notice edits made by any control. */
+    readonly editStamp = $derived(this.config === null ? '' : stamp(this.config));
+
+    /** True when this session has made changes that can be reverted together. */
+    readonly canRevert = $derived(this.config !== null
+        && this.sessionBaseline !== ''
+        && stamp(this.config) !== this.sessionBaseline);
 
     /** The channel currently being edited. */
     channelId = $state<string | null>(null);
@@ -108,7 +122,9 @@ class ConfigStore {
             this.config = loaded;
             this.channelId = loaded.Channels[0]?.Id ?? null;
             this.settled = stamp(loaded);
+            this.sessionBaseline = stamp(loaded);
             this.settledIds = new Set(loaded.Channels.map((c) => c.Id));
+            this.loaded = true;
         } catch (err) {
             // Said out loud. A configuration that silently fails to load leaves a page that
             // looks merely empty, which is the failure this project keeps rediscovering.
@@ -200,10 +216,58 @@ class ConfigStore {
         }
     }
 
-    /**
-     * Adds a channel and selects it. `sources` empty is "start from nothing"; the suggestions
-     * screen passes a lineup. Not saved - Save is still what reaches the server.
-     */
+    /** Queues the current configuration for automatic persistence. */
+    queueAutoSave(): void {
+        if (!this.config || !this.loaded || !this.dirty) { return; }
+        if (this.autoSaveTimer !== null) { clearTimeout(this.autoSaveTimer); }
+        this.autoSaveTimer = setTimeout(() => {
+            this.autoSaveTimer = null;
+            if (this.autoSaveRunning || !this.dirty) { return; }
+            this.autoSaveRunning = true;
+            void this.save().finally(() => {
+                this.autoSaveRunning = false;
+                if (this.dirty) { this.queueAutoSave(); }
+            });
+        }, 450);
+    }
+
+    /** Restores the state from when this page session was opened. */
+    async revert(): Promise<void> {
+        if (!this.config || !this.canRevert) { return; }
+        const target = JSON.parse(this.sessionBaseline) as PluginConfig;
+        const current = JSON.parse(this.settled) as PluginConfig;
+        const targetById = new Map(target.Channels.map((c) => [c.Id, c]));
+        const currentById = new Map(current.Channels.map((c) => [c.Id, c]));
+        const bar = dashboard();
+        bar.showLoadingMsg();
+        try {
+            for (const id of currentById.keys()) {
+                if (!targetById.has(id)) {
+                    await api().fetch({ url: api().getUrl('LiteTv/Definitions/' + id), type: 'DELETE' });
+                }
+            }
+            for (const channel of target.Channels) {
+                if (JSON.stringify(currentById.get(channel.Id)) === JSON.stringify(channel)) { continue; }
+                await api().fetch({
+                    url: api().getUrl('LiteTv/Definitions/' + channel.Id),
+                    type: 'POST',
+                    data: JSON.stringify(channel),
+                    contentType: 'application/json',
+                });
+            }
+            await api().updatePluginConfiguration(PLUGIN_ID, { ...target, Channels: [] });
+            this.config = target;
+            this.settled = this.sessionBaseline;
+            this.settledIds = new Set(target.Channels.map((c) => c.Id));
+            this.savedAt = new Date();
+        } catch (err) {
+            bar.alert('Could not revert: ' + failureWords(err));
+        } finally {
+            bar.hideLoadingMsg();
+        }
+    }
+
+    /** Adds a channel and selects it. Auto-save persists it shortly afterwards. */
     addChannel(name: string, sources: ChannelSource[] = []): void {
         if (!this.config) { return; }
         const made: TvChannel = {
@@ -232,22 +296,51 @@ class ConfigStore {
         this.channelId = made.Id;
 
         // Only when there is something to lay out. A channel started from nothing has no
-        // content, and asking the server to schedule nothing produces an error where the owner
-        // expected a week.
+        // content, and asking the server to schedule nothing produces an error.
         if (sources.length > 0) { this.wantsLayout.add(made.Id); }
     }
 
     /**
-     * Takes a channel out of the configuration and selects whatever is beside it.
-     *
-     * Not saved, like everything else here - Save is what reaches the server. The channel's
-     * stored week lives in its own file rather than in the configuration, and the server throws
-     * that away when it sees the channel has gone.
+     * Deletes a channel immediately. Deleting is deliberately different from editing: there is
+     * no useful undo for a channel and its stored week, so waiting for the page-wide Save button
+     * only makes the UI claim that something can be undone when it cannot.
      */
-    removeChannel(channelId: string): void {
+    async removeChannel(channelId: string): Promise<void> {
         if (!this.config) { return; }
         const at = this.config.Channels.findIndex((c) => c.Id === channelId);
         if (at === -1) { return; }
+
+        // A channel created on this page has no server file yet; removing it is local only.
+        if (this.settledIds.has(channelId)) {
+            const bar = dashboard();
+            bar.showLoadingMsg();
+            try {
+                await api().fetch({
+                    url: api().getUrl('LiteTv/Definitions/' + channelId),
+                    type: 'DELETE',
+                });
+            } catch (err) {
+                bar.alert('Could not delete: ' + failureWords(err));
+                return;
+            } finally {
+                bar.hideLoadingMsg();
+            }
+
+            // Keep the server snapshot in step without swallowing unrelated edits.
+            const settled = this.settled ? JSON.parse(this.settled) as PluginConfig : null;
+            if (settled) {
+                settled.Channels = settled.Channels.filter((c) => c.Id !== channelId);
+                this.settled = stamp(settled);
+            }
+            const baseline = this.sessionBaseline ? JSON.parse(this.sessionBaseline) as PluginConfig : null;
+            if (baseline) {
+                baseline.Channels = baseline.Channels.filter((c) => c.Id !== channelId);
+                this.sessionBaseline = stamp(baseline);
+            }
+            this.settledIds.delete(channelId);
+        } else {
+            this.wantsLayout.delete(channelId);
+        }
 
         this.config.Channels.splice(at, 1);
         const next = this.config.Channels[at] ?? this.config.Channels[at - 1] ?? null;

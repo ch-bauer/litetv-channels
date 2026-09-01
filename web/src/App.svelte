@@ -44,20 +44,19 @@
         }
     });
 
-    /*
-        One Save, covering everything on the page.
+    /* Configuration edits save automatically. The week remains an explicit draft because its
+       timeline needs Undo and Discard while an edit is being rehearsed. */
+    const unsaved = $derived(week.dirty);
 
-        The schedule used to write itself down the instant it changed, and the owner reported
-        exactly what that looks like from outside: an edit that does not light Save. Now the
-        week holds its edits until this button too, so "unsaved changes" means all of it and
-        the button is the only thing that writes.
-    */
-    const unsaved = $derived(store.dirty || week.dirty);
+    $effect(() => {
+        void store.editStamp;
+        if (store.loaded) { store.queueAutoSave(); }
+    });
 
     const saved = $derived.by(() => {
-        if (store.dirty && week.dirty) { return german ? 'ungespeicherte Änderungen inkl. Programmplan' : 'unsaved changes, schedule included'; }
+        if (store.canRevert && week.dirty) { return german ? 'automatisch gespeichert, Programmplan ungespeichert' : 'auto-saved, schedule not saved'; }
         if (week.dirty) { return german ? 'ungespeicherter Programmplan' : 'unsaved schedule changes'; }
-        if (store.dirty) { return german ? 'ungespeicherte Änderungen' : 'unsaved changes'; }
+        if (store.canRevert) { return german ? 'automatisch gespeichert' : 'auto-saved'; }
         if (!store.savedAt) { return ''; }
         const seconds = Math.round((Date.now() - store.savedAt.getTime()) / 1000);
         return seconds < 60
@@ -118,11 +117,14 @@
                     <h1>{german ? 'Keine Kanäle' : 'No channels'}</h1>
                     <div class="spacer"></div>
                     <span class="saved" class:dirty={unsaved}>{saved}</span>
-                    <button type="button" class="save" disabled={!unsaved} onclick={saveAll}>{german ? 'Speichern' : 'Save'}</button>
+                    {#if store.canRevert}
+                        <button type="button" class="save" onclick={() => void store.revert()}>{german ? 'Änderungen zurücksetzen' : 'Revert changes'}</button>
+                    {/if}
+                    {#if unsaved}<button type="button" class="save" onclick={saveAll}>{german ? 'Programmplan speichern' : 'Save schedule'}</button>{/if}
                 </header>
                 <p class="unported">
                     {store.dirty
-                        ? (german ? 'Keine Kanäle übrig. Speichere oder lege mit + einen neuen an.' : 'Nothing is left. Press Save to write that down, or use + in the rail to make another.')
+                        ? (german ? 'Keine Kanäle übrig. Die Änderung wird automatisch gespeichert. Mit + kannst du einen neuen anlegen.' : 'Nothing is left. The change is saved automatically. Use + in the rail to make another.')
                         : (german ? 'Dieser Server hat noch keine Kanäle. Lege mit + einen an.' : 'This server has no channels yet. Use + in the rail to make one.')}
                 </p>
             {:else}
@@ -130,7 +132,10 @@
                     <h1>{channel.Name}</h1>
                     <div class="spacer"></div>
                     <span class="saved" class:dirty={unsaved}>{saved}</span>
-                    <button type="button" class="save" disabled={!unsaved} onclick={saveAll}>{german ? 'Speichern' : 'Save'}</button>
+                    {#if store.canRevert}
+                        <button type="button" class="save" onclick={() => void store.revert()}>{german ? 'Änderungen zurücksetzen' : 'Revert changes'}</button>
+                    {/if}
+                    {#if unsaved}<button type="button" class="save" onclick={saveAll}>{german ? 'Programmplan speichern' : 'Save schedule'}</button>{/if}
                 </header>
 
                 <nav class="tabs">

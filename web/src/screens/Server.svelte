@@ -242,7 +242,9 @@
     <header>
         <h1>{german ? 'Servereinstellungen' : 'Server settings'}</h1>
         <div class="spacer"></div>
-        <button type="button" class="save" disabled={!store.dirty} onclick={() => store.save()}>{german ? 'Speichern' : 'Save'}</button>
+        {#if store.canRevert}
+            <button type="button" class="save" onclick={() => void store.revert()}>{german ? 'Änderungen zurücksetzen' : 'Revert changes'}</button>
+        {/if}
     </header>
 
     <nav class="subtabs">
