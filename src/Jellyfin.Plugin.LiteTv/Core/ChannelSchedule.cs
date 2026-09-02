@@ -170,6 +170,7 @@ public sealed class ChannelSchedule
     private readonly IReadOnlyDictionary<int, string> _blockNames;
     private readonly IReadOnlySet<int> _weeklySequenceBlocks;
     private readonly IReadOnlySet<int> _autoSizedBlocks;
+    private readonly IReadOnlyDictionary<int, BlockWindow> _blockWindows;
     private readonly TimeZoneInfo _timeZone;
     private readonly DateTime _anchorUtc;
 
@@ -188,13 +189,15 @@ public sealed class ChannelSchedule
         IReadOnlySet<int> weeklySequenceBlocks,
         DateTime anchorUtc,
         TimeZoneInfo timeZone,
-        IReadOnlySet<int>? autoSizedBlocks = null)
+        IReadOnlySet<int>? autoSizedBlocks = null,
+        IReadOnlyDictionary<int, BlockWindow>? blockWindows = null)
     {
         _timeline = timeline;
         _lineups = lineups;
         _blockNames = blockNames;
         _weeklySequenceBlocks = weeklySequenceBlocks;
         _autoSizedBlocks = autoSizedBlocks ?? new HashSet<int>();
+        _blockWindows = blockWindows ?? new Dictionary<int, BlockWindow>();
         _anchorUtc = anchorUtc;
         _timeZone = timeZone;
     }
@@ -224,26 +227,54 @@ public sealed class ChannelSchedule
         var cursor = ToLocal(fromUtc);
         var end = ToLocal(toUtc);
         var anchorLocal = ToLocal(_anchorUtc);
+        var baseAirtimeTail = 0L;
+        DateTime? baseResumeAt = null;
+        DateTime? baseResumeEnd = null;
+        var releasedAutoSpans = new HashSet<long>();
 
         // A window is walked, not solved: a block boundary can cut a program short and the
         // next lineup starts wherever it left off, so each step depends on the one before.
         // The cap keeps a configuration that somehow fails to advance from spinning here.
         for (var step = 0; cursor < end && step < 4096; step++)
         {
+            if (baseResumeAt is { } resumeAt && baseResumeEnd is { } resumeEnd && cursor >= resumeEnd)
+            {
+                // The virtual base run has reached the original block boundary. From here on
+                // the normal timeline airtime is short by the released tail, so carry that tail
+                // forward and return to the ordinary calculation.
+                baseAirtimeTail += (resumeEnd - resumeAt).Ticks;
+                baseResumeAt = null;
+                baseResumeEnd = null;
+            }
+
             var absoluteMinute = WeekTimeline.AbsoluteMinute(cursor);
             var owner = _timeline.OwnerAt(absoluteMinute);
-            var spanStart = MinuteToLocal(_timeline.SpanStartAt(absoluteMinute), DateTime.MinValue);
+            var spanStartMinute = _timeline.SpanStartAt(absoluteMinute);
+            var spanStart = MinuteToLocal(spanStartMinute, DateTime.MinValue);
             var spanEnd = MinuteToLocal(_timeline.NextChangeAfter(absoluteMinute), DateTime.MaxValue);
 
             // An auto-sized weekly film block releases the channel back to its base lineup as
             // soon as this week's selected film ends, rather than keeping the rest of its
             // fallback window as a large empty block.
-            if (_weeklySequenceBlocks.Contains(owner)
-                && _autoSizedBlocks.Contains(owner)
-                && cursor >= spanStart + TimeSpan.FromTicks(lineupLength(owner, cursor, anchorLocal)))
+            if (_weeklySequenceBlocks.Contains(owner) && _autoSizedBlocks.Contains(owner))
             {
-                owner = WeekTimeline.BaseLineup;
-                spanStart = cursor;
+                var release = spanStart + TimeSpan.FromTicks(lineupLength(owner, cursor, anchorLocal));
+                if (cursor >= release)
+                {
+                    // Once an auto-sized film has ended, the rest of the configured block window
+                    // belongs to the base lineup. The timeline still reports the original block
+                    // until its configured end, so remember the released span and count its tail
+                    // exactly once. Without this, every loop iteration recalculated the base
+                    // queue at the airtime immediately before the film and repeated that episode.
+                    if (spanStartMinute is { } start && releasedAutoSpans.Add(start))
+                    {
+                        baseResumeAt = release;
+                        baseResumeEnd = spanEnd;
+                    }
+
+                    owner = WeekTimeline.BaseLineup;
+                    spanStart = release;
+                }
             }
 
             if (!_lineups.TryGetValue(owner, out var lineup) || lineup.IsEmpty)
@@ -259,9 +290,26 @@ public sealed class ChannelSchedule
                 continue;
             }
 
+            var airtime = Airtime(owner, cursor) - Airtime(owner, anchorLocal);
+            if (owner == WeekTimeline.BaseLineup)
+            {
+                airtime += baseAirtimeTail;
+                if (baseResumeAt is { } currentResumeAt
+                    && baseResumeEnd is { } currentResumeEnd
+                    && cursor < currentResumeEnd)
+                {
+                    // The timeline still calls this part of the day a block, but an auto-sized
+                    // film has already ended. Let the base queue advance with the wall clock
+                    // until that original span ends; otherwise every airing starts at the same
+                    // pre-film cursor.
+                    airtime = Airtime(owner, currentResumeAt) - Airtime(owner, anchorLocal)
+                        + (cursor - currentResumeAt).Ticks;
+                }
+            }
+
             var (index, entry, elapsedInSlot, slotLength) = _weeklySequenceBlocks.Contains(owner)
-                ? lineup.AtWeeklyOccurrence(WeeksSinceAnchor(cursor, anchorLocal))
-                : lineup.At(Airtime(owner, cursor) - Airtime(owner, anchorLocal));
+                ? lineup.AtWeeklyOccurrence(BlockOccurrence(owner, spanStart, anchorLocal))
+                : lineup.At(airtime);
 
             // A weekly sequence block owns one item for the occurrence. Do not start that same
             // item again when it ends before the configured window; the next item belongs to the
@@ -306,8 +354,48 @@ public sealed class ChannelSchedule
     private long lineupLength(int owner, DateTime cursor, DateTime anchorLocal)
     {
         var lineup = _lineups[owner];
-        var selected = lineup.AtWeeklyOccurrence(WeeksSinceAnchor(cursor, anchorLocal));
+        var selected = lineup.AtWeeklyOccurrence(BlockOccurrence(owner, cursor, anchorLocal));
         return selected.SlotLength;
+    }
+
+    private long BlockOccurrence(int owner, DateTime local, DateTime anchorLocal)
+    {
+        if (!_blockWindows.TryGetValue(owner, out var block))
+        {
+            return WeeksSinceAnchor(local, anchorLocal);
+        }
+
+        var days = block.Days.Count > 0
+            ? block.Days
+            : Enum.GetValues<DayOfWeek>();
+        var daysPerWeek = days.Count;
+        var daysFromAnchor = (local.Date - anchorLocal.Date).Days;
+        var week = FloorDiv(daysFromAnchor, 7);
+        var weekStart = anchorLocal.Date.AddDays(week * 7);
+        var day = (local.Date - weekStart).Days;
+        var minutes = (int)(local - local.Date).TotalMinutes;
+        var inWeek = days.Count(d => (int)d == (int)local.DayOfWeek && block.StartMinutes <= minutes);
+
+        foreach (var candidate in days)
+        {
+            var candidateDay = (int)candidate;
+            var localDay = (int)local.DayOfWeek;
+            var mondayCandidate = ((candidateDay + 6) % 7);
+            var mondayLocal = ((localDay + 6) % 7);
+            if (mondayCandidate < mondayLocal)
+            {
+                inWeek++;
+            }
+        }
+
+        return (week * daysPerWeek) + Math.Max(0, inWeek - 1);
+    }
+
+    private static long FloorDiv(int value, int divisor)
+    {
+        var quotient = value / divisor;
+        var remainder = value % divisor;
+        return remainder < 0 ? quotient - 1 : quotient;
     }
 
     /// <summary>

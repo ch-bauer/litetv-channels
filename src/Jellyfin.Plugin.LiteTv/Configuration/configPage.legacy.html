@@ -1836,8 +1836,8 @@
             // and squeezed everything beside it.
             var ARTWORK = [
                 { key: 'BannerUrl', label: 'Card picture', note: 'wide — the row card in the channel list', ratio: '16 / 6' },
-                { key: 'BackdropUrl', label: 'Background', note: 'fills the screen behind the channel', ratio: '16 / 9' },
-                { key: 'PosterUrl', label: 'Cover', note: 'upright, beside the channel name', ratio: '2 / 3' }
+                { key: 'PosterUrl', label: 'Cover', note: 'upright, beside the channel name', ratio: '2 / 3' },
+                { key: 'BackdropUrl', label: 'Background', note: 'fills the screen behind the channel', ratio: '16 / 9' }
             ];
 
             var artworkTarget = 'BannerUrl';
@@ -4736,21 +4736,33 @@
                         var label = document.createElement('div');
                         label.style.flexGrow = '1';
                         label.style.marginRight = '0.6em';
-                        label.textContent = state.Held ? 'Held' : 'None held';
+                        label.textContent = state.TokenState === 'held'
+                            ? 'Held'
+                            : state.TokenState === 'expired' ? 'Expired' : 'None held';
 
                         var detail = document.createElement('div');
                         detail.className = 'fieldDescription';
                         detail.style.margin = '0';
                         detail.style.whiteSpace = 'nowrap';
-                        detail.textContent = state.Held
+                        detail.textContent = state.TokenState === 'held'
                             ? ('minted ' + poAge(state.AgeSeconds)
                                 + (state.HasPlayerToken ? '  ·  with a player token' : '  ·  no player token'))
-                            : 'trailers are capped at 360p';
+                            : state.TokenState === 'expired'
+                                ? 'expired  ·  trailers are capped at 360p'
+                                : 'none held  ·  trailers are capped at 360p';
 
                         row.appendChild(dot);
                         row.appendChild(label);
                         row.appendChild(detail);
                         host.appendChild(row);
+
+                        var resolved = document.createElement('div');
+                        resolved.className = 'fieldDescription';
+                        resolved.style.marginTop = '0.35em';
+                        resolved.textContent = state.LastResolved
+                            ? 'Last resolved: ' + state.LastResolved
+                            : 'Last resolved: nothing since this server started';
+                        host.appendChild(resolved);
                     })
                     .catch(function () {
                         host.innerHTML = '<div class="fieldDescription">Could not be asked.</div>';

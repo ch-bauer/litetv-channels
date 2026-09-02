@@ -1214,19 +1214,54 @@ public class LiteTvController : ControllerBase
 
             // Kept only while the channel still points at OUR file for this slot. Any other
             // address - a library item, somewhere else entirely, or nothing at all - means the
-            // upload is no longer in use. Compared as a prefix, because the page appends a
-            // cache-buster to the address it has just uploaded to.
-            // The public URL contains the normal dashed Guid form. Using the compact form here
-            // made every online upload look orphaned on the next channel save, so the file was
-            // deleted and the page showed a broken image after a reload.
-            var ours = $"/LiteTv/Artwork/{channel.Id}/{kind}";
-            if (url is null || !url.StartsWith(ours, StringComparison.OrdinalIgnoreCase))
+            // upload is no longer in use. Parse the route instead of comparing a string prefix:
+            // older pages wrote compact GUIDs while newer pages write dashed GUIDs, and both are
+            // valid route forms. Treating the compact form as foreign deleted a real file on the
+            // next channel save and left the page with a broken image after reload.
+            if (!IsOurArtworkUrl(url, channel.Id, kind))
             {
                 unused.Add(kind);
             }
         }
 
         return unused;
+    }
+
+    /// <summary>
+    /// Says whether a stored address points at this channel's file for this artwork kind.
+    /// Query strings are cache-busters and do not change the file being addressed. Both dashed
+    /// and compact GUIDs are accepted because both have existed in saved configurations.
+    /// </summary>
+    /// <param name="url">The stored address.</param>
+    /// <param name="channelId">The channel the file belongs to.</param>
+    /// <param name="kind">The artwork kind.</param>
+    /// <returns>True when the address is exactly this plugin artwork route.</returns>
+    internal static bool IsOurArtworkUrl(string? url, Guid channelId, string kind)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        var path = url.Trim();
+        if (Uri.TryCreate(path, UriKind.Absolute, out var absolute)
+            && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
+        {
+            path = absolute.AbsolutePath;
+        }
+        else
+        {
+            var query = path.IndexOfAny(new[] { '?', '#' });
+            if (query >= 0)
+            {
+                path = path[..query];
+            }
+        }
+
+        var expected = $"/LiteTv/Artwork/{channelId:N}/{kind}";
+        var dashed = $"/LiteTv/Artwork/{channelId:D}/{kind}";
+        return string.Equals(path.TrimEnd('/'), expected, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path.TrimEnd('/'), dashed, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

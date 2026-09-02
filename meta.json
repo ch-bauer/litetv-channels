@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Die Tagesansicht kann durch alle Tage der ausgewählten Woche navigieren. Block-Editoren lassen sich einklappen. Blöcke passen sich standardmäßig an den Inhalt an; Filmabend-Blöcke verwenden die Länge des jeweiligen Wochenfilms. Block-Trailer werden mit dem eingestellten Abstand auch in dichten Schedules eingefügt.",
+  "changelog": "Film-night blocks now advance through their selected films at every weekly occurrence, including multiple occurrences in one week. The base schedule resumes correctly after a film instead of repeating the preceding episode. Collapsed block rows show the current film's measured runtime, and proof-of-origin diagnostics now distinguish held, expired and missing tokens without sentinel quality values.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-09-02T00:00:00.000Z",
-  "version": "1.0.111.0",
+  "version": "1.0.112.0",
   "status": "Active",
   "autoUpdate": false
 }

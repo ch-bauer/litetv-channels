@@ -97,6 +97,61 @@
 
     let fitting = $state(false);
     let account = $state<string | null>(null);
+    let currentFilmMinutes = $state<Record<number, number>>({});
+    let durationRequest = 0;
+
+    function currentWeeklySource(block: ProgramBlock): typeof block.Sources[number] | null {
+        if (!block.AdvanceOnePerWeek || block.Sources.length === 0) { return null; }
+
+        const anchor = new Date(channel.AnchorUtc || '1970-01-05T00:00:00Z');
+        const today = new Date();
+        const anchorDate = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+        const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const daysFromAnchor = Math.floor((todayDate.getTime() - anchorDate.getTime()) / 86400000);
+        const week = Math.floor(daysFromAnchor / 7);
+        const dayNames = [...DAYS];
+        const activeDays = block.Days.length > 0 ? block.Days : dayNames;
+        const todayName = dayNames[(todayDate.getDay() + 6) % 7];
+        const todayIndex = dayNames.indexOf(todayName);
+        const startsToday = today.getHours() * 60 + today.getMinutes() >= block.StartMinutes;
+        const ordinal = activeDays.filter((day) => {
+            const index = dayNames.indexOf(day);
+            return index < todayIndex || (index === todayIndex && startsToday);
+        }).length;
+        const occurrence = Math.max(0, week) * activeDays.length + Math.max(0, ordinal - 1);
+        return block.Sources[occurrence % block.Sources.length] ?? null;
+    }
+
+    async function refreshCurrentFilmDurations(): Promise<void> {
+        const request = ++durationRequest;
+        const next: Record<number, number> = {};
+        await Promise.all(blocks.map(async (block, index) => {
+            if (!block.FitToContent) { return; }
+            const source = currentWeeklySource(block);
+            if (!source) { return; }
+            try {
+                const measured = await measure([source], block.EpisodesPerBlock);
+                if (measured.minutes > 0) { next[index] = measured.minutes; }
+            } catch { /* The row keeps its honest loading label. */ }
+        }));
+        if (request === durationRequest) { currentFilmMinutes = next; }
+    }
+
+    $effect(() => {
+        void channel.Id;
+        void JSON.stringify(blocks.map((block) => [
+            block.AdvanceOnePerWeek, block.FitToContent, block.StartMinutes,
+            block.Days, block.Sources.map((source) => source.ItemId),
+        ]));
+        void refreshCurrentFilmDurations();
+    });
+
+    function summaryMinutes(block: ProgramBlock, index: number): number | null {
+        if (block.AdvanceOnePerWeek && block.FitToContent) {
+            return currentFilmMinutes[index] ?? null;
+        }
+        return block.DurationMinutes;
+    }
 
     /*
         Item 14: a block's length comes from what it plays, not from a typed number. The server
@@ -129,6 +184,7 @@
 {#if blocks.length > 0}
 <div class="blocks">
     {#each blocks as block, index (index)}
+        {@const minutes = summaryMinutes(block, index)}
         <button
             type="button"
             class="block-row"
@@ -138,9 +194,13 @@
             <span class="swatch" style="background: {fillOf(index)}"></span>
             <span class="block-name" title={block.Name}>{block.Name}</span>
             <span class="when">
-                {clock(block.StartMinutes)}&ndash;{clock((block.StartMinutes + block.DurationMinutes) % (24 * 60))}
+                {clock(block.StartMinutes)}&ndash;{minutes === null
+                    ? (german ? 'Filmlänge' : 'film length')
+                    : clock((block.StartMinutes + minutes) % (24 * 60))}
             </span>
-            <span class="how-long">{spanWords(block.DurationMinutes)}</span>
+            <span class="how-long">{minutes === null
+                ? (german ? 'wird ermittelt…' : 'measuring…')
+                : spanWords(minutes)}</span>
             <span class="on-days">{daysWords(block)}</span>
             {#if !block.Enabled}<span class="off">{german ? 'aus' : 'off'}</span>{/if}
         </button>

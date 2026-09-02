@@ -363,6 +363,7 @@ public class ChannelPlaylistBuilder
         var weeklySequenceBlocks = new HashSet<int>();
         var autoSizedBlocks = new HashSet<int>();
         var windows = new List<BlockWindow>();
+        var blockWindows = new Dictionary<int, BlockWindow>();
 
         for (var i = 0; i < channel.Blocks.Count; i++)
         {
@@ -384,7 +385,9 @@ public class ChannelPlaylistBuilder
                 ? ContentMinutes(lineups[i], slotTicks, block.AdvanceOnePerWeek)
                 : block.DurationMinutes;
             if (block.FitToContent) { autoSizedBlocks.Add(i); }
-            windows.Add(new BlockWindow(i, block.StartMinutes, duration, block.Days));
+            var window = new BlockWindow(i, block.StartMinutes, duration, block.Days);
+            windows.Add(window);
+            blockWindows[i] = window;
         }
 
         return new ChannelSchedule(
@@ -394,7 +397,8 @@ public class ChannelPlaylistBuilder
             weeklySequenceBlocks,
             channel.AnchorUtc,
             TimeZoneInfo.Local,
-            autoSizedBlocks);
+            autoSizedBlocks,
+            blockWindows);
     }
 
     private static int ContentMinutes(

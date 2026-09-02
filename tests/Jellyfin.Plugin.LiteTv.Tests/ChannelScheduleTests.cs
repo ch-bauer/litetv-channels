@@ -53,6 +53,56 @@ public class ChannelScheduleTests
         Assert.Equal("Film 2", schedule.At(Anchor.AddDays(7).AddHours(20))!.Entry!.Name);
     }
 
+    [Fact]
+    public void AutoSizedWeeklyFilmBlockResumesTheBaseQueueAfterTheFilm()
+    {
+        var block = Block(1, 20, 3, DayOfWeek.Monday);
+        var schedule = new ChannelSchedule(
+            WeekTimeline.Build(new[] { block }),
+            new Dictionary<int, Lineup>
+            {
+                [WeekTimeline.BaseLineup] = Queue(30, ("Episode 1", 30), ("Episode 2", 30), ("Episode 3", 30)),
+                [1] = Queue(0, ("Film", 90))
+            },
+            new Dictionary<int, string> { [1] = "Filmabend" },
+            new HashSet<int> { 1 },
+            Anchor,
+            TimeZoneInfo.Utc,
+            new HashSet<int> { 1 },
+            new Dictionary<int, BlockWindow> { [1] = block });
+
+        var after = schedule.Enumerate(Anchor.AddHours(21.5), Anchor.AddHours(24)).ToList();
+        var programmes = after
+            .Where(a => a.Kind == AiringKind.Program)
+            .Select(a => a.Entry!.Name)
+            .ToList();
+
+        Assert.Equal(new[] { "Episode 2", "Episode 3", "Episode 1", "Episode 2", "Episode 3" }, programmes);
+    }
+
+    [Fact]
+    public void WeeklyFilmBlockUsesTheNextFilmAtEachOccurrenceInTheWeek()
+    {
+        var block = new BlockWindow(
+            1, 20 * 60, 60, new[] { DayOfWeek.Monday, DayOfWeek.Wednesday });
+        var schedule = new ChannelSchedule(
+            WeekTimeline.Build(new[] { block }),
+            new Dictionary<int, Lineup>
+            {
+                [WeekTimeline.BaseLineup] = Queue(0, ("Base", 30)),
+                [1] = Queue(0, ("Film 1", 60), ("Film 2", 60))
+            },
+            new Dictionary<int, string> { [1] = "Filmabend" },
+            new HashSet<int> { 1 },
+            Anchor,
+            TimeZoneInfo.Utc,
+            new HashSet<int>(),
+            new Dictionary<int, BlockWindow> { [1] = block });
+
+        Assert.Equal("Film 1", schedule.At(Anchor.AddHours(20))!.Entry!.Name);
+        Assert.Equal("Film 2", schedule.At(Anchor.AddDays(2).AddHours(20))!.Entry!.Name);
+    }
+
     // ------------------------------------------------------------------ the plain loop
 
     [Fact]

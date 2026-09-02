@@ -44,8 +44,8 @@
     */
     const SLOTS: { slot: Slot; name: string; ratio: string; aspect: string; wide: boolean }[] = [
         { slot: 'Banner', name: 'Banner', ratio: 'about 5:1', aspect: '1000 / 185', wide: true },
-        { slot: 'Backdrop', name: 'Backdrop', ratio: '16:9', aspect: '16 / 9', wide: false },
         { slot: 'Poster', name: 'Poster', ratio: '2:3', aspect: '2 / 3', wide: false },
+        { slot: 'Backdrop', name: 'Backdrop', ratio: '16:9', aspect: '16 / 9', wide: false },
     ];
 
     /*
@@ -127,12 +127,24 @@
         // otherwise the upload can finish before auto-save notices it and cleanup removes the
         // freshly uploaded file as unreferenced.
         channel.Artwork = { ...(channel.Artwork ?? {}), [key]: value };
+        if (value) {
+            const resolved = absolute(value);
+            if (dead[resolved]) {
+                dead = { ...dead, [resolved]: false };
+            }
+        }
     }
 
     function current(slot: Slot): string | null {
         const key = slot + 'Url';
         const value = artwork[key];
-        return typeof value === 'string' && value.length > 0 ? absolute(value) : null;
+        if (typeof value !== 'string' || value.length === 0) { return null; }
+        const resolved = absolute(value);
+        return dead[resolved] ? null : resolved;
+    }
+
+    function artworkFailed(url: string): void {
+        dead = { ...dead, [url]: true };
     }
 
     function sourceOf(slot: Slot): string {
@@ -870,7 +882,8 @@
                             style="aspect-ratio: {entry.aspect}"
                         >
                             {#if current(entry.slot)}
-                                <img src={current(entry.slot)} alt="" />
+                                {@const image = current(entry.slot)}
+                                <img src={image} alt="" onerror={() => artworkFailed(image)} />
                             {:else}
                                 <span class="frame-empty">nothing set</span>
                             {/if}
@@ -1178,7 +1191,10 @@
                         <div class="tv-screen-left">
                             <div class="tv-head">
                                 <div class="tv-cover">
-                                    {#if current('Poster')}<img src={current('Poster')} alt="" />{/if}
+                                    {#if current('Poster')}
+                                        {@const image = current('Poster')}
+                                        <img src={image} alt="" onerror={() => artworkFailed(image)} />
+                                    {/if}
                                 </div>
                                 <div class="tv-name">{channel.Name}</div>
                             </div>
@@ -1202,7 +1218,10 @@
             <div class="tv-label">The cover on its own, uncropped</div>
             <div class="tv poster-strip">
                 <div class="tv-poster">
-                    {#if current('Poster')}<img src={current('Poster')} alt="" />{/if}
+                    {#if current('Poster')}
+                        {@const image = current('Poster')}
+                        <img src={image} alt="" onerror={() => artworkFailed(image)} />
+                    {/if}
                 </div>
                 <p class="hint tight">
                     {current('Poster')

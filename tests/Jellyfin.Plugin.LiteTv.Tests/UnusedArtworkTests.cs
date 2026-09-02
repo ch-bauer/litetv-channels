@@ -66,6 +66,31 @@ public class UnusedArtworkTests
     }
 
     [Fact]
+    public void ACompactGuidOnTheAddressKeepsThePicture()
+    {
+        var unused = LiteTvController.UnusedArtwork(
+            With(a => a.BannerUrl = $"/LiteTv/Artwork/{Channel:N}/banner?t=1788378491975"));
+
+        Assert.DoesNotContain("banner", unused);
+    }
+
+    [Fact]
+    public void AnAbsoluteCompactGuidOnTheAddressKeepsThePicture()
+    {
+        var unused = LiteTvController.UnusedArtwork(
+            With(a => a.PosterUrl = $"http://192.168.178.62:8096/LiteTv/Artwork/{Channel:N}/poster?x=1"));
+
+        Assert.DoesNotContain("poster", unused);
+    }
+
+    [Fact]
+    public void ASimilarButDifferentArtworkRouteDoesNotKeepThePicture()
+    {
+        Assert.False(LiteTvController.IsOurArtworkUrl(
+            $"/LiteTv/Artwork/{Channel:N}/banner-extra", Channel, "banner"));
+    }
+
+    [Fact]
     public void APictureReplacedByAnAddressSomewhereElseIsAnOrphan()
     {
         var unused = LiteTvController.UnusedArtwork(
