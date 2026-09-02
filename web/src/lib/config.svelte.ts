@@ -30,8 +30,10 @@ class ConfigStore {
     loading = $state(false);
     error = $state<string | null>(null);
     savedAt = $state<Date | null>(null);
-    /** Number of newly-created channels whose first schedule is still being generated. */
-    scheduleGenerating = $state(0);
+    /** Newly-created channels whose first schedule is still being generated. */
+    scheduleGenerating = $state<string[]>([]);
+    /** Generation failures are kept per channel so the empty schedule can offer retry. */
+    scheduleGenerationErrors = $state<Record<string, string>>({});
 
     /** The configuration as the server last stated it. */
     private settled = $state<string>('');
@@ -197,7 +199,7 @@ class ConfigStore {
                 .filter((id) => sent.Channels.some((c) => c.Id === id && c.Sources.length > 0));
             for (const id of layoutIds) { this.wantsLayout.delete(id); }
             if (layoutIds.length > 0) {
-                this.scheduleGenerating += layoutIds.length;
+                for (const id of layoutIds) { this.beginScheduleGeneration(id); }
                 void this.generateSchedules(layoutIds);
             }
         } catch (err) {
@@ -264,11 +266,33 @@ class ConfigStore {
             type: 'POST',
         })));
         for (const [index, result] of results.entries()) {
+            const id = ids[index];
             if (result.status === 'rejected') {
-                console.warn('[litetv] could not lay out the new channel', ids[index], result.reason);
+                const message = failureWords(result.reason);
+                console.warn('[litetv] could not lay out the new channel', id, result.reason);
+                this.scheduleGenerationErrors[id] = 'Schedule generation failed. ' + message;
             }
+            this.scheduleGenerating = this.scheduleGenerating.filter((active) => active !== id);
         }
-        this.scheduleGenerating = Math.max(0, this.scheduleGenerating - ids.length);
+    }
+
+    isScheduleGenerating(id: string): boolean { return this.scheduleGenerating.includes(id); }
+
+    scheduleGenerationError(id: string): string | null {
+        return this.scheduleGenerationErrors[id] ?? null;
+    }
+
+    retrySchedule(id: string): void {
+        if (!this.serverHas(id) || this.isScheduleGenerating(id)) { return; }
+        this.beginScheduleGeneration(id);
+        void this.generateSchedules([id]);
+    }
+
+    private beginScheduleGeneration(id: string): void {
+        if (!this.scheduleGenerating.includes(id)) {
+            this.scheduleGenerating = [...this.scheduleGenerating, id];
+        }
+        delete this.scheduleGenerationErrors[id];
     }
 
     /** Adds a channel and selects it. Auto-save persists it shortly afterwards. */

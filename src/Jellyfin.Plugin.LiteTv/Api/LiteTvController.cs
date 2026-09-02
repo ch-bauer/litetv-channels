@@ -1432,12 +1432,22 @@ public class LiteTvController : ControllerBase
         return new PoTokenStatusDto
         {
             Held = held is not null,
+            TokenState = TokenState(held, ProofOfOrigin.Stored),
             MintedUtc = held?.MintedUtc,
-            AgeSeconds = held is null ? null : (int)(DateTime.UtcNow - held.MintedUtc).TotalSeconds,
+            AgeSeconds = ProofOfOrigin.Stored is { } stored ? SafeAgeSeconds(stored.MintedUtc) : null,
             HasPlayerToken = held?.PlayerToken is not null,
             LastResolved = LastResolvedWords(last),
             LastResolvedLow = last?.Low ?? false
         };
+    }
+
+    private static string TokenState(ProofOfOrigin.Minted? held, ProofOfOrigin.Minted? stored)
+        => held is not null ? "held" : stored is not null ? "expired" : "missing";
+
+    private static int SafeAgeSeconds(DateTime mintedUtc)
+    {
+        var age = (DateTime.UtcNow - DateTime.SpecifyKind(mintedUtc, DateTimeKind.Utc)).TotalSeconds;
+        return (int)Math.Clamp(age, 0, int.MaxValue);
     }
 
     /// <summary>
@@ -1455,12 +1465,12 @@ public class LiteTvController : ControllerBase
     /// <returns>A sentence, or null when nothing has been resolved.</returns>
     internal static string? LastResolvedWords(YouTubeStreamResolver.Resolution? last)
     {
-        if (last is null)
+        if (last is null || string.IsNullOrWhiteSpace(last.VideoId) || last.WhenUtc == default)
         {
             return null;
         }
 
-        var quality = last.Quality > 0
+        var quality = last.Quality > 0 && last.Quality < 10000
             ? last.Quality.ToString(CultureInfo.InvariantCulture) + "p"
             : "unknown quality";
 
@@ -2581,6 +2591,9 @@ public class PoTokenStatusDto
 {
     /// <summary>Gets or sets a value indicating whether a usable token is held.</summary>
     public bool Held { get; set; }
+
+    /// <summary>Gets or sets the independent persisted-token state: held, expired, or missing.</summary>
+    public string TokenState { get; set; } = "missing";
 
     /// <summary>Gets or sets when it was minted.</summary>
     public DateTime? MintedUtc { get; set; }

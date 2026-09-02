@@ -13,6 +13,7 @@
 
     interface PoToken {
         Held: boolean;
+        TokenState: 'held' | 'expired' | 'missing';
         MintedUtc: string | null;
         AgeSeconds: number | null;
         HasPlayerToken: boolean;
@@ -232,7 +233,8 @@
 
     const poLine = $derived.by(() => {
         if (!po) { return 'not known'; }
-        if (!po.Held) { return 'none held — trailers are capped at 360p'; }
+        if (!po.Held || po.TokenState === 'missing') { return 'none held — trailers are capped at 360p'; }
+        if (po.TokenState === 'expired') { return 'expired — trailers are capped at 360p'; }
         const age = po.AgeSeconds === null ? '' : ' · minted ' + Math.round(po.AgeSeconds / 60) + ' min ago';
         return 'held' + age + (po.HasPlayerToken ? ' · with a player token' : '');
     });

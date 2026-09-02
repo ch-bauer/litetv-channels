@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Channels now save immediately while schedule generation continues in the background. Collection sources selected through title search are treated as real content, and the library source picker has a search field for large libraries. The duplicate configuration-language control is removed.",
+  "changelog": "Schedule generation now shows visible progress in the empty schedule and offers a retry when generation fails. Proof-of-origin diagnostics distinguish held, expired and missing tokens, and impossible resolution values are shown as unknown.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-09-02T00:00:00.000Z",
-  "version": "1.0.107.0",
+  "version": "1.0.108.0",
   "status": "Active",
   "autoUpdate": false
 }

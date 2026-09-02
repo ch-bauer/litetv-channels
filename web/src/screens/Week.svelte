@@ -27,7 +27,7 @@
         // A new channel is saved before its first week is generated. Re-run this effect when
         // that background generation finishes, so a temporary 404 cannot remain on screen.
         const serverHasChannel = store.serverHas(channel.Id);
-        const generationDone = store.scheduleGenerating === 0;
+        const generationDone = !store.isScheduleGenerating(channel.Id);
         void week.load(channel.Id, serverHasChannel, serverHasChannel && generationDone);
     });
 
@@ -440,7 +440,16 @@
     -->
     <div class="grid-wrap">
         <Grid {onDropItem} />
-        {#if week.loading}
+        {#if store.isScheduleGenerating(channel.Id)}
+            <p class="waiting over">{german ? 'Schedule wird erstellt …' : 'Schedule is being created …'}</p>
+        {:else if store.scheduleGenerationError(channel.Id)}
+            <p class="bad over">
+                {german ? 'Schedule konnte nicht erstellt werden.' : store.scheduleGenerationError(channel.Id)}
+                <button type="button" class="retry" onclick={() => store.retrySchedule(channel.Id)}>
+                    {german ? 'Erneut versuchen' : 'Retry'}
+                </button>
+            </p>
+        {:else if week.loading}
             <p class="waiting over">{german ? 'Woche wird geladen…' : 'Loading the week…'}</p>
         {/if}
     </div>
@@ -729,4 +738,15 @@
         pointer-events: none;
     }
     .bad { color: #e08585; }
+
+    .retry {
+        margin-left: 9px;
+        padding: 4px 9px;
+        border: 1px solid currentColor;
+        border-radius: var(--lt-radius-small);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+    }
 </style>

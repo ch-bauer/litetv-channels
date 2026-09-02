@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.LiteTv.Trailers;
+using Jellyfin.Plugin.LiteTv.Api;
 using Xunit;
 
 namespace Jellyfin.Plugin.LiteTv.Tests;
@@ -127,4 +128,29 @@ public class ProofOfOriginTests : IDisposable
         Assert.NotEqual(afterFirst, afterSecond);
         Assert.NotEqual(afterSecond, ProofOfOrigin.Generation);
     }
+
+    [Fact]
+    public void RejectsExpiredAndFutureTokenTimestamps()
+    {
+        var now = DateTime.UtcNow;
+        var expired = new ProofOfOrigin.Minted("visitor", "token", null, now.AddHours(-6));
+        var future = new ProofOfOrigin.Minted("visitor", "token", null, now.AddMinutes(1));
+
+        Assert.False(ProofOfOrigin.IsUsable(expired, now));
+        Assert.False(ProofOfOrigin.IsUsable(future, now));
+        Assert.True(ProofOfOrigin.IsUsable(expired with { MintedUtc = now.AddMinutes(-5) }, now));
+    }
+
+    [Fact]
+    public void DoesNotPresentManifestSentinelAsPixelQuality()
+    {
+        var words = LiteTvController.LastResolvedWords(
+            new YouTubeStreamResolver.Resolution("video", int.MaxValue, "VISIONOS", true, DateTime.UtcNow));
+
+        Assert.Equal("unknown quality · VISIONOS · with a token", words);
+    }
+
+    [Fact]
+    public void HasNoWordsForMissingResolution()
+        => Assert.Null(LiteTvController.LastResolvedWords(null));
 }

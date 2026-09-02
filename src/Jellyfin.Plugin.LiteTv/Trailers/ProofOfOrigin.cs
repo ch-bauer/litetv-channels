@@ -76,8 +76,22 @@ public static class ProofOfOrigin
         get
         {
             Load();
-            return _held is { } held && DateTime.UtcNow - held.MintedUtc < GoodFor ? held : null;
+            return _held is { } held && IsUsable(held, DateTime.UtcNow) ? held : null;
         }
+    }
+
+    /// <summary>Gets the persisted token record, including an expired one, for diagnostics.</summary>
+    public static Minted? Stored
+    {
+        get { Load(); return _held; }
+    }
+
+    internal static bool IsUsable(Minted minted, DateTime nowUtc)
+    {
+        var mintedUtc = minted.MintedUtc.Kind == DateTimeKind.Utc
+            ? minted.MintedUtc
+            : DateTime.SpecifyKind(minted.MintedUtc, DateTimeKind.Utc);
+        return mintedUtc <= nowUtc && nowUtc - mintedUtc < GoodFor;
     }
 
     /// <summary>
