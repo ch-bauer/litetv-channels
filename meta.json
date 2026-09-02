@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Film-night blocks now advance through their selected films at every weekly occurrence, including multiple occurrences in one week. The base schedule resumes correctly after a film instead of repeating the preceding episode. Collapsed block rows show the current film's measured runtime, and proof-of-origin diagnostics now distinguish held, expired and missing tokens without sentinel quality values.",
+  "changelog": "Artwork previews now keep the established Banner, Backdrop, Poster order, while the picture-selection overlay keeps its Banner, Poster, Backdrop action order. Also includes the recurring film-night scheduling fix, measured collapsed film runtimes, and clearer proof-of-origin diagnostics.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-09-02T00:00:00.000Z",
-  "version": "1.0.112.0",
+  "version": "1.0.113.0",
   "status": "Active",
   "autoUpdate": false
 }

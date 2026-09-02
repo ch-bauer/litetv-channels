@@ -44,8 +44,14 @@
     */
     const SLOTS: { slot: Slot; name: string; ratio: string; aspect: string; wide: boolean }[] = [
         { slot: 'Banner', name: 'Banner', ratio: 'about 5:1', aspect: '1000 / 185', wide: true },
-        { slot: 'Poster', name: 'Poster', ratio: '2:3', aspect: '2 / 3', wide: false },
         { slot: 'Backdrop', name: 'Backdrop', ratio: '16:9', aspect: '16 / 9', wide: false },
+        { slot: 'Poster', name: 'Poster', ratio: '2:3', aspect: '2 / 3', wide: false },
+    ];
+
+    const OVERLAY_SLOTS: { slot: Slot; name: string }[] = [
+        { slot: 'Banner', name: 'Banner' },
+        { slot: 'Poster', name: 'Poster' },
+        { slot: 'Backdrop', name: 'Backdrop' },
     ];
 
     /*
@@ -1128,7 +1134,7 @@
                 -->
                 <div class="use-as">
                     <span>Use this picture as</span>
-                    {#each SLOTS as entry (entry.slot)}
+                    {#each OVERLAY_SLOTS as entry (entry.slot)}
                         <button type="button" onclick={() => useTile(offering!, entry.slot)}>
                             {entry.name}
                         </button>
