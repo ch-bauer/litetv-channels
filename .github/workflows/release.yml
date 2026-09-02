@@ -56,10 +56,14 @@ jobs:
       - name: Package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          mkdir package
+          rm -rf package
+          mkdir -p package
+          test -f publish/Jellyfin.Plugin.LiteTv.dll
+          test -f meta.json
           cp publish/Jellyfin.Plugin.LiteTv.dll package/
           cp meta.json package/
-          (cd package && zip "../litetv-channels_${VERSION}.zip" ./*)
+          zip -q -j "litetv-channels_${VERSION}.zip" package/Jellyfin.Plugin.LiteTv.dll package/meta.json
+          test -s "litetv-channels_${VERSION}.zip"
           echo "MD5 checksum for manifest.json:"
           md5sum "litetv-channels_${VERSION}.zip"
 
