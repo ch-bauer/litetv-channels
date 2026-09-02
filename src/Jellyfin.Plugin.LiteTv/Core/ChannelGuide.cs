@@ -274,6 +274,7 @@ public sealed class ChannelGuide
         // Materialised because filling a gap needs to see past it. The window is bounded by
         // the caller, so this is a few dozen entries, not a stream.
         var window = airings.ToList();
+        InsertDenseBlockTrailers(channel, window);
 
         for (var i = 0; i < window.Count; i++)
         {
@@ -583,6 +584,91 @@ public sealed class ChannelGuide
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Inserts a block trailer into a completely full schedule. A trailer in a normal gap is
+    /// handled by <see cref="WithTrailers"/> below; a back-to-back film channel has no gap, so
+    /// the only honest way to honour the configured distance is to move the following airings.
+    /// </summary>
+    private void InsertDenseBlockTrailers(TvChannel channel, List<Airing> window)
+    {
+        for (var targetIndex = 0; targetIndex < window.Count; targetIndex++)
+        {
+            var target = window[targetIndex];
+            if (target.Kind != AiringKind.Program
+                || target.Entry is null
+                || target.OffsetTicks > 0
+                || target.BlockName is null)
+            {
+                continue;
+            }
+
+            var block = channel.Blocks.FirstOrDefault(b => b.Enabled
+                && b.TrailerEnabled
+                && string.Equals(b.Name, target.BlockName, StringComparison.Ordinal));
+            if (block is null)
+            {
+                continue;
+            }
+
+            var trailer = _builder.TrailersFor(target.Entry.ItemId).FirstOrDefault();
+            if (trailer is null)
+            {
+                continue;
+            }
+
+            var wanted = Math.Max(1, block.TrailerProgramsBefore);
+            var previousPrograms = new List<int>();
+            for (var i = targetIndex - 1; i >= 0 && previousPrograms.Count < wanted; i--)
+            {
+                if (window[i].Kind == AiringKind.Interstitial || window[i].Kind == AiringKind.Trailer)
+                {
+                    continue;
+                }
+
+                if (window[i].Kind == AiringKind.Program && window[i].Entry is not null && window[i].OffsetTicks == 0)
+                {
+                    previousPrograms.Add(i);
+                }
+            }
+
+            if (previousPrograms.Count < wanted)
+            {
+                continue;
+            }
+
+            var afterIndex = previousPrograms[^1];
+            if (afterIndex + 1 >= targetIndex || window.Skip(afterIndex + 1).Take(targetIndex - afterIndex - 1).Any(a => a.Kind != AiringKind.Program))
+            {
+                // There is already a break to use, or there is no room to place this trailer
+                // without making it a direct lead-in. The normal gap pass will handle it.
+                continue;
+            }
+
+            var insertionIndex = afterIndex + 1;
+            var start = window[afterIndex].EndUtc;
+            var end = start + TimeSpan.FromTicks(trailer.RuntimeTicks);
+            var shift = end - start;
+            for (var i = insertionIndex; i < window.Count; i++)
+            {
+                window[i] = window[i] with
+                {
+                    StartUtc = window[i].StartUtc + shift,
+                    EndUtc = window[i].EndUtc + shift
+                };
+            }
+
+            window.Insert(insertionIndex, new Airing(
+                AiringKind.Trailer,
+                trailer,
+                start,
+                end,
+                0,
+                target.BlockName,
+                target.Entry));
+            targetIndex++;
+        }
     }
 
     /// <summary>

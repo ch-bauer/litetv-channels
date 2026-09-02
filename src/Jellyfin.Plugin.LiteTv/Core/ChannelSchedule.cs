@@ -169,6 +169,7 @@ public sealed class ChannelSchedule
     private readonly IReadOnlyDictionary<int, Lineup> _lineups;
     private readonly IReadOnlyDictionary<int, string> _blockNames;
     private readonly IReadOnlySet<int> _weeklySequenceBlocks;
+    private readonly IReadOnlySet<int> _autoSizedBlocks;
     private readonly TimeZoneInfo _timeZone;
     private readonly DateTime _anchorUtc;
 
@@ -186,12 +187,14 @@ public sealed class ChannelSchedule
         IReadOnlyDictionary<int, string> blockNames,
         IReadOnlySet<int> weeklySequenceBlocks,
         DateTime anchorUtc,
-        TimeZoneInfo timeZone)
+        TimeZoneInfo timeZone,
+        IReadOnlySet<int>? autoSizedBlocks = null)
     {
         _timeline = timeline;
         _lineups = lineups;
         _blockNames = blockNames;
         _weeklySequenceBlocks = weeklySequenceBlocks;
+        _autoSizedBlocks = autoSizedBlocks ?? new HashSet<int>();
         _anchorUtc = anchorUtc;
         _timeZone = timeZone;
     }
@@ -231,6 +234,17 @@ public sealed class ChannelSchedule
             var owner = _timeline.OwnerAt(absoluteMinute);
             var spanStart = MinuteToLocal(_timeline.SpanStartAt(absoluteMinute), DateTime.MinValue);
             var spanEnd = MinuteToLocal(_timeline.NextChangeAfter(absoluteMinute), DateTime.MaxValue);
+
+            // An auto-sized weekly film block releases the channel back to its base lineup as
+            // soon as this week's selected film ends, rather than keeping the rest of its
+            // fallback window as a large empty block.
+            if (_weeklySequenceBlocks.Contains(owner)
+                && _autoSizedBlocks.Contains(owner)
+                && cursor >= spanStart + TimeSpan.FromTicks(lineupLength(owner, cursor, anchorLocal)))
+            {
+                owner = WeekTimeline.BaseLineup;
+                spanStart = cursor;
+            }
 
             if (!_lineups.TryGetValue(owner, out var lineup) || lineup.IsEmpty)
             {
@@ -287,6 +301,13 @@ public sealed class ChannelSchedule
 
             cursor = phaseEnd > cursor ? phaseEnd : cursor.AddMinutes(1);
         }
+    }
+
+    private long lineupLength(int owner, DateTime cursor, DateTime anchorLocal)
+    {
+        var lineup = _lineups[owner];
+        var selected = lineup.AtWeeklyOccurrence(WeeksSinceAnchor(cursor, anchorLocal));
+        return selected.SlotLength;
     }
 
     /// <summary>

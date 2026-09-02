@@ -127,6 +127,7 @@ public class ChannelPlaylistBuilder
                 .Append(block.EpisodesPerBlock).Append(',')
                 .Append((int)block.Order).Append(',')
                 .Append(block.AdvanceOnePerWeek).Append(',')
+                .Append(block.FitToContent).Append(',')
                 .Append(block.TrailerEnabled).Append(',')
                 .Append(block.TrailerProgramsBefore).Append(':');
             AppendSources(text, block.Sources);
@@ -360,6 +361,7 @@ public class ChannelPlaylistBuilder
         };
         var names = new Dictionary<int, string>();
         var weeklySequenceBlocks = new HashSet<int>();
+        var autoSizedBlocks = new HashSet<int>();
         var windows = new List<BlockWindow>();
 
         for (var i = 0; i < channel.Blocks.Count; i++)
@@ -370,7 +372,6 @@ public class ChannelPlaylistBuilder
                 continue;
             }
 
-            windows.Add(new BlockWindow(i, block.StartMinutes, block.DurationMinutes, block.Days));
             names[i] = block.Name;
             if (block.AdvanceOnePerWeek)
             {
@@ -379,6 +380,11 @@ public class ChannelPlaylistBuilder
             lineups[i] = new Lineup(
                 Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i),
                 slotTicks);
+            var duration = block.FitToContent
+                ? ContentMinutes(lineups[i], slotTicks, block.AdvanceOnePerWeek)
+                : block.DurationMinutes;
+            if (block.FitToContent) { autoSizedBlocks.Add(i); }
+            windows.Add(new BlockWindow(i, block.StartMinutes, duration, block.Days));
         }
 
         return new ChannelSchedule(
@@ -387,7 +393,22 @@ public class ChannelPlaylistBuilder
             names,
             weeklySequenceBlocks,
             channel.AnchorUtc,
-            TimeZoneInfo.Local);
+            TimeZoneInfo.Local,
+            autoSizedBlocks);
+    }
+
+    private static int ContentMinutes(
+        Lineup lineup,
+        long slotTicks,
+        bool weeklySequence)
+    {
+        if (lineup.Entries.Count == 0) { return 0; }
+        var ticks = weeklySequence
+            ? lineup.Entries.Max(e => slotTicks > 0
+                ? ((e.RuntimeTicks + slotTicks - 1) / slotTicks) * slotTicks
+                : e.RuntimeTicks)
+            : lineup.TotalTicks;
+        return Math.Max(1, (int)Math.Ceiling((double)ticks / TimeSpan.TicksPerMinute));
     }
 
     private IReadOnlyList<ScheduledEntry> Build(TvChannel channel)

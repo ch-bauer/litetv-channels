@@ -21,9 +21,10 @@
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const HEADS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     let picked = $state(0);
+    let collapsed = $state(false);
 
     const blocks = $derived(channel.Blocks ?? []);
-    const current = $derived<ProgramBlock | null>(blocks[picked] ?? null);
+    const current = $derived<ProgramBlock | null>(collapsed ? null : (blocks[picked] ?? null));
 
     /** How long a block runs, in the coarsest unit that is still true. */
     function spanWords(minutes: number): string {
@@ -74,10 +75,12 @@
             EpisodesPerBlock: 0,
             Order: 'Sequential',
             AdvanceOnePerWeek: false,
+            FitToContent: true,
             TrailerEnabled: false,
             TrailerProgramsBefore: 3,
         });
         picked = channel.Blocks.length - 1;
+        collapsed = false;
     }
 
     function removeBlock(): void {
@@ -130,7 +133,7 @@
             type="button"
             class="block-row"
             class:picked={index === picked}
-            onclick={() => (picked = index)}
+            onclick={() => { picked = index; collapsed = false; }}
         >
             <span class="swatch" style="background: {fillOf(index)}"></span>
             <span class="block-name" title={block.Name}>{block.Name}</span>
@@ -159,15 +162,32 @@
             </label>
             <label>
                 {german ? 'Dauer' : 'For'}
-                <input type="number" min="15" step="15" bind:value={current.DurationMinutes} />
+                <input type="number" min="15" step="15" bind:value={current.DurationMinutes} disabled={current.FitToContent !== false} />
                 {german ? 'Min.' : 'min'}
             </label>
             <button type="button" class="ghost" onclick={fitToContent} disabled={fitting}>
                 {fitting ? (german ? 'Wird gemessen…' : 'Measuring…') : (german ? 'An Inhalt anpassen' : 'Fit to content')}
             </button>
             <button type="button" class="ghost" onclick={addBlock}>{german ? 'Neuer Block' : 'New block'}</button>
+            <button type="button" class="ghost" onclick={() => (collapsed = true)}>{german ? 'Einklappen' : 'Collapse'}</button>
             <button type="button" class="ghost danger" onclick={removeBlock}>{german ? 'Löschen' : 'Delete'}</button>
         </div>
+
+        <label class="weekly-film">
+            <input
+                type="checkbox"
+                checked={current.FitToContent !== false}
+                onchange={(event) => (current.FitToContent = event.currentTarget.checked)}
+            />
+            <span>
+                <strong>{german ? 'Block an Inhalt anpassen' : 'Fit block to content'}</strong>
+                <small>
+                    {german
+                        ? 'Standardmäßig aktiv. Beim Filmabend wird die Länge des Films der jeweiligen Woche verwendet.'
+                        : 'On by default. For film night, the length of that week\'s film is used.'}
+                </small>
+            </span>
+        </label>
 
         {#if account}<p class="account">{account}</p>{/if}
 
@@ -221,7 +241,11 @@
             <!-- The only empty state. The list above used to carry one as well, so with no
                  blocks the same sentence was printed twice, once with a button and once
                  without. -->
-            <span class="empty">{german ? 'Keine Blöcke — die ganze Woche spielt die Liste oben.' : 'No blocks — the whole week plays the list above.'}</span>
+            <span class="empty">
+                {blocks.length > 0
+                    ? (german ? 'Block eingeklappt.' : 'Block collapsed.')
+                    : (german ? 'Keine Blöcke — die ganze Woche spielt die Liste oben.' : 'No blocks — the whole week plays the list above.')}
+            </span>
             <button type="button" class="ghost" onclick={addBlock}>{german ? 'Neuer Block' : 'New block'}</button>
         </div>
     {/if}

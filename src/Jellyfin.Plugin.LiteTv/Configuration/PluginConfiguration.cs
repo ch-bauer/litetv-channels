@@ -521,6 +521,9 @@ public class ProgramBlock
     /// </summary>
     public bool AdvanceOnePerWeek { get; set; }
 
+    /// <summary>Gets or sets whether the block length is calculated from its content.</summary>
+    public bool FitToContent { get; set; } = true;
+
     /// <summary>Gets or sets whether this block advertises its selected programme.</summary>
     public bool TrailerEnabled { get; set; }
 

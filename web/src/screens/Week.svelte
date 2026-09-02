@@ -628,6 +628,12 @@
     .day-picker button:hover:not(:disabled) { color: var(--lt-text-strong); }
     .day-picker button:disabled { opacity: .3; cursor: default; }
 
+    /* Keep the arrows stationary while the weekday label changes width. */
+    .day-picker .which {
+        width: 150px;
+        text-align: center;
+    }
+
     .which {
         font-size: 12.5px;
         font-weight: 600;
