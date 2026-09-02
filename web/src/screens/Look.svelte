@@ -147,6 +147,10 @@
         dead = { ...dead, [url]: true };
     }
 
+    function imageFor(slot: Slot): string {
+        return current(slot) ?? '';
+    }
+
     function sourceOf(slot: Slot): string {
         if (current(slot)) { return 'set for this channel'; }
         const borrowed = artwork['ImageItemName'];
@@ -882,7 +886,7 @@
                             style="aspect-ratio: {entry.aspect}"
                         >
                             {#if current(entry.slot)}
-                                {@const image = current(entry.slot)}
+                                {@const image = imageFor(entry.slot)}
                                 <img src={image} alt="" onerror={() => artworkFailed(image)} />
                             {:else}
                                 <span class="frame-empty">nothing set</span>
@@ -1192,7 +1196,7 @@
                             <div class="tv-head">
                                 <div class="tv-cover">
                                     {#if current('Poster')}
-                                        {@const image = current('Poster')}
+                                        {@const image = imageFor('Poster')}
                                         <img src={image} alt="" onerror={() => artworkFailed(image)} />
                                     {/if}
                                 </div>
@@ -1219,7 +1223,7 @@
             <div class="tv poster-strip">
                 <div class="tv-poster">
                     {#if current('Poster')}
-                        {@const image = current('Poster')}
+                        {@const image = imageFor('Poster')}
                         <img src={image} alt="" onerror={() => artworkFailed(image)} />
                     {/if}
                 </div>
