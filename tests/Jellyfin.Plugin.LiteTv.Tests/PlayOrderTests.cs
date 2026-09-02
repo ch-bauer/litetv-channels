@@ -13,15 +13,17 @@ public class PlayOrderTests
     };
 
     [Fact]
-    public void ShuffleBySourceKeepsEachInterleaveGroupTogether()
+    public void ShuffleBySourceShufflesEachSourceAndKeepsInterleaveGroups()
     {
-        var entries = new[] { Entry("A1", "A"), Entry("A2", "A"), Entry("B1", "B"), Entry("B2", "B") };
+        var entries = new[] { Entry("A1", "A"), Entry("B1", "B"), Entry("A2", "A"), Entry("B2", "B") };
 
         var result = ChannelPlaylistBuilder.Order(entries, PlayOrder.ShuffleBySource, Guid.Parse("11111111-1111-1111-1111-111111111111"), 0, 2, 20);
 
         Assert.Equal(4, result.Count);
         var names = result.Select(entry => entry.Name).ToArray();
-        Assert.True(names is ["A1", "A2", "B1", "B2"] or ["B1", "B2", "A1", "A2"]);
+        Assert.Equal(["A", "A", "B", "B"], result.Select(entry => entry.SourceKey!).ToArray());
+        Assert.Equal(["A1", "A2"], result.Where(entry => entry.SourceKey == "A").Select(entry => entry.Name).Order().ToArray());
+        Assert.Equal(["B1", "B2"], result.Where(entry => entry.SourceKey == "B").Select(entry => entry.Name).Order().ToArray());
     }
 
     [Fact]

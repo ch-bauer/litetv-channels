@@ -653,24 +653,24 @@ public class ChannelPlaylistBuilder
         var state = Seed(channelId, owner);
         if (order == PlayOrder.ShuffleBySource)
         {
-            var groups = new List<List<ScheduledEntry>>();
-            foreach (var entry in entries)
+            // Shuffle each source's own stream, then distribute those streams in the same
+            // configured groups as the ordinary interleave. This gives e.g. two random
+            // SpongeBob episodes, two random episodes from the next source, and so on.
+            var streams = entries
+                .GroupBy(entry => entry.SourceKey)
+                .Select(group => group.ToList())
+                .ToList();
+            foreach (var stream in streams)
             {
-                if (groups.Count == 0 || groups[^1][0].SourceKey != entry.SourceKey)
+                for (var i = stream.Count - 1; i > 0; i--)
                 {
-                    groups.Add(new List<ScheduledEntry>());
+                    state = NextState(state);
+                    var j = (int)(state % (ulong)(i + 1));
+                    (stream[i], stream[j]) = (stream[j], stream[i]);
                 }
-                groups[^1].Add(entry);
             }
 
-            for (var i = groups.Count - 1; i > 0; i--)
-            {
-                state = NextState(state);
-                var j = (int)(state % (ulong)(i + 1));
-                (groups[i], groups[j]) = (groups[j], groups[i]);
-            }
-
-            return groups.SelectMany(group => group).ToList();
+            return Interleave(streams, episodesPerBlock);
         }
 
         var shuffled = entries.ToList();

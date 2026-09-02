@@ -110,18 +110,18 @@ With two, it plays two before moving on - which is what makes a channel that air
     const orderNote = $derived.by(() => {
         if (channel.Order === 'ShuffleBySource') {
             return german
-                ? 'Zufällige Quellenblöcke; „Wie weit abspielen“ bleibt erhalten.'
-                : 'Random source blocks; “How far through” remains in effect.';
+                ? 'Jede Quelle wird separat gemischt und danach in den eingestellten Gruppen verteilt.'
+                : 'Each source is shuffled independently, then distributed in the configured groups.';
         }
         if (channel.Order === 'WeightedShuffle') {
             return german
-                ? 'Vollständig zufällig, mit einer einstellbaren Chance für dieselbe Quelle wie zuvor.'
-                : 'Fully random, with an adjustable chance to stay with the previous source.';
+                ? 'Zufällige Auswahl mit einer einstellbaren Chance für dieselbe Quelle wie zuvor; „Wie weit abspielen“ wird ignoriert.'
+                : 'Random selection with an adjustable chance to stay with the previous source; “How far through” is ignored.';
         }
         if (channel.Order === 'Shuffle') {
             return german
-                ? 'Alte vollständige Zufallsreihenfolge; für die Quellenregel bitte „Quellenblöcke zufällig“ wählen.'
-                : 'Legacy full shuffle; choose “Random source blocks” to keep the source rule.';
+                ? 'Alte vollständige Zufallsreihenfolge; für die Quellenregel bitte „Quelle separat mischen“ wählen.'
+                : 'Legacy full shuffle; choose “Shuffle each source” for source-aware order.';
         }
         return german ? 'Jede Quelle nacheinander, in der Reihenfolge der Liste.' : 'Each source in turn, in the order of the list.';
     });
@@ -178,7 +178,7 @@ With two, it plays two before moving on - which is what makes a channel that air
                     class:on={channel.Order === 'ShuffleBySource'}
                     aria-pressed={channel.Order === 'ShuffleBySource'}
                     onclick={() => pick('ShuffleBySource')}
-                >{german ? 'Quellenblöcke zufällig' : 'Random source blocks'}</button>
+                >{german ? 'Quelle separat mischen' : 'Shuffle each source'}</button>
                 <button
                     type="button"
                     class:on={channel.Order === 'WeightedShuffle'}

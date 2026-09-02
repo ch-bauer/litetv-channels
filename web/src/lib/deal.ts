@@ -7,7 +7,8 @@
  *
  * It mirrors the server's rule rather than inventing one: each source expands to its playable
  * items (a film is itself, a series is its episodes in aired order, a collection is its
- * children), then sources are taken from in turn, `episodesPerBlock` at a time.
+ * children), then sources are taken from in turn, `episodesPerBlock` at a time. In the
+ * source-aware shuffle mode each source is shuffled before that distribution happens.
  *
  * **Shuffled means shuffled once, not re-drawn.** The server is emphatic about this - a schedule
  * that reshuffles promises one thing and airs another - so the shuffle here is seeded from the
@@ -166,10 +167,22 @@ export async function deal(
 ): Promise<DealtItem[]> {
     if (sources.length === 0) { return []; }
 
-    const pools = await Promise.all(
+    const sourcePools = await Promise.all(
         sources.map((s, i) => expand(s, want + 2).then((items) =>
             items.map((it) => ({ ...it, sourceIndex: i })))),
     );
+
+    const pools = order === 'ShuffleBySource'
+        ? sourcePools.map((pool) => {
+            const random = seeded(seed + ':' + pool[0]?.sourceIndex);
+            const shuffled = [...pool];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        })
+        : sourcePools;
 
     const take = Math.max(1, episodesPerBlock || 1);
     const queue: DealtItem[] = [];
@@ -195,20 +208,6 @@ export async function deal(
         }
     }
 
-    if (order === 'ShuffleBySource') {
-        const random = seeded(seed);
-        const groups: DealtItem[][] = [];
-        for (const item of queue) {
-            const previous = groups.at(-1);
-            if (!previous || previous[0].sourceIndex !== item.sourceIndex) { groups.push([]); }
-            groups.at(-1)!.push(item);
-        }
-        for (let i = groups.length - 1; i > 0; i--) {
-            const j = Math.floor(random() * (i + 1));
-            [groups[i], groups[j]] = [groups[j], groups[i]];
-        }
-        return groups.flat();
-    }
     if (order === 'Shuffle' || order === 'WeightedShuffle') {
         const random = seeded(seed);
         if (order === 'WeightedShuffle') {

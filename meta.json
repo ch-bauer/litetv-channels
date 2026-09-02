@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Adds two explicit random scheduling modes: source-block shuffle preserves the configured episode run length per source, while weighted random selection can prefer the same source for a configurable probability. The schedule preview and legacy editor expose the same choices, including the probability setting.",
+  "changelog": "Refines random scheduling into three clear modes: in-order playback, independently shuffled sources distributed in the configured episode groups, and weighted random playback that can prefer the current source with a configurable probability while ignoring episode-group sizing. The modern and legacy configuration previews now use the same semantics.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-09-02T00:00:00.000Z",
-  "version": "1.0.114.0",
+  "version": "1.0.115.0",
   "status": "Active",
   "autoUpdate": false
 }
