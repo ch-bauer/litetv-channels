@@ -1,0 +1,15 @@
+{
+  "category": "General",
+  "changelog": "**Channels save immediately.** Channel changes are stored first and schedule generation continues in the background, so creating or editing a channel no longer blocks the configuration page.\n\n**Collection sources are fully supported.** Collections selected through title search are treated as real channel content, and the library source picker includes a search field for large libraries.\n\n**YouTube and language UI fixes.** YouTube sources retain their thumbnails, and the duplicate configuration-language control has been removed.",
+  "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
+  "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
+  "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
+  "name": "LiteTV Channels",
+  "overview": "TV channels from your library, without transcoding.",
+  "owner": "Christian",
+  "targetAbi": "10.11.0.0",
+  "timestamp": "2026-09-02T00:00:00.000Z",
+  "version": "1.0.107.0",
+  "status": "Active",
+  "autoUpdate": false
+}
