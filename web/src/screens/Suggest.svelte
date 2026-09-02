@@ -312,15 +312,30 @@
                 return [{ Type: 'Collection', ItemId: collectionSeed.id, Name: collectionSeed.name }];
             }
             if (!answer) { return []; }
-            // Only what is both ticked AND above the cut-off: hiding something must not leave
-            // it in the channel.
-            return answer.Results
+            // The seeds are the titles the owner explicitly chose, so they belong in the
+            // channel regardless of how the scorer ranks them. The old code only converted
+            // answer.Results and silently dropped the chosen starting films and series.
+            const startingTitles = seeds
+                .filter((s): s is SearchHit & { kind: 'Movie' | 'Series' } =>
+                    s.kind === 'Movie' || s.kind === 'Series')
+                .map((s) => ({
+                    Type: s.kind,
+                    ItemId: s.id,
+                    Name: s.name,
+                } satisfies ChannelSource));
+            const recommended = answer.Results
                 .filter((r) => chosen[r.Id] && r.Score >= cutoff)
                 .map((r) => ({
                     Type: r.Kind === 'Series' ? 'Series' : 'Movie',
                     ItemId: r.Id,
                     Name: r.Name,
                 } satisfies ChannelSource));
+            const seen = new Set<string>();
+            return [...startingTitles, ...recommended].filter((source) => {
+                if (seen.has(source.ItemId)) { return false; }
+                seen.add(source.ItemId);
+                return true;
+            });
         }
         if (pickedCollection) {
             return [{ Type: 'Collection', ItemId: pickedCollection.Id, Name: pickedCollection.Name }];

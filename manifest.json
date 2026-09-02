@@ -9,11 +9,11 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
-        "version": "1.0.108.0",
-        "changelog": "Die Zeitplan-Erstellung zeigt jetzt direkt im leeren Zeitplan den Fortschritt und bietet bei einem Fehler einen erneuten Versuch an. Die Herkunftsnachweis-Diagnose unterscheidet gehaltene, abgelaufene und fehlende Tokens; unmögliche Auflösungswerte werden als unbekannt angezeigt.",
+        "version": "1.0.109.0",
+        "changelog": "Der Schedule-Anfang lässt sich jetzt minutengenau mit Sekunden setzen; ein Button schlägt eine passende volle Stunde vor. Die Inhaltsvorschau folgt nun der Server-Reihenfolge, ausgewählte Starttitel bleiben erhalten und Wochenblöcke sind im Schedule farblich hervorgehoben.",
         "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.108.0/litetv-channels_1.0.108.0.zip",
-        "checksum": "8bb7f9ffe695d78e770c80539c006f40",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.109.0/litetv-channels_1.0.109.0.zip",
+        "checksum": "PENDING",
         "timestamp": "2026-09-02T00:00:00.000Z"
       },
       {

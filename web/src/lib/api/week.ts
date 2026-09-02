@@ -142,3 +142,6 @@ export const KIND_FILL: Record<AiringKind, string> = {
     Advert: '#2f9e8f',
     Gap: 'transparent',
 };
+
+/** A separate colour for programmes that come from a configured weekly block. */
+export const BLOCK_FILL = '#8b5bb5';

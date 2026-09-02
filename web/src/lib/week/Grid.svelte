@@ -18,7 +18,7 @@
     */
     import { week, ZOOM_MIN, ZOOM_MAX } from './weekStore.svelte';
     import {
-        DAY_SHORT, KIND_FILL, SECONDS_PER_DAY, clock, dayOf, nowSecond, secondOfDay,
+        BLOCK_FILL, DAY_SHORT, KIND_FILL, SECONDS_PER_DAY, clock, dayOf, nowSecond, secondOfDay,
         type WeekAiring,
     } from '../api/week';
 
@@ -538,8 +538,8 @@
                         draggable="true"
                         ondragstart={(e) => onBarDragStart(e, airing)}
                         ondragend={() => { grabbedAt = 0; draggingSeconds = 0; preview = null; }}
-                        style="top: {topOf(airing, day)}px; height: {height}px; background: {KIND_FILL[airing.Kind]};"
-                        title="{airing.Name} — {clock(secondOfDay(airing.StartSecond))}, {Math.round(airing.DurationSeconds / 60)} min · drag to move it"
+                        style="top: {topOf(airing, day)}px; height: {height}px; background: {airing.BlockName ? BLOCK_FILL : KIND_FILL[airing.Kind]};"
+                        title="{airing.Name} — {clock(secondOfDay(airing.StartSecond))}, {Math.round(airing.DurationSeconds / 60)} min{airing.BlockName ? ' · ' + airing.BlockName : ''} · drag to move it"
                         onclick={(e) => pick(airing, e)}
                     >
                         {#if timed(height)}

@@ -14,8 +14,45 @@
 
     let helpOpen = $state(false);
     let cycle = $state<string | null>(null);
+    let anchorDraft = $state('');
     const german = $derived(store.config?.PageLanguage === 'de'
         || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
+
+    $effect(() => {
+        void channel.Id;
+        anchorDraft = anchorInputValue(channel.AnchorUtc);
+    });
+
+    function anchorInputValue(anchorUtc: string): string {
+        const date = new Date(anchorUtc);
+        if (Number.isNaN(date.getTime())) { return ''; }
+        const pad = (value: number): string => String(value).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function setAnchorFromInput(value: string): void {
+        anchorDraft = value;
+        const [datePart, timePart] = value.split('T');
+        const [year, month, day] = (datePart ?? '').split('-').map(Number);
+        const [hour, minute, second = 0] = (timePart ?? '').split(':').map(Number);
+        if (![year, month, day, hour, minute, second].every(Number.isFinite)) { return; }
+        const local = new Date(year, month - 1, day, hour, minute, second);
+        if (Number.isNaN(local.getTime())) { return; }
+        channel.AnchorUtc = local.toISOString();
+    }
+
+    function suggestAnchor(): void {
+        const [datePart, timePart] = anchorDraft.split('T');
+        const [year, month, day] = (datePart ?? '').split('-').map(Number);
+        const [hour, minute] = (timePart ?? '').split(':').map(Number);
+        const base = [year, month, day, hour, minute].every(Number.isFinite)
+            ? new Date(year, month - 1, day, hour, minute, 0)
+            : new Date();
+        if (Number.isNaN(base.getTime())) { return; }
+        base.setMinutes(0, 0, 0);
+        if (base.getTime() <= Date.now()) { base.setHours(base.getHours() + 1); }
+        setAnchorFromInput(anchorInputValue(base.toISOString()));
+    }
 
     /*
         How long the channel takes to play everything once.
@@ -93,6 +130,26 @@ With two, it plays two before moving on - which is what makes a channel that air
 <Card>
     <div class="stack">
         <h3>{german ? 'Wiedergabereihenfolge' : 'How they are laid out'}</h3>
+
+        <div class="group">
+            <div class="label">{german ? 'Anfang des Zeitplans' : 'Schedule start'}</div>
+            <input
+                class="anchor"
+                type="datetime-local"
+                step="1"
+                bind:value={anchorDraft}
+                onchange={() => setAnchorFromInput(anchorDraft)}
+                aria-label={german ? 'Anfang des Zeitplans' : 'Schedule start'}
+            />
+            <button type="button" class="suggest" onclick={suggestAnchor}>
+                {german ? 'Gute Startzeit vorschlagen' : 'Suggest a good start time'}
+            </button>
+            <p class="note">
+                {german
+                    ? 'Der erste Inhalt beginnt genau dann. Der Vorschlag rundet auf die nächste volle Stunde; ein leeres Feld verwendet jetzt als Ausgangspunkt.'
+                    : 'The first item starts at this exact time. The suggestion rounds to the next full hour; an empty field starts from now.'}
+            </p>
+        </div>
 
         <div class="group">
             <div class="label">{german ? 'Reihenfolge' : 'Order'}</div>
@@ -224,6 +281,27 @@ With two, it plays two before moving on - which is what makes a channel that air
         font-family: inherit;
         color: var(--lt-text);
     }
+
+    input.anchor {
+        flex: 0 1 auto;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .suggest {
+        align-self: flex-start;
+        padding: 7px 11px;
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+        background: var(--lt-field);
+        color: var(--lt-text-body);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .suggest:hover { background: var(--lt-hover); }
 
     .at { font-size: 12.5px; color: var(--lt-text-muted); }
 

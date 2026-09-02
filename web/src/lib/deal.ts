@@ -174,33 +174,32 @@ export async function deal(
     const queue: DealtItem[] = [];
     const cursors = pools.map(() => 0);
 
-    if (order === 'Shuffle') {
-        // Shuffle which source is drawn from next, not the items within a source: an episode
-        // out of order is a different thing from a series out of order, and only the second is
-        // what "shuffled" means here.
-        const random = seeded(seed);
+    // This is the same order as the server: first interleave (or concatenate), then apply the
+    // stable shuffle to the resulting queue. Shuffling the source choice while dealing produced
+    // a different schedule than the one the server actually airs.
+    if (episodesPerBlock <= 0) {
+        for (const pool of pools) { queue.push(...pool); }
+        queue.length = Math.min(queue.length, want);
+    } else {
         let guard = 0;
         while (queue.length < want && guard++ < want * 20) {
-            const live = pools.map((_, i) => i).filter((i) => cursors[i] < pools[i].length);
-            if (live.length === 0) { break; }
-            const pick = live[Math.floor(random() * live.length)];
-            for (let n = 0; n < take && cursors[pick] < pools[pick].length && queue.length < want; n++) {
-                queue.push(pools[pick][cursors[pick]++]);
+            let moved = false;
+            for (let i = 0; i < pools.length && queue.length < want; i++) {
+                for (let n = 0; n < take && cursors[i] < pools[i].length && queue.length < want; n++) {
+                    queue.push(pools[i][cursors[i]++]);
+                    moved = true;
+                }
             }
+            if (!moved) { break; }
         }
-        return queue;
     }
 
-    let guard = 0;
-    while (queue.length < want && guard++ < want * 20) {
-        let moved = false;
-        for (let i = 0; i < pools.length && queue.length < want; i++) {
-            for (let n = 0; n < take && cursors[i] < pools[i].length && queue.length < want; n++) {
-                queue.push(pools[i][cursors[i]++]);
-                moved = true;
-            }
+    if (order === 'Shuffle') {
+        const random = seeded(seed);
+        for (let i = queue.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [queue[i], queue[j]] = [queue[j], queue[i]];
         }
-        if (!moved) { break; }
     }
     return queue;
 }

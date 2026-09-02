@@ -25,7 +25,7 @@
     const signature = $derived([
         channel.Id,
         channel.Order,
-        channel.EpisodesPerBlock || 1,
+        channel.EpisodesPerBlock,
         channel.Sources.map((s) => s.ItemId).join(','),
     ].join('|'));
 
@@ -33,7 +33,7 @@
         const asked = signature;
         busy = true;
         failed = null;
-        deal(channel.Sources, channel.Order, channel.EpisodesPerBlock || 1, channel.Id)
+        deal(channel.Sources, channel.Order, channel.EpisodesPerBlock, channel.Id)
             .then((dealt) => {
                 // A slow answer must not overwrite a newer question.
                 if (asked !== signature) { return; }
@@ -49,7 +49,7 @@
 </script>
 
 <Card>
-    <h3>{german ? 'Die ersten Titel in ihrer Reihenfolge' : 'The first few, as they would fall'}</h3>
+    <h3>{german ? 'Die ersten Titel im Zeitplan' : 'The first few in the schedule'}</h3>
 
     {#if failed}
         <p class="bad">{german ? 'Die Vorschau konnte nicht erstellt werden: ' : 'The queue could not be worked out: '}{failed}</p>
