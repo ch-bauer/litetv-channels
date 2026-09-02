@@ -1216,7 +1216,10 @@ public class LiteTvController : ControllerBase
             // address - a library item, somewhere else entirely, or nothing at all - means the
             // upload is no longer in use. Compared as a prefix, because the page appends a
             // cache-buster to the address it has just uploaded to.
-            var ours = $"/LiteTv/Artwork/{channel.Id:N}/{kind}";
+            // The public URL contains the normal dashed Guid form. Using the compact form here
+            // made every online upload look orphaned on the next channel save, so the file was
+            // deleted and the page showed a broken image after a reload.
+            var ours = $"/LiteTv/Artwork/{channel.Id}/{kind}";
             if (url is null || !url.StartsWith(ours, StringComparison.OrdinalIgnoreCase))
             {
                 unused.Add(kind);

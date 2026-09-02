@@ -36,6 +36,10 @@ export interface ProgramBlock {
     Sources: ChannelSource[];
     EpisodesPerBlock: number;
     Order: PlayOrder;
+    /** Start the next selected item on each weekly block occurrence. */
+    AdvanceOnePerWeek: boolean;
+    TrailerEnabled: boolean;
+    TrailerProgramsBefore: number;
 }
 
 export interface TvChannel {

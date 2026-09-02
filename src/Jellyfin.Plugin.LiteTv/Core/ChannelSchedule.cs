@@ -147,6 +147,14 @@ public sealed class Lineup
     /// <param name="index">The current index.</param>
     /// <returns>The next entry.</returns>
     public ScheduledEntry After(int index) => Entries[(index + 1) % Entries.Count];
+
+    /// <summary>Starts the next queue item for a weekly block occurrence.</summary>
+    public (int Index, ScheduledEntry Entry, long ElapsedInSlot, long SlotLength) AtWeeklyOccurrence(long occurrence)
+    {
+        var index = (int)(occurrence % Entries.Count);
+        if (index < 0) { index += Entries.Count; }
+        return (index, Entries[index], 0, _slotted[index]);
+    }
 }
 
 /// <summary>
@@ -160,6 +168,7 @@ public sealed class ChannelSchedule
     private readonly WeekTimeline _timeline;
     private readonly IReadOnlyDictionary<int, Lineup> _lineups;
     private readonly IReadOnlyDictionary<int, string> _blockNames;
+    private readonly IReadOnlySet<int> _weeklySequenceBlocks;
     private readonly TimeZoneInfo _timeZone;
     private readonly DateTime _anchorUtc;
 
@@ -175,12 +184,14 @@ public sealed class ChannelSchedule
         WeekTimeline timeline,
         IReadOnlyDictionary<int, Lineup> lineups,
         IReadOnlyDictionary<int, string> blockNames,
+        IReadOnlySet<int> weeklySequenceBlocks,
         DateTime anchorUtc,
         TimeZoneInfo timeZone)
     {
         _timeline = timeline;
         _lineups = lineups;
         _blockNames = blockNames;
+        _weeklySequenceBlocks = weeklySequenceBlocks;
         _anchorUtc = anchorUtc;
         _timeZone = timeZone;
     }
@@ -234,8 +245,20 @@ public sealed class ChannelSchedule
                 continue;
             }
 
-            var airtime = Airtime(owner, cursor) - Airtime(owner, anchorLocal);
-            var (index, entry, elapsedInSlot, slotLength) = lineup.At(airtime);
+            var (index, entry, elapsedInSlot, slotLength) = _weeklySequenceBlocks.Contains(owner)
+                ? lineup.AtWeeklyOccurrence(WeeksSinceAnchor(cursor, anchorLocal))
+                : lineup.At(Airtime(owner, cursor) - Airtime(owner, anchorLocal));
+
+            // A weekly sequence block owns one item for the occurrence. Do not start that same
+            // item again when it ends before the configured window; the next item belongs to the
+            // next week. The remaining window is an intentional interstitial.
+            if (_weeklySequenceBlocks.Contains(owner)
+                && cursor >= spanStart + TimeSpan.FromTicks(slotLength))
+            {
+                yield return new Airing(AiringKind.Interstitial, null, ToUtc(cursor), ToUtc(spanEnd), 0, BlockName(owner), null);
+                cursor = spanEnd;
+                continue;
+            }
 
             // Inside a slot there are two phases: the program, then whatever the slot has
             // left over. They are separate airings - the guide has to be able to say "the
@@ -278,6 +301,12 @@ public sealed class ChannelSchedule
 
     private string? BlockName(int owner)
         => _blockNames.TryGetValue(owner, out var name) ? name : null;
+
+    private static long WeeksSinceAnchor(DateTime local, DateTime anchorLocal)
+    {
+        var days = (local.Date - anchorLocal.Date).Days;
+        return days >= 0 ? days / 7 : -(((-days) + 6) / 7);
+    }
 
     /// <summary>
     /// Gets how much airtime a lineup has had by a given local time, in ticks. Only the

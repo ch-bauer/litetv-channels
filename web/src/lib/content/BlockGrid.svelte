@@ -73,6 +73,9 @@
             Sources: [],
             EpisodesPerBlock: 0,
             Order: 'Sequential',
+            AdvanceOnePerWeek: false,
+            TrailerEnabled: false,
+            TrailerProgramsBefore: 3,
         });
         picked = channel.Blocks.length - 1;
     }
@@ -176,8 +179,38 @@
             {/each}
         </div>
 
+        <label class="weekly-film">
+            <input type="checkbox" bind:checked={current.AdvanceOnePerWeek} />
+            <span>
+                <strong>{german ? 'Filmabend: ein Film pro Woche' : 'Film night: one film per week'}</strong>
+                <small>
+                    {german
+                        ? 'Die ausgewählten Filme werden der Reihe nach abgespielt: erster Film diese Woche, nächster Film nächste Woche.'
+                        : 'Play the selected films in order: the first this week, the next one next week.'}
+                </small>
+            </span>
+        </label>
+
+        <label class="weekly-film">
+            <input type="checkbox" bind:checked={current.TrailerEnabled} />
+            <span>
+                <strong>{german ? 'Trailer für den heutigen Block-Film' : 'Trailer for today\'s block film'}</strong>
+                <small>
+                    {german
+                        ? 'Nur der Trailer des Films, der in diesem Block läuft. Der Trailer erscheint so viele Programme vorher wie eingestellt.'
+                        : 'Only the trailer for the film airing in this block. The trailer appears the configured number of programmes ahead.'}
+                </small>
+            </span>
+        </label>
+        {#if current.TrailerEnabled}
+            <label class="trailer-count">
+                {german ? 'Programme vorher' : 'Programmes before'}
+                <input type="number" min="1" step="1" bind:value={current.TrailerProgramsBefore} />
+            </label>
+        {/if}
+
         <div class="block-content">
-            <div class="sub">{german ? 'Was dieser Block stattdessen abspielt' : 'What this block plays instead'}</div>
+            <div class="sub">{german ? 'Filme für diesen Block auswählen' : 'Choose films for this block'}</div>
             <div class="inset">
                 <SourceList sources={current.Sources} empty="Nothing yet — this block would play the channel's own list." />
                 <SourceSearch sources={current.Sources} />
@@ -290,6 +323,22 @@
     .ghost.danger:hover { color: #e08585; border-color: rgba(224, 133, 133, .4); }
 
     .days { display: flex; gap: 5px; margin-top: 9px; }
+
+    .weekly-film {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        margin-top: 12px;
+        padding: 10px 12px;
+        border: 1px solid rgba(119, 91, 244, .25);
+        border-radius: var(--lt-radius-small);
+        background: rgba(119, 91, 244, .07);
+        cursor: pointer;
+    }
+
+    .weekly-film input { flex: 0 0 auto; margin: 2px 0 0; }
+    .weekly-film strong { display: block; font-size: 12.5px; color: var(--lt-text-body); }
+    .weekly-film small { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.4; color: var(--lt-text-muted); }
 
     .day-chip {
         flex: 0 0 auto;

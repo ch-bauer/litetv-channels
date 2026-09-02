@@ -242,6 +242,24 @@
             <button type="button" class:on={week.view === 'day'} onclick={() => (week.view = 'day')}>{german ? 'Tag' : 'Day'}</button>
         </div>
 
+        {#if week.view === 'day'}
+            <div class="day-picker" role="group" aria-label="Which day of the schedule">
+                <button
+                    type="button"
+                    onclick={() => week.setShownDay(week.shownDay - 1)}
+                    disabled={week.shownDay <= week.weekIndex * 7}
+                    aria-label="The previous day"
+                >&lsaquo;</button>
+                <span class="which">{dayWords(week.shownDay * SECONDS_PER_DAY)}</span>
+                <button
+                    type="button"
+                    onclick={() => week.setShownDay(week.shownDay + 1)}
+                    disabled={week.shownDay >= week.weekIndex * 7 + 6}
+                    aria-label="The next day"
+                >&rsaquo;</button>
+            </div>
+        {/if}
+
         {#if week.weeks > 1}
             <!--
                 Which week of the cycle. A four-week schedule is twenty-eight day columns and
@@ -586,6 +604,29 @@
 
     .weeks button:hover:not(:disabled) { color: var(--lt-text-strong); }
     .weeks button:disabled { opacity: .3; cursor: default; }
+
+    .day-picker {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        border: 1px solid var(--lt-line-strong);
+        border-radius: var(--lt-radius-small);
+        padding: 2px 3px;
+    }
+
+    .day-picker button {
+        background: none;
+        border: none;
+        color: var(--lt-text-dim);
+        font-family: inherit;
+        font-size: 15px;
+        line-height: 1;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+
+    .day-picker button:hover:not(:disabled) { color: var(--lt-text-strong); }
+    .day-picker button:disabled { opacity: .3; cursor: default; }
 
     .which {
         font-size: 12.5px;

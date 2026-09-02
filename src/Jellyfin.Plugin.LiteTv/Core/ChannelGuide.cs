@@ -243,7 +243,8 @@ public sealed class ChannelGuide
     private IEnumerable<Airing> GeneratedWindow(TvChannel channel, DateTime fromUtc, DateTime toUtc)
     {
         var airings = _builder.GetSchedule(channel).Enumerate(fromUtc, toUtc);
-        var withTrailers = channel.TrailersInGaps ? WithTrailers(channel, airings) : airings;
+        var hasBlockTrailers = channel.Blocks.Any(b => b.Enabled && b.TrailerEnabled);
+        var withTrailers = channel.TrailersInGaps || hasBlockTrailers ? WithTrailers(channel, airings) : airings;
         return ScheduleEditing.Apply(
             withTrailers,
             channel.ScheduleEdits,
@@ -285,8 +286,14 @@ public sealed class ChannelGuide
 
             // The fallback is checked too, or a gap with nothing to show would be announced
             // anyway by the entry the schedule happens to have put after it.
-            var trailed = TrailedProgram(channel, window, i)
-                ?? airing.NextProgram?.Takeaway(next => _builder.HasTrailer(next.ItemId));
+            var blockTrailed = BlockTrailedProgram(channel, window, i);
+            var isBlockBreak = !string.IsNullOrWhiteSpace(airing.BlockName);
+            var trailed = blockTrailed;
+            if (trailed is null && !isBlockBreak)
+            {
+                trailed = TrailedProgram(channel, window, i)
+                    ?? airing.NextProgram?.Takeaway(next => _builder.HasTrailer(next.ItemId));
+            }
             var slot = SlotFor(channel, airing);
             var cursor = airing.StartUtc;
 
@@ -340,7 +347,10 @@ public sealed class ChannelGuide
 
             if (trailed is not null)
             {
-                foreach (var trailer in _builder.TrailersFor(trailed.ItemId))
+                var trailers = blockTrailed is not null
+                    ? _builder.TrailersFor(trailed.ItemId).Take(1)
+                    : _builder.TrailersFor(trailed.ItemId);
+                foreach (var trailer in trailers)
                 {
                     var end = cursor + TimeSpan.FromTicks(trailer.RuntimeTicks);
                     if (end > airing.EndUtc)
@@ -532,6 +542,47 @@ public sealed class ChannelGuide
         }
 
         return seen >= 2 ? furthest : null;
+    }
+
+    /// <summary>
+    /// Picks only a configured block's upcoming programme. The distance is counted over all
+    /// programmes, so a film block can be advertised from the channel lineup before it starts.
+    /// </summary>
+    private ScheduledEntry? BlockTrailedProgram(TvChannel channel, List<Airing> window, int index)
+    {
+        var wantedByBlock = channel.Blocks
+            .Where(b => b.Enabled && b.TrailerEnabled && !string.IsNullOrWhiteSpace(b.Name))
+            .ToDictionary(b => b.Name, b => Math.Max(1, b.TrailerProgramsBefore), StringComparer.Ordinal);
+        if (wantedByBlock.Count == 0)
+        {
+            return null;
+        }
+
+        var seen = 0;
+        for (var i = index + 1; i < window.Count; i++)
+        {
+            if (window[i].Kind != AiringKind.Program || window[i].Entry is null || window[i].OffsetTicks > 0)
+            {
+                continue;
+            }
+
+            seen++;
+            var blockName = window[i].BlockName;
+            var entry = window[i].Entry;
+            if (blockName is null
+                || entry is null
+                || !wantedByBlock.TryGetValue(blockName, out var wanted)
+                || seen < wanted)
+            {
+                continue;
+            }
+
+            // The caller limits this target to one trailer, never the channel's manual list or
+            // every trailer attached to the title.
+            return _builder.HasTrailer(entry.ItemId) ? entry : null;
+        }
+
+        return null;
     }
 
     /// <summary>

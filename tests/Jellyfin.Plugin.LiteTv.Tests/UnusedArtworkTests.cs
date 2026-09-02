@@ -31,7 +31,7 @@ public class UnusedArtworkTests
         return channel;
     }
 
-    private static string Ours(string kind) => $"/LiteTv/Artwork/{Channel:N}/{kind}";
+    private static string Ours(string kind) => $"/LiteTv/Artwork/{Channel}/{kind}";
 
     [Fact]
     public void AChannelWithNoPicturesSetHasNothingWorthKeeping()

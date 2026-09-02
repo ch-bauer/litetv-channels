@@ -121,6 +121,14 @@
 
     const artwork = $derived(channel.Artwork as Record<string, string | null | undefined>);
 
+    function setArtworkField(key: string, value: string | null): void {
+        // Reassign the object instead of mutating a field on a derived reference. The explicit
+        // assignment makes the first artwork change part of the config snapshot immediately;
+        // otherwise the upload can finish before auto-save notices it and cleanup removes the
+        // freshly uploaded file as unreferenced.
+        channel.Artwork = { ...(channel.Artwork ?? {}), [key]: value };
+    }
+
     function current(slot: Slot): string | null {
         const key = slot + 'Url';
         const value = artwork[key];
@@ -521,7 +529,7 @@
                     dataType: 'json',
                 });
             }
-            artwork[slot + 'Url'] = '/LiteTv/Artwork/' + channel.Id + '/' + slot + '?t=' + Date.now();
+            setArtworkField(slot + 'Url', '/LiteTv/Artwork/' + channel.Id + '/' + slot + '?t=' + Date.now());
             offering = null;
         } catch (err) {
             bar.alert('That picture could not be taken: ' + (failureWords(err)));
@@ -544,7 +552,7 @@
                 body: file,
             });
             if (!answer.ok) { throw new Error(answer.status + ' ' + answer.statusText); }
-            artwork[slot + 'Url'] = '/LiteTv/Artwork/' + channel.Id + '/' + slot + '?t=' + Date.now();
+            setArtworkField(slot + 'Url', '/LiteTv/Artwork/' + channel.Id + '/' + slot + '?t=' + Date.now());
         } catch (err) {
             bar.alert('That picture could not be uploaded: ' + (failureWords(err)));
         } finally {
@@ -731,7 +739,7 @@
             });
             if (!answer.ok) { throw new Error(answer.status + ' ' + answer.statusText); }
 
-            artwork[slot + 'Url'] = '/LiteTv/Artwork/' + channel.Id + '/' + slot + '?t=' + Date.now();
+            setArtworkField(slot + 'Url', '/LiteTv/Artwork/' + channel.Id + '/' + slot + '?t=' + Date.now());
             closeCrop();
         } catch (err) {
             cropError = 'That crop could not be saved: ' + failureWords(err);
@@ -741,7 +749,7 @@
     }
 
     function clearSlot(slot: Slot): void {
-        artwork[slot + 'Url'] = null;
+        setArtworkField(slot + 'Url', null);
     }
 
     async function findBorrow(): Promise<void> {
@@ -759,8 +767,8 @@
     }
 
     function borrow(hit: SearchHit): void {
-        artwork['ImageItemId'] = hit.id;
-        artwork['ImageItemName'] = hit.name;
+        setArtworkField('ImageItemId', hit.id);
+        setArtworkField('ImageItemName', hit.name);
         borrowTerm = '';
         borrowHits = [];
     }
@@ -800,8 +808,8 @@
     );
 
     function stopBorrowing(): void {
-        artwork['ImageItemId'] = null;
-        artwork['ImageItemName'] = null;
+        setArtworkField('ImageItemId', null);
+        setArtworkField('ImageItemName', null);
     }
 </script>
 

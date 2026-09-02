@@ -25,6 +25,7 @@ public class ChannelScheduleTests
             WeekTimeline.Build(blocks),
             lineups.ToDictionary(l => l.Owner, l => l.Lineup),
             blocks.ToDictionary(b => b.Owner, b => "Block " + b.Owner),
+            new HashSet<int>(),
             Anchor,
             TimeZoneInfo.Utc);
     }
@@ -34,6 +35,23 @@ public class ChannelScheduleTests
 
     private static BlockWindow Block(int owner, int startHour, int hours, params DayOfWeek[] days)
         => new(owner, startHour * 60, hours * 60, days);
+
+    [Fact]
+    public void WeeklySequenceBlockStartsNextFilmOnNextWeek()
+    {
+        var block = Block(1, 20, 3, DayOfWeek.Monday);
+        var schedule = new ChannelSchedule(
+            WeekTimeline.Build(new[] { block }),
+            new Dictionary<int, Lineup> { [1] = Queue(0, ("Film 1", 60), ("Film 2", 60)) },
+            new Dictionary<int, string> { [1] = "Filmabend" },
+            new HashSet<int> { 1 },
+            Anchor,
+            TimeZoneInfo.Utc);
+
+        Assert.Equal("Film 1", schedule.At(Anchor.AddHours(20))!.Entry!.Name);
+        Assert.Equal(AiringKind.Interstitial, schedule.At(Anchor.AddHours(21))!.Kind);
+        Assert.Equal("Film 2", schedule.At(Anchor.AddDays(7).AddHours(20))!.Entry!.Name);
+    }
 
     // ------------------------------------------------------------------ the plain loop
 

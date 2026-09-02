@@ -514,6 +514,18 @@ public class ProgramBlock
     /// Gets or sets the order the block's queue is played in.
     /// </summary>
     public PlayOrder Order { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the block starts the next selected item on each
+    /// weekly occurrence, rather than looping through its queue during the block.
+    /// </summary>
+    public bool AdvanceOnePerWeek { get; set; }
+
+    /// <summary>Gets or sets whether this block advertises its selected programme.</summary>
+    public bool TrailerEnabled { get; set; }
+
+    /// <summary>Gets or sets how many programmes ahead the block trailer is shown.</summary>
+    public int TrailerProgramsBefore { get; set; } = 3;
 }
 
 /// <summary>

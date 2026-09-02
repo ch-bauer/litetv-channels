@@ -128,6 +128,9 @@ class WeekStore {
     */
     weekIndex = $state(0);
 
+    /** The chosen weekday in the currently displayed cycle week; null means today initially. */
+    private dayInWeek = $state<number | null>(null);
+
     /*
         $state, and this is not a detail - it is the whole of "the zoom on day does nothing".
 
@@ -206,7 +209,17 @@ class WeekStore {
     */
     get shownDay(): number {
         if (this.weekIndex !== this.currentWeek) { return this.weekIndex * 7; }
-        return this.currentWeek * 7 + Math.floor(nowSecond() / SECONDS_PER_DAY);
+        return this.dayInWeek === null
+            ? this.currentWeek * 7 + Math.floor(nowSecond() / SECONDS_PER_DAY)
+            : this.weekIndex * 7 + this.dayInWeek;
+    }
+
+    /** Selects a weekday in the cycle week for Day view. */
+    setShownDay(day: number): void {
+        const weekday = Math.max(0, Math.min(6, Math.round(day - this.weekIndex * 7)));
+        this.dayInWeek = weekday;
+        this.frameNowByChannel[this.channelKey] = false;
+        this.remember();
     }
 
     setFrameNow(on: boolean): void {
@@ -342,6 +355,7 @@ class WeekStore {
         this.error = null;
         this.selectedId = null;
         this.weekIndex = 0;
+        this.dayInWeek = null;
         // Pending edits belong to the channel they were made on. Carrying them to the next
         // channel would apply them to somebody else's schedule, which is the worst thing this
         // store could do.

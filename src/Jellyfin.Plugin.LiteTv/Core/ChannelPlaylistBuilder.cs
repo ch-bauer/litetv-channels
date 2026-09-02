@@ -125,7 +125,10 @@ public class ChannelPlaylistBuilder
                 .Append(block.DurationMinutes).Append(',')
                 .Append(string.Join('+', block.Days)).Append(',')
                 .Append(block.EpisodesPerBlock).Append(',')
-                .Append((int)block.Order).Append(':');
+                .Append((int)block.Order).Append(',')
+                .Append(block.AdvanceOnePerWeek).Append(',')
+                .Append(block.TrailerEnabled).Append(',')
+                .Append(block.TrailerProgramsBefore).Append(':');
             AppendSources(text, block.Sources);
         }
 
@@ -356,6 +359,7 @@ public class ChannelPlaylistBuilder
             [WeekTimeline.BaseLineup] = new Lineup(GetEntries(channel), slotTicks)
         };
         var names = new Dictionary<int, string>();
+        var weeklySequenceBlocks = new HashSet<int>();
         var windows = new List<BlockWindow>();
 
         for (var i = 0; i < channel.Blocks.Count; i++)
@@ -368,10 +372,12 @@ public class ChannelPlaylistBuilder
 
             windows.Add(new BlockWindow(i, block.StartMinutes, block.DurationMinutes, block.Days));
             names[i] = block.Name;
+            if (block.AdvanceOnePerWeek)
+            {
+                weeklySequenceBlocks.Add(i);
+            }
             lineups[i] = new Lineup(
-                WithScheduledTrailers(
-                    Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i),
-                    channel),
+                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i),
                 slotTicks);
         }
 
@@ -379,6 +385,7 @@ public class ChannelPlaylistBuilder
             WeekTimeline.Build(windows),
             lineups,
             names,
+            weeklySequenceBlocks,
             channel.AnchorUtc,
             TimeZoneInfo.Local);
     }
