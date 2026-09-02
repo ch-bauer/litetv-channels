@@ -13,7 +13,7 @@
         "changelog": "Refines random scheduling into three clear modes: in-order playback, independently shuffled sources distributed in the configured episode groups, and weighted random playback that can prefer the current source with a configurable probability while ignoring episode-group sizing. The modern and legacy configuration previews now use the same semantics.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.115.0/litetv-channels_1.0.115.0.zip",
-        "checksum": "",
+        "checksum": "992fb15dcc3cbfcea0a3feacfe590a64",
         "timestamp": "2026-09-02T00:00:00.000Z"
       },
       {
