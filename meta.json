@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Collection sources can now be selected from title search and searched efficiently in the library view. Retains trailer scheduling, remote trailers, playlist previews and collection order.",
+  "changelog": "Channels now save immediately while schedule generation continues in the background. Collection sources selected through title search are treated as real content, and the library source picker has a search field for large libraries. The duplicate configuration-language control is removed.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-01T22:00:00.000Z",
-  "version": "1.0.106.0",
+  "timestamp": "2026-09-02T00:00:00.000Z",
+  "version": "1.0.107.0",
   "status": "Active",
   "autoUpdate": false
 }

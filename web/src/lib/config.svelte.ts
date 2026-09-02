@@ -30,6 +30,8 @@ class ConfigStore {
     loading = $state(false);
     error = $state<string | null>(null);
     savedAt = $state<Date | null>(null);
+    /** Number of newly-created channels whose first schedule is still being generated. */
+    scheduleGenerating = $state(0);
 
     /** The configuration as the server last stated it. */
     private settled = $state<string>('');
@@ -176,29 +178,6 @@ class ConfigStore {
                 });
             }
 
-            /*
-                A channel made on this page is laid out now, in the same Save that created it.
-                After the writes above, so the server is laying out the channel as it now
-                stands, and before `settledIds` below, so the Week screen's reload - which
-                watches exactly that - picks the new week up by itself.
-            */
-            for (const id of [...this.wantsLayout]) {
-                this.wantsLayout.delete(id);
-                const made = sent.Channels.find((c) => c.Id === id);
-                if (!made || made.Sources.length === 0) { continue; }
-                try {
-                    await api().fetch({
-                        url: api().getUrl('LiteTv/Channels/' + id + '/Week/Generate'),
-                        type: 'POST',
-                    });
-                } catch (err) {
-                    // Not worth failing the save over, and not worth an alert either: the
-                    // channel IS saved, and the Week screen offers to lay it out with a button
-                    // that says what went wrong if it is pressed again.
-                    console.warn('[litetv] could not lay out the new channel', id, err);
-                }
-            }
-
             // Everything that is not a channel. The list is sent empty rather than omitted:
             // the server clears it anyway, and sending what is on screen would put the
             // channels back into the one document this change took them out of.
@@ -209,6 +188,18 @@ class ConfigStore {
             this.settled = JSON.stringify(sent);
             this.settledIds = new Set(sent.Channels.map((c) => c.Id));
             this.savedAt = new Date();
+
+            // The channel is usable now. Laying out its first week can be expensive for a
+            // collection or a long series, so let the page finish saving and do that work in
+            // the background. The counter is reactive, which also tells Week to reload once
+            // the generated week becomes available.
+            const layoutIds = [...this.wantsLayout]
+                .filter((id) => sent.Channels.some((c) => c.Id === id && c.Sources.length > 0));
+            for (const id of layoutIds) { this.wantsLayout.delete(id); }
+            if (layoutIds.length > 0) {
+                this.scheduleGenerating += layoutIds.length;
+                void this.generateSchedules(layoutIds);
+            }
         } catch (err) {
             bar.alert('Could not save: ' + (failureWords(err)));
         } finally {
@@ -265,6 +256,19 @@ class ConfigStore {
         } finally {
             bar.hideLoadingMsg();
         }
+    }
+
+    private async generateSchedules(ids: string[]): Promise<void> {
+        const results = await Promise.allSettled(ids.map((id) => api().fetch({
+            url: api().getUrl('LiteTv/Channels/' + id + '/Week/Generate'),
+            type: 'POST',
+        })));
+        for (const [index, result] of results.entries()) {
+            if (result.status === 'rejected') {
+                console.warn('[litetv] could not lay out the new channel', ids[index], result.reason);
+            }
+        }
+        this.scheduleGenerating = Math.max(0, this.scheduleGenerating - ids.length);
     }
 
     /** Adds a channel and selects it. Auto-save persists it shortly afterwards. */

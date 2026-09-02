@@ -24,7 +24,11 @@
             `serverHas` here is what makes the second case happen by itself: a new channel shows
             "not saved yet", and the moment Save lands its week arrives without another prompt.
         */
-        void week.load(channel.Id, store.serverHas(channel.Id));
+        // A new channel is saved before its first week is generated. Re-run this effect when
+        // that background generation finishes, so a temporary 404 cannot remain on screen.
+        const serverHasChannel = store.serverHas(channel.Id);
+        const generationDone = store.scheduleGenerating === 0;
+        void week.load(channel.Id, serverHasChannel, serverHasChannel && generationDone);
     });
 
     week.restoreZoom();

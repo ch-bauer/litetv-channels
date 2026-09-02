@@ -333,9 +333,9 @@ class WeekStore {
      * `onServer` is the caller's answer to "has this channel been saved?" - the configuration
      * store knows, and the week endpoints only answer about channels the server holds.
      */
-    async load(channelId: string, onServer = true): Promise<void> {
+    async load(channelId: string, onServer = true, force = false): Promise<void> {
         const key = channelId + '|' + (onServer ? 'saved' : 'new');
-        if (this.loadedKey === key) { return; }
+        if (!force && this.loadedKey === key) { return; }
         this.loadedKey = key;
         this.channelId = channelId;
         this.loading = true;

@@ -54,6 +54,7 @@
     });
 
     const saved = $derived.by(() => {
+        if (store.scheduleGenerating > 0) { return german ? 'Schedule wird erstellt…' : 'creating schedule…'; }
         if (store.canRevert && week.dirty) { return german ? 'automatisch gespeichert, Programmplan ungespeichert' : 'auto-saved, schedule not saved'; }
         if (week.dirty) { return german ? 'ungespeicherter Programmplan' : 'unsaved schedule changes'; }
         if (store.canRevert) { return german ? 'automatisch gespeichert' : 'auto-saved'; }
