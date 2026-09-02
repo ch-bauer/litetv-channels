@@ -13,17 +13,28 @@ public class PlayOrderTests
     };
 
     [Fact]
-    public void ShuffleBySourceShufflesEachSourceAndKeepsInterleaveGroups()
+    public void ShuffleBySourceShufflesEpisodesInsideEachSourceAndKeepsFixedSourceBlocks()
     {
-        var entries = new[] { Entry("A1", "A"), Entry("B1", "B"), Entry("A2", "A"), Entry("B2", "B") };
+        var entries = new[]
+        {
+            Entry("A1", "A"), Entry("B1", "B"), Entry("C1", "C"),
+            Entry("A2", "A"), Entry("B2", "B"), Entry("C2", "C"),
+            Entry("A3", "A"), Entry("B3", "B"), Entry("C3", "C"),
+            Entry("A4", "A"), Entry("B4", "B"), Entry("C4", "C")
+        };
 
         var result = ChannelPlaylistBuilder.Order(entries, PlayOrder.ShuffleBySource, Guid.Parse("11111111-1111-1111-1111-111111111111"), 0, 2, 20);
 
-        Assert.Equal(4, result.Count);
-        var names = result.Select(entry => entry.Name).ToArray();
-        Assert.Equal(["A", "A", "B", "B"], result.Select(entry => entry.SourceKey!).ToArray());
-        Assert.Equal(["A1", "A2"], result.Where(entry => entry.SourceKey == "A").Select(entry => entry.Name).Order().ToArray());
-        Assert.Equal(["B1", "B2"], result.Where(entry => entry.SourceKey == "B").Select(entry => entry.Name).Order().ToArray());
+        Assert.Equal(12, result.Count);
+        Assert.Equal(
+            ["A", "A", "B", "B", "C", "C", "A", "A", "B", "B", "C", "C"],
+            result.Select(entry => entry.SourceKey!).ToArray());
+        foreach (var source in new[] { "A", "B", "C" })
+        {
+            Assert.Equal(
+                [$"{source}1", $"{source}2", $"{source}3", $"{source}4"],
+                result.Where(entry => entry.SourceKey == source).Select(entry => entry.Name).Order().ToArray());
+        }
     }
 
     [Fact]
