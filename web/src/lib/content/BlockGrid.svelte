@@ -74,6 +74,7 @@
             Sources: [],
             EpisodesPerBlock: 0,
             Order: 'Sequential',
+            SameSourceProbability: 20,
             AdvanceOnePerWeek: false,
             FitToContent: true,
             TrailerEnabled: false,

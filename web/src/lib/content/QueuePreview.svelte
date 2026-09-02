@@ -33,7 +33,7 @@
         const asked = signature;
         busy = true;
         failed = null;
-        deal(channel.Sources, channel.Order, channel.EpisodesPerBlock, channel.Id)
+        deal(channel.Sources, channel.Order, channel.EpisodesPerBlock, channel.Id, channel.SameSourceProbability)
             .then((dealt) => {
                 // A slow answer must not overwrite a newer question.
                 if (asked !== signature) { return; }

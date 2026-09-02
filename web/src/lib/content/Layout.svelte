@@ -107,11 +107,24 @@ With one at a time it plays one thing from the first source, then one from the n
 
 With two, it plays two before moving on - which is what makes a channel that airs a pair of episodes and then a film, rather than a whole series and then a whole film.`;
 
-    const orderNote = $derived(
-        channel.Order === 'Shuffle'
-            ? (german ? 'Einmal gemischt und beibehalten. Ein Zeitplan, der sich neu mischt, ist kein Zeitplan.' : 'Shuffled once, and kept. A schedule that re-draws itself is not a schedule.')
-            : (german ? 'Jede Quelle nacheinander, in der Reihenfolge der Liste.' : 'Each source in turn, in the order of the list.'),
-    );
+    const orderNote = $derived.by(() => {
+        if (channel.Order === 'ShuffleBySource') {
+            return german
+                ? 'Zufällige Quellenblöcke; „Wie weit abspielen“ bleibt erhalten.'
+                : 'Random source blocks; “How far through” remains in effect.';
+        }
+        if (channel.Order === 'WeightedShuffle') {
+            return german
+                ? 'Vollständig zufällig, mit einer einstellbaren Chance für dieselbe Quelle wie zuvor.'
+                : 'Fully random, with an adjustable chance to stay with the previous source.';
+        }
+        if (channel.Order === 'Shuffle') {
+            return german
+                ? 'Alte vollständige Zufallsreihenfolge; für die Quellenregel bitte „Quellenblöcke zufällig“ wählen.'
+                : 'Legacy full shuffle; choose “Random source blocks” to keep the source rule.';
+        }
+        return german ? 'Jede Quelle nacheinander, in der Reihenfolge der Liste.' : 'Each source in turn, in the order of the list.';
+    });
 
     const interleaveNote = $derived(
         rightThrough
@@ -156,18 +169,40 @@ With two, it plays two before moving on - which is what makes a channel that air
             <div class="segmented" role="group" aria-label={german ? 'Wiedergabereihenfolge' : 'Play order'}>
                 <button
                     type="button"
-                    class:on={channel.Order !== 'Shuffle'}
-                    aria-pressed={channel.Order !== 'Shuffle'}
+                    class:on={channel.Order === 'Sequential'}
+                    aria-pressed={channel.Order === 'Sequential'}
                     onclick={() => pick('Sequential')}
                 >{german ? 'In Reihenfolge' : 'In order'}</button>
                 <button
                     type="button"
-                    class:on={channel.Order === 'Shuffle'}
-                    aria-pressed={channel.Order === 'Shuffle'}
-                    onclick={() => pick('Shuffle')}
-                >{german ? 'Zufällig' : 'Shuffled'}</button>
+                    class:on={channel.Order === 'ShuffleBySource'}
+                    aria-pressed={channel.Order === 'ShuffleBySource'}
+                    onclick={() => pick('ShuffleBySource')}
+                >{german ? 'Quellenblöcke zufällig' : 'Random source blocks'}</button>
+                <button
+                    type="button"
+                    class:on={channel.Order === 'WeightedShuffle'}
+                    aria-pressed={channel.Order === 'WeightedShuffle'}
+                    onclick={() => pick('WeightedShuffle')}
+                >{german ? 'Gewichtet zufällig' : 'Weighted random'}</button>
             </div>
             <p class="note">{orderNote}</p>
+            {#if channel.Order === 'WeightedShuffle'}
+                <div class="row">
+                    <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={channel.SameSourceProbability ?? 20}
+                        oninput={(event) => {
+                            const n = Number(event.currentTarget.value);
+                            channel.SameSourceProbability = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.floor(n))) : 20;
+                        }}
+                        aria-label={german ? 'Wahrscheinlichkeit gleiche Quelle' : 'Same source probability'}
+                    />
+                    <span class="at">% {german ? 'gleiche Quelle / Serie wie zuvor' : 'same source / series as before'}</span>
+                </div>
+            {/if}
         </div>
 
         <div class="group">

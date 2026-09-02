@@ -56,6 +56,7 @@ public class ChannelFingerprintTests
     public static TheoryData<string, Action<TvChannel>> Edits() => new()
     {
         { "play order", c => c.Order = PlayOrder.Shuffle },
+        { "source probability", c => c.SameSourceProbability = 80 },
         { "slot minutes", c => c.SlotMinutes = 30 },
         { "trailers in gaps", c => c.TrailersInGaps = false },
         { "trailer mode", c => c.Trailers = TrailerMode.Preview },

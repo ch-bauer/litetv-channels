@@ -385,6 +385,9 @@ public class TvChannel
     /// </summary>
     public PlayOrder Order { get; set; }
 
+    /// <summary>Gets or sets the chance that weighted random order keeps the current source (0-100).</summary>
+    public int SameSourceProbability { get; set; } = 20;
+
     /// <summary>
     /// Gets or sets the grid programs start on, in minutes. Zero - the default - runs
     /// them back to back, the way the channel always has. With 30, a program starts only
@@ -515,6 +518,9 @@ public class ProgramBlock
     /// </summary>
     public PlayOrder Order { get; set; }
 
+    /// <summary>Gets or sets the chance that weighted random order keeps the current source (0-100).</summary>
+    public int SameSourceProbability { get; set; } = 20;
+
     /// <summary>
     /// Gets or sets a value indicating whether the block starts the next selected item on each
     /// weekly occurrence, rather than looping through its queue during the block.
@@ -568,7 +574,13 @@ public enum PlayOrder
     /// schedule that reshuffles is not a schedule: the guide would promise one thing and
     /// air another, and a viewer already watching would be moved mid-program.
     /// </summary>
-    Shuffle
+    Shuffle,
+
+    /// <summary>Randomizes source-sized groups while preserving the configured interleave size.</summary>
+    ShuffleBySource,
+
+    /// <summary>Chooses every next entry randomly, with an optional same-source chance.</summary>
+    WeightedShuffle
 }
 
 /// <summary>

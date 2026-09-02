@@ -161,6 +161,7 @@ export async function deal(
     order: PlayOrder,
     episodesPerBlock: number,
     seed: string,
+    sameSourceProbability = 20,
     want = 6,
 ): Promise<DealtItem[]> {
     if (sources.length === 0) { return []; }
@@ -194,8 +195,41 @@ export async function deal(
         }
     }
 
-    if (order === 'Shuffle') {
+    if (order === 'ShuffleBySource') {
         const random = seeded(seed);
+        const groups: DealtItem[][] = [];
+        for (const item of queue) {
+            const previous = groups.at(-1);
+            if (!previous || previous[0].sourceIndex !== item.sourceIndex) { groups.push([]); }
+            groups.at(-1)!.push(item);
+        }
+        for (let i = groups.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [groups[i], groups[j]] = [groups[j], groups[i]];
+        }
+        return groups.flat();
+    }
+    if (order === 'Shuffle' || order === 'WeightedShuffle') {
+        const random = seeded(seed);
+        if (order === 'WeightedShuffle') {
+            const result: DealtItem[] = [];
+            const remaining = [...queue];
+            let previous: number | null = null;
+            const chance = Math.max(0, Math.min(100, sameSourceProbability));
+            while (remaining.length > 0) {
+                const same: boolean = previous !== null
+                    && remaining.some((item) => item.sourceIndex === previous)
+                    && random() * 100 < chance;
+                const candidates: DealtItem[] = same
+                    ? remaining.filter((item) => item.sourceIndex === previous)
+                    : remaining;
+                const picked: DealtItem = candidates[Math.floor(random() * candidates.length)];
+                result.push(picked);
+                remaining.splice(remaining.indexOf(picked), 1);
+                previous = picked.sourceIndex;
+            }
+            return result;
+        }
         for (let i = queue.length - 1; i > 0; i--) {
             const j = Math.floor(random() * (i + 1));
             [queue[i], queue[j]] = [queue[j], queue[i]];

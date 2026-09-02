@@ -781,11 +781,15 @@
                                                         <div style="flex: 0 1 12em;">
                                                             <select is="emby-select" id="BlockOrder" label="Play order">
                                                                 <option value="Sequential">In order</option>
-                                                                <option value="Shuffled">Shuffled</option>
+                                                                <option value="ShuffleBySource">Random source blocks</option>
+                                                                <option value="WeightedShuffle">Weighted random</option>
                                                             </select>
                                                         </div>
                                                         <div style="flex: 0 1 14em;">
                                                             <input is="emby-input" type="number" id="BlockEpisodesPerBlock" min="0" step="1" label="Episodes at a time (0 = all)" />
+                                                        </div>
+                                                        <div style="flex: 0 1 10em;">
+                                                            <input is="emby-input" type="number" id="BlockSameSourceProbability" min="0" max="100" step="1" label="Same source %" />
                                                         </div>
                                                     </div>
                                                     <div style="margin-bottom: 0.5em;">
@@ -815,17 +819,22 @@
                             <div class="inputLabel" style="margin-bottom: 0.3em;">Play order</div>
                             <div class="ltvSeg" id="PlayOrderToggle">
                                 <button type="button" data-order="Sequential">In order</button>
-                                <button type="button" data-order="Shuffled">Shuffled</button>
+                                <button type="button" data-order="ShuffleBySource">Random source blocks</button>
+                                <button type="button" data-order="WeightedShuffle">Weighted random</button>
                             </div>
                             <select is="emby-select" id="PlayOrder" style="display: none;">
                                 <option value="Sequential">In order</option>
-                                <option value="Shuffled">Shuffled</option>
+                                <option value="ShuffleBySource">Random source blocks</option>
+                                <option value="WeightedShuffle">Weighted random</option>
                             </select>
                         </div>
                                                         <div style="flex: 0 1 13em;">
                                                             <input is="emby-input" type="number" id="EpisodesPerBlock" min="0" step="1" label="Episodes at a time" />
                                                         </div>
                                                         <button type="button" class="ltvWhy" data-help="OrderHelp">?</button>
+                                                    </div>
+                                                    <div style="margin-top: 0.4em; max-width: 12em;">
+                                                        <input is="emby-input" type="number" id="SameSourceProbability" min="0" max="100" step="1" label="Same source %" />
                                                     </div>
                                                     <div class="ltvHelp" id="OrderHelp">
                                                         Episodes at a time is how many of a series run before the channel
@@ -1578,6 +1587,7 @@
                 q('#ChannelEnabled').checked = channel.Enabled !== false;
                 q('#EpisodesPerBlock').value = channel.EpisodesPerBlock || 0;
                 q('#PlayOrder').value = channel.Order || 'Sequential';
+                q('#SameSourceProbability').value = channel.SameSourceProbability ?? 20;
                 syncPlayOrderToggle();
                 q('#SlotMinutes').value = channel.SlotMinutes || 0;
                 q('#TrailersInGaps').checked = channel.TrailersInGaps !== false;
@@ -1712,7 +1722,7 @@
             }
 
             function drawDealPreview(host, sources, lists) {
-                var shuffled = q('#PlayOrder').value === 'Shuffled';
+                var shuffled = q('#PlayOrder').value !== 'Sequential';
                 var atATime = Math.max(0, parseInt(q('#EpisodesPerBlock').value, 10) || 0);
 
                 // Zero means "play each source through in full". A queue drawn twelve deep
@@ -4655,6 +4665,7 @@
                 q('#BlockDuration').value = block.DurationMinutes || 0;
                 q('#BlockOrder').value = block.Order || 'Sequential';
                 q('#BlockEpisodesPerBlock').value = block.EpisodesPerBlock || 0;
+                q('#BlockSameSourceProbability').value = block.SameSourceProbability ?? 20;
 
                 var days = q('#BlockDays');
                 days.innerHTML = '';
@@ -4689,6 +4700,7 @@
                 block.DurationMinutes = Math.max(1, parseInt(q('#BlockDuration').value, 10) || 0);
                 block.Order = q('#BlockOrder').value;
                 block.EpisodesPerBlock = parseInt(q('#BlockEpisodesPerBlock').value, 10) || 0;
+                block.SameSourceProbability = Math.max(0, Math.min(100, parseInt(q('#BlockSameSourceProbability').value, 10) || 0));
                 block.Days = Array.prototype.slice.call(document.querySelectorAll('.blockDay'))
                     .filter(function (box) { return box.checked; })
                     .map(function (box) { return box.value; });
@@ -5497,6 +5509,7 @@
                 channel.Enabled = q('#ChannelEnabled').checked;
                 channel.EpisodesPerBlock = parseInt(q('#EpisodesPerBlock').value, 10) || 0;
                 channel.Order = q('#PlayOrder').value;
+                channel.SameSourceProbability = Math.max(0, Math.min(100, parseInt(q('#SameSourceProbability').value, 10) || 0));
                 channel.SlotMinutes = Math.max(0, parseInt(q('#SlotMinutes').value, 10) || 0);
                 channel.TrailersInGaps = q('#TrailersInGaps').checked;
                 channel.Trailers = q('#TrailerMode').value;

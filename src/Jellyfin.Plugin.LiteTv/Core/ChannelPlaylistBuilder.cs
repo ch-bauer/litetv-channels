@@ -108,6 +108,7 @@ public class ChannelPlaylistBuilder
         text.Append(channel.AnchorUtc.Ticks).Append('|')
             .Append(channel.EpisodesPerBlock).Append('|')
             .Append((int)channel.Order).Append('|')
+            .Append(channel.SameSourceProbability).Append('|')
             .Append(channel.SlotMinutes).Append('|')
             .Append(channel.TrailersInGaps).Append('|')
             .Append((int)channel.Trailers).Append('|')
@@ -126,6 +127,7 @@ public class ChannelPlaylistBuilder
                 .Append(string.Join('+', block.Days)).Append(',')
                 .Append(block.EpisodesPerBlock).Append(',')
                 .Append((int)block.Order).Append(',')
+                .Append(block.SameSourceProbability).Append(',')
                 .Append(block.AdvanceOnePerWeek).Append(',')
                 .Append(block.FitToContent).Append(',')
                 .Append(block.TrailerEnabled).Append(',')
@@ -379,7 +381,7 @@ public class ChannelPlaylistBuilder
                 weeklySequenceBlocks.Add(i);
             }
             lineups[i] = new Lineup(
-                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i),
+                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i, block.EpisodesPerBlock, block.SameSourceProbability),
                 slotTicks);
             var duration = block.FitToContent
                 ? ContentMinutes(lineups[i], slotTicks, block.AdvanceOnePerWeek)
@@ -422,7 +424,9 @@ public class ChannelPlaylistBuilder
                 Interleave(Expand(channel.Sources, channel.Name), channel.EpisodesPerBlock),
                 channel.Order,
                 channel.Id,
-                WeekTimeline.BaseLineup),
+                WeekTimeline.BaseLineup,
+                channel.EpisodesPerBlock,
+                channel.SameSourceProbability),
             channel);
     }
 
@@ -549,6 +553,8 @@ public class ChannelPlaylistBuilder
 
             if (stream.Count > 0)
             {
+                var sourceKey = source.ItemId != Guid.Empty ? source.ItemId.ToString("N") : source.Url;
+                stream = stream.Select(entry => entry with { SourceKey = sourceKey }).ToList();
                 streams.Add(stream);
             }
         }
@@ -629,13 +635,15 @@ public class ChannelPlaylistBuilder
     /// client and after every restart. A schedule that re-draws is not a schedule: the
     /// guide would promise one program and the player would air another.
     /// </summary>
-    private static IReadOnlyList<ScheduledEntry> Order(
+    internal static IReadOnlyList<ScheduledEntry> Order(
         IReadOnlyList<ScheduledEntry> entries,
         PlayOrder order,
         Guid channelId,
-        int owner)
+        int owner,
+        int episodesPerBlock,
+        int sameSourceProbability)
     {
-        if (order != PlayOrder.Shuffle || entries.Count < 2)
+        if ((order != PlayOrder.Shuffle && order != PlayOrder.ShuffleBySource && order != PlayOrder.WeightedShuffle) || entries.Count < 2)
         {
             return entries;
         }
@@ -643,7 +651,54 @@ public class ChannelPlaylistBuilder
         // Deliberately not System.Random: a seeded shuffle only holds still as long as the
         // generator behind it does, and this one has to hold across runtime versions.
         var state = Seed(channelId, owner);
+        if (order == PlayOrder.ShuffleBySource)
+        {
+            var groups = new List<List<ScheduledEntry>>();
+            foreach (var entry in entries)
+            {
+                if (groups.Count == 0 || groups[^1][0].SourceKey != entry.SourceKey)
+                {
+                    groups.Add(new List<ScheduledEntry>());
+                }
+                groups[^1].Add(entry);
+            }
+
+            for (var i = groups.Count - 1; i > 0; i--)
+            {
+                state = NextState(state);
+                var j = (int)(state % (ulong)(i + 1));
+                (groups[i], groups[j]) = (groups[j], groups[i]);
+            }
+
+            return groups.SelectMany(group => group).ToList();
+        }
+
         var shuffled = entries.ToList();
+        if (order == PlayOrder.WeightedShuffle)
+        {
+            var result = new List<ScheduledEntry>(shuffled.Count);
+            var remaining = shuffled.ToList();
+            string? previousSource = null;
+            var chance = Math.Clamp(sameSourceProbability, 0, 100);
+            while (remaining.Count > 0)
+            {
+                state = NextState(state);
+                var same = previousSource is not null
+                    && remaining.Any(e => e.SourceKey == previousSource)
+                    && (state % 100UL) < (ulong)chance;
+                var candidates = same
+                    ? remaining.Where(e => e.SourceKey == previousSource).ToList()
+                    : remaining;
+                state = NextState(state);
+                var picked = candidates[(int)(state % (ulong)candidates.Count)];
+                result.Add(picked);
+                remaining.Remove(picked);
+                previousSource = picked.SourceKey;
+            }
+
+            return result;
+        }
+
         for (var i = shuffled.Count - 1; i > 0; i--)
         {
             state = NextState(state);

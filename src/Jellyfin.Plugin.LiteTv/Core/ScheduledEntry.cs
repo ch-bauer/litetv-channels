@@ -10,6 +10,8 @@ namespace Jellyfin.Plugin.LiteTv.Core;
 /// <param name="RuntimeTicks">The item runtime in ticks; always &gt; 0 for scheduled entries.</param>
 public sealed record ScheduledEntry(Guid ItemId, string Name, string? SeriesName, Guid? SeriesId, long RuntimeTicks)
 {
+    /// <summary>Gets the configured source this entry came from, used by source-aware random order.</summary>
+    public string? SourceKey { get; init; }
     /// <summary>Gets a value indicating whether this entry is a scheduled trailer.</summary>
     public bool IsTrailer { get; init; }
 

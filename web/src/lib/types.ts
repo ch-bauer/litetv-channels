@@ -7,7 +7,7 @@
  * and never parsed here.
  */
 
-export type PlayOrder = 'Sequential' | 'Shuffle';
+export type PlayOrder = 'Sequential' | 'Shuffle' | 'ShuffleBySource' | 'WeightedShuffle';
 
 /**
  * How trailers are worked into the queue. Mirrors the server's `TrailerMode` enum, and it is
@@ -36,6 +36,7 @@ export interface ProgramBlock {
     Sources: ChannelSource[];
     EpisodesPerBlock: number;
     Order: PlayOrder;
+    SameSourceProbability: number;
     /** Start the next selected item on each weekly block occurrence. */
     AdvanceOnePerWeek: boolean;
     FitToContent: boolean;
@@ -61,6 +62,7 @@ export interface TvChannel {
     ScheduleEdits: unknown[];
     EpisodesPerBlock: number;
     Order: PlayOrder;
+    SameSourceProbability: number;
     SlotMinutes: number;
     TrailersInGaps: boolean;
     Trailers: TrailerMode;

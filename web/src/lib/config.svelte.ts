@@ -310,6 +310,7 @@ class ConfigStore {
             ScheduleEdits: [],
             EpisodesPerBlock: 1,
             Order: 'Sequential',
+            SameSourceProbability: 20,
             SlotMinutes: 0,
             TrailersInGaps: true,
             Trailers: 'Off',
