@@ -219,10 +219,10 @@
         });
     }
 
-    function howLongAgo(value: string): string {
-        const at = new Date(value).getTime();
-        if (Number.isNaN(at)) { return ''; }
-        const minutes = Math.round((Date.now() - at) / 60000);
+    // Both places that say how old something is say it the same way. The token line used to
+    // do its own arithmetic and reported a six-hour token as "minted 147 min ago", which reads
+    // like a fault rather than a token halfway through an ordinary life.
+    function minutesAgo(minutes: number): string {
         if (minutes < 1) { return 'just now'; }
         if (minutes < 60) { return minutes + ' min ago'; }
         const hours = Math.round(minutes / 60);
@@ -231,11 +231,17 @@
         return days + (days === 1 ? ' day ago' : ' days ago');
     }
 
+    function howLongAgo(value: string): string {
+        const at = new Date(value).getTime();
+        if (Number.isNaN(at)) { return ''; }
+        return minutesAgo(Math.round((Date.now() - at) / 60000));
+    }
+
     const poLine = $derived.by(() => {
         if (!po) { return 'not known'; }
         if (po.TokenState === 'expired') { return 'expired — trailers are capped at 360p'; }
         if (!po.Held || po.TokenState === 'missing') { return 'none held — trailers are capped at 360p'; }
-        const age = po.AgeSeconds === null ? '' : ' · minted ' + Math.round(po.AgeSeconds / 60) + ' min ago';
+        const age = po.AgeSeconds === null ? '' : ' · minted ' + minutesAgo(Math.round(po.AgeSeconds / 60));
         return 'held' + age + (po.HasPlayerToken ? ' · with a player token' : '');
     });
 </script>
