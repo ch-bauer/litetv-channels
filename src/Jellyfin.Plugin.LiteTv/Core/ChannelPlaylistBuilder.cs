@@ -108,7 +108,6 @@ public class ChannelPlaylistBuilder
         text.Append(channel.AnchorUtc.Ticks).Append('|')
             .Append(channel.EpisodesPerBlock).Append('|')
             .Append((int)channel.Order).Append('|')
-            .Append(channel.SameSourceProbability).Append('|')
             .Append(channel.SlotMinutes).Append('|')
             .Append(channel.TrailersInGaps).Append('|')
             .Append((int)channel.Trailers).Append('|')
@@ -127,7 +126,6 @@ public class ChannelPlaylistBuilder
                 .Append(string.Join('+', block.Days)).Append(',')
                 .Append(block.EpisodesPerBlock).Append(',')
                 .Append((int)block.Order).Append(',')
-                .Append(block.SameSourceProbability).Append(',')
                 .Append(block.AdvanceOnePerWeek).Append(',')
                 .Append(block.FitToContent).Append(',')
                 .Append(block.TrailerEnabled).Append(',')
@@ -147,7 +145,8 @@ public class ChannelPlaylistBuilder
             // one for another would go on airing the old queue until the cache aged out.
             text.Append(source.ItemId.ToString("N")).Append('-')
                 .Append((int)source.Type).Append('-')
-                .Append(source.Url).Append(';');
+                .Append(source.Url).Append('-')
+                .Append(source.Probability).Append(';');
         }
     }
 
@@ -381,7 +380,7 @@ public class ChannelPlaylistBuilder
                 weeklySequenceBlocks.Add(i);
             }
             lineups[i] = new Lineup(
-                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i, block.EpisodesPerBlock, block.SameSourceProbability),
+                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i, block.EpisodesPerBlock),
                 slotTicks);
             var duration = block.FitToContent
                 ? ContentMinutes(lineups[i], slotTicks, block.AdvanceOnePerWeek)
@@ -425,8 +424,7 @@ public class ChannelPlaylistBuilder
                 channel.Order,
                 channel.Id,
                 WeekTimeline.BaseLineup,
-                channel.EpisodesPerBlock,
-                channel.SameSourceProbability),
+                channel.EpisodesPerBlock),
             channel);
     }
 
@@ -554,7 +552,11 @@ public class ChannelPlaylistBuilder
             if (stream.Count > 0)
             {
                 var sourceKey = source.ItemId != Guid.Empty ? source.ItemId.ToString("N") : source.Url;
-                stream = stream.Select(entry => entry with { SourceKey = sourceKey }).ToList();
+                stream = stream.Select(entry => entry with
+                {
+                    SourceKey = sourceKey,
+                    SourceProbability = Math.Clamp(source.Probability, 0, 100)
+                }).ToList();
                 streams.Add(stream);
             }
         }
@@ -614,7 +616,8 @@ public class ChannelPlaylistBuilder
                 TimeSpan.FromSeconds(item.Seconds).Ticks)
             {
                 Url = item.Url,
-                SourceKey = sourceKey
+                SourceKey = sourceKey,
+                SourceProbability = Math.Clamp(source.Probability, 0, 100)
             });
         }
 
@@ -642,8 +645,7 @@ public class ChannelPlaylistBuilder
         PlayOrder order,
         Guid channelId,
         int owner,
-        int episodesPerBlock,
-        int sameSourceProbability)
+        int episodesPerBlock)
     {
         if ((order != PlayOrder.Shuffle && order != PlayOrder.ShuffleBySource && order != PlayOrder.WeightedShuffle) || entries.Count < 2)
         {
@@ -679,23 +681,37 @@ public class ChannelPlaylistBuilder
         if (order == PlayOrder.WeightedShuffle)
         {
             var result = new List<ScheduledEntry>(shuffled.Count);
-            var remaining = shuffled.ToList();
-            string? previousSource = null;
-            var chance = Math.Clamp(sameSourceProbability, 0, 100);
-            while (remaining.Count > 0)
+            var streams = shuffled
+                .GroupBy(entry => entry.SourceKey)
+                .Select(group => new WeightedStream(group.Key, group.ToList(), Math.Clamp(group.First().SourceProbability, 0, 100)))
+                .ToList();
+            var first = streams[0];
+            result.Add(first.Entries[first.Cursor++]);
+
+            while (result.Count < shuffled.Count)
             {
+                var available = streams.Where(stream => stream.Cursor < stream.Entries.Count).ToList();
+                if (available.Count == 0) { break; }
+
+                var total = available.Sum(stream => stream.Weight);
+                if (total <= 0) { total = available.Count; }
                 state = NextState(state);
-                var same = previousSource is not null
-                    && remaining.Any(e => e.SourceKey == previousSource)
-                    && (state % 100UL) < (ulong)chance;
-                var candidates = same
-                    ? remaining.Where(e => e.SourceKey == previousSource).ToList()
-                    : remaining;
-                state = NextState(state);
-                var picked = candidates[(int)(state % (ulong)candidates.Count)];
-                result.Add(picked);
-                remaining.Remove(picked);
-                previousSource = picked.SourceKey;
+                var ticket = (int)(state % (ulong)total);
+                WeightedStream selected = available[^1];
+                foreach (var stream in available)
+                {
+                    var weight = total == available.Count ? 1 : stream.Weight;
+                    if (ticket < weight) { selected = stream; break; }
+                    ticket -= weight;
+                }
+
+                var count = episodesPerBlock <= 0
+                    ? selected.Entries.Count - selected.Cursor
+                    : Math.Min(episodesPerBlock, selected.Entries.Count - selected.Cursor);
+                for (var i = 0; i < count; i++)
+                {
+                    result.Add(selected.Entries[selected.Cursor++]);
+                }
             }
 
             return result;
@@ -709,6 +725,14 @@ public class ChannelPlaylistBuilder
         }
 
         return shuffled;
+    }
+
+    private sealed class WeightedStream(string? sourceKey, List<ScheduledEntry> entries, int weight)
+    {
+        public string? SourceKey { get; } = sourceKey;
+        public List<ScheduledEntry> Entries { get; } = entries;
+        public int Weight { get; } = weight;
+        public int Cursor { get; set; }
     }
 
     private static ulong Seed(Guid channelId, int owner)

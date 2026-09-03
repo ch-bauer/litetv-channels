@@ -115,8 +115,8 @@ With two, it plays two before moving on - which is what makes a channel that air
         }
         if (channel.Order === 'WeightedShuffle') {
             return german
-                ? 'Zufällige Auswahl mit einer einstellbaren Chance für dieselbe Quelle wie zuvor; „Wie weit abspielen“ wird ignoriert.'
-                : 'Random selection with an adjustable chance to stay with the previous source; “How far through” is ignored.';
+                ? 'Für jede Quelle wird bei jedem neuen Block anhand ihrer Wahrscheinlichkeit neu gelost. „Einige auf einmal“ legt die Blockgröße fest.'
+                : 'Each new block draws from the sources using their probabilities. “A few at a time” sets the block size.';
         }
         if (channel.Order === 'Shuffle') {
             return german
@@ -187,22 +187,6 @@ With two, it plays two before moving on - which is what makes a channel that air
                 >{german ? 'Gewichtet zufällig' : 'Weighted random'}</button>
             </div>
             <p class="note">{orderNote}</p>
-            {#if channel.Order === 'WeightedShuffle'}
-                <div class="row">
-                    <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={channel.SameSourceProbability ?? 20}
-                        oninput={(event) => {
-                            const n = Number(event.currentTarget.value);
-                            channel.SameSourceProbability = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.floor(n))) : 20;
-                        }}
-                        aria-label={german ? 'Wahrscheinlichkeit gleiche Quelle' : 'Same source probability'}
-                    />
-                    <span class="at">% {german ? 'gleiche Quelle / Serie wie zuvor' : 'same source / series as before'}</span>
-                </div>
-            {/if}
         </div>
 
         <div class="group">

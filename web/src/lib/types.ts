@@ -25,6 +25,8 @@ export interface ChannelSource {
     Name: string;
     /** Set only for a YouTube source, which has no library item behind it at all. */
     Url?: string;
+    /** Relative probability used by WeightedShuffle when this source still has episodes. */
+    Probability?: number;
 }
 
 export interface ProgramBlock {

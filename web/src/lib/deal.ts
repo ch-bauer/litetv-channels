@@ -31,6 +31,7 @@ export interface DealtItem {
     id: string;
     label: string;
     sourceIndex: number;
+    sourceProbability?: number;
 }
 
 interface LibraryItem {
@@ -176,7 +177,6 @@ export async function deal(
     order: PlayOrder,
     episodesPerBlock: number,
     seed: string,
-    sameSourceProbability = 20,
     want = 6,
 ): Promise<DealtItem[]> {
     if (sources.length === 0) { return []; }
@@ -202,9 +202,43 @@ export async function deal(
     const queue: DealtItem[] = [];
     const cursors = pools.map(() => 0);
 
-    // This is the same order as the server: first interleave (or concatenate), then apply the
-    // stable shuffle to the resulting queue. Shuffling the source choice while dealing produced
-    // a different schedule than the one the server actually airs.
+    // WeightedShuffle chooses a source for each block from its own configured weights. The first
+    // episode remains the first configured episode; every later block gets a fresh lottery.
+    if (order === 'WeightedShuffle') {
+        const result: DealtItem[] = [];
+        const weightedPools = pools.map((pool, index) => ({
+            pool,
+            index,
+            cursor: 0,
+            weight: Math.max(0, Math.min(100, sources[index].Probability ?? 100)),
+        }));
+        const first = weightedPools.find((candidate) => candidate.pool.length > 0);
+        if (!first) { return []; }
+        result.push(first.pool[first.cursor++]);
+        const random = seeded(seed);
+        while (result.length < want) {
+            const available = weightedPools.filter((candidate) => candidate.cursor < candidate.pool.length);
+            if (available.length === 0) { break; }
+            const total = available.reduce((sum, candidate) => sum + candidate.weight, 0);
+            let ticket = Math.floor(random() * (total > 0 ? total : available.length));
+            let selected = available[available.length - 1];
+            for (const candidate of available) {
+                const weight = total > 0 ? candidate.weight : 1;
+                if (ticket < weight) { selected = candidate; break; }
+                ticket -= weight;
+            }
+            const count = episodesPerBlock <= 0
+                ? selected.pool.length - selected.cursor
+                : Math.min(take, selected.pool.length - selected.cursor);
+            for (let i = 0; i < count && result.length < want; i++) {
+                result.push(selected.pool[selected.cursor++]);
+            }
+        }
+        return result;
+    }
+
+    // This is the same order as the server for the other modes: first interleave (or
+    // concatenate), then apply the stable shuffle to the resulting queue.
     if (episodesPerBlock <= 0) {
         for (const pool of pools) { queue.push(...pool); }
         queue.length = Math.min(queue.length, want);
@@ -222,27 +256,8 @@ export async function deal(
         }
     }
 
-    if (order === 'Shuffle' || order === 'WeightedShuffle') {
+    if (order === 'Shuffle') {
         const random = seeded(seed);
-        if (order === 'WeightedShuffle') {
-            const result: DealtItem[] = [];
-            const remaining = [...queue];
-            let previous: number | null = null;
-            const chance = Math.max(0, Math.min(100, sameSourceProbability));
-            while (remaining.length > 0) {
-                const same: boolean = previous !== null
-                    && remaining.some((item) => item.sourceIndex === previous)
-                    && random() * 100 < chance;
-                const candidates: DealtItem[] = same
-                    ? remaining.filter((item) => item.sourceIndex === previous)
-                    : remaining;
-                const picked: DealtItem = candidates[Math.floor(random() * candidates.length)];
-                result.push(picked);
-                remaining.splice(remaining.indexOf(picked), 1);
-                previous = picked.sourceIndex;
-            }
-            return result;
-        }
         for (let i = queue.length - 1; i > 0; i--) {
             const j = Math.floor(random() * (i + 1));
             [queue[i], queue[j]] = [queue[j], queue[i]];

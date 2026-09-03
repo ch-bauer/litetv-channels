@@ -788,9 +788,6 @@
                                                         <div style="flex: 0 1 14em;">
                                                             <input is="emby-input" type="number" id="BlockEpisodesPerBlock" min="0" step="1" label="Episodes at a time (0 = all)" />
                                                         </div>
-                                                        <div style="flex: 0 1 10em;">
-                                                            <input is="emby-input" type="number" id="BlockSameSourceProbability" min="0" max="100" step="1" label="Same source %" />
-                                                        </div>
                                                     </div>
                                                     <div style="margin-bottom: 0.5em;">
                                                         <input is="emby-input" type="text" id="BlockItemSearch" placeholder="Add content to this block…" style="margin: 0;" />
@@ -832,9 +829,6 @@
                                                             <input is="emby-input" type="number" id="EpisodesPerBlock" min="0" step="1" label="Episodes at a time" />
                                                         </div>
                                                         <button type="button" class="ltvWhy" data-help="OrderHelp">?</button>
-                                                    </div>
-                                                    <div style="margin-top: 0.4em; max-width: 12em;">
-                                                        <input is="emby-input" type="number" id="SameSourceProbability" min="0" max="100" step="1" label="Same source %" />
                                                     </div>
                                                     <div class="ltvHelp" id="OrderHelp">
                                                         Episodes at a time is how many of a series run before the channel
@@ -1587,7 +1581,6 @@
                 q('#ChannelEnabled').checked = channel.Enabled !== false;
                 q('#EpisodesPerBlock').value = channel.EpisodesPerBlock || 0;
                 q('#PlayOrder').value = channel.Order || 'Sequential';
-                q('#SameSourceProbability').value = channel.SameSourceProbability ?? 20;
                 syncPlayOrderToggle();
                 q('#SlotMinutes').value = channel.SlotMinutes || 0;
                 q('#TrailersInGaps').checked = channel.TrailersInGaps !== false;
@@ -4307,6 +4300,21 @@
                     label.textContent = (i + 1) + '. [' + source.Type + '] ' + (source.Name || source.ItemId);
                     row.appendChild(label);
 
+                    var probability = document.createElement('input');
+                    probability.type = 'number';
+                    probability.min = '0';
+                    probability.max = '100';
+                    probability.step = '1';
+                    probability.value = String(source.Probability == null ? 100 : source.Probability);
+                    probability.title = 'Probability for this source (%)';
+                    probability.style.width = '5em';
+                    probability.addEventListener('change', function () {
+                        var value = parseInt(probability.value, 10);
+                        source.Probability = isFinite(value) ? Math.max(0, Math.min(100, value)) : 100;
+                        probability.value = String(source.Probability);
+                    });
+                    row.appendChild(probability);
+
                     [['↑', -1], ['↓', 1]].forEach(function (move) {
                         var btn = document.createElement('button');
                         btn.setAttribute('is', 'emby-button');
@@ -4665,7 +4673,6 @@
                 q('#BlockDuration').value = block.DurationMinutes || 0;
                 q('#BlockOrder').value = block.Order || 'Sequential';
                 q('#BlockEpisodesPerBlock').value = block.EpisodesPerBlock || 0;
-                q('#BlockSameSourceProbability').value = block.SameSourceProbability ?? 20;
 
                 var days = q('#BlockDays');
                 days.innerHTML = '';
@@ -4700,7 +4707,6 @@
                 block.DurationMinutes = Math.max(1, parseInt(q('#BlockDuration').value, 10) || 0);
                 block.Order = q('#BlockOrder').value;
                 block.EpisodesPerBlock = parseInt(q('#BlockEpisodesPerBlock').value, 10) || 0;
-                block.SameSourceProbability = Math.max(0, Math.min(100, parseInt(q('#BlockSameSourceProbability').value, 10) || 0));
                 block.Days = Array.prototype.slice.call(document.querySelectorAll('.blockDay'))
                     .filter(function (box) { return box.checked; })
                     .map(function (box) { return box.value; });
@@ -5509,7 +5515,6 @@
                 channel.Enabled = q('#ChannelEnabled').checked;
                 channel.EpisodesPerBlock = parseInt(q('#EpisodesPerBlock').value, 10) || 0;
                 channel.Order = q('#PlayOrder').value;
-                channel.SameSourceProbability = Math.max(0, Math.min(100, parseInt(q('#SameSourceProbability').value, 10) || 0));
                 channel.SlotMinutes = Math.max(0, parseInt(q('#SlotMinutes').value, 10) || 0);
                 channel.TrailersInGaps = q('#TrailersInGaps').checked;
                 channel.Trailers = q('#TrailerMode').value;

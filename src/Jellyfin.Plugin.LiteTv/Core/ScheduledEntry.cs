@@ -12,6 +12,8 @@ public sealed record ScheduledEntry(Guid ItemId, string Name, string? SeriesName
 {
     /// <summary>Gets the configured source this entry came from, used by source-aware random order.</summary>
     public string? SourceKey { get; init; }
+    /// <summary>Gets the configured selection weight of the source this entry came from.</summary>
+    public int SourceProbability { get; init; } = 100;
     /// <summary>Gets a value indicating whether this entry is a scheduled trailer.</summary>
     public bool IsTrailer { get; init; }
 

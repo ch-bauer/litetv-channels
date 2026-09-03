@@ -238,6 +238,22 @@
                 <div class="detail" title={detailOf(source)}>{detailOf(source)}</div>
             </div>
 
+            <label class="probability">
+                <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={source.Probability ?? 100}
+                    oninput={(e) => {
+                        const n = Number(e.currentTarget.value);
+                        source.Probability = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.floor(n))) : 100;
+                    }}
+                    aria-label={german ? `Wahrscheinlichkeit für ${source.Name}` : `Probability for ${source.Name}`}
+                    onclick={(e) => e.stopPropagation()}
+                />
+                <span>%</span>
+            </label>
+
             <span
                 class="kind"
                 class:series={source.Type === 'Series'}
@@ -343,6 +359,9 @@
     }
 
     .who { flex-grow: 1; min-width: 0; }
+
+    .probability { display: flex; align-items: center; gap: 3px; flex: 0 0 auto; color: var(--lt-text-muted); font-size: 11px; }
+    .probability input { width: 47px; padding: 4px 3px; border: 1px solid var(--lt-line-strong); border-radius: var(--lt-radius-small); background: var(--lt-bg); color: var(--lt-text); font: inherit; text-align: right; }
 
     .name {
         font-size: 13.5px;

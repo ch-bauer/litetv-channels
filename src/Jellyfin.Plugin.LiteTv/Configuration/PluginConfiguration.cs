@@ -579,7 +579,7 @@ public enum PlayOrder
     /// <summary>Randomizes source-sized groups while preserving the configured interleave size.</summary>
     ShuffleBySource,
 
-    /// <summary>Chooses every next entry randomly, with an optional same-source chance.</summary>
+    /// <summary>Chooses a source with its configured probability for every new episode block.</summary>
     WeightedShuffle
 }
 
@@ -616,6 +616,12 @@ public class ChannelSource
     /// </para>
     /// </summary>
     public string Url { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the relative probability used when WeightedShuffle chooses this source.
+    /// Values are normalized across sources that still have episodes available.
+    /// </summary>
+    public int Probability { get; set; } = 100;
 }
 
 /// <summary>

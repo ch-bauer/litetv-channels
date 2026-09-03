@@ -6,10 +6,11 @@ namespace Jellyfin.Plugin.LiteTv.Tests;
 
 public class PlayOrderTests
 {
-    private static ScheduledEntry Entry(string name, string source) => new(
+    private static ScheduledEntry Entry(string name, string source, int probability = 100) => new(
         Guid.NewGuid(), name, source, Guid.NewGuid(), TimeSpan.FromMinutes(20).Ticks)
     {
-        SourceKey = source
+        SourceKey = source,
+        SourceProbability = probability
     };
 
     [Fact]
@@ -23,7 +24,7 @@ public class PlayOrderTests
             Entry("A4", "A"), Entry("B4", "B"), Entry("C4", "C")
         };
 
-        var result = ChannelPlaylistBuilder.Order(entries, PlayOrder.ShuffleBySource, Guid.Parse("11111111-1111-1111-1111-111111111111"), 0, 2, 20);
+        var result = ChannelPlaylistBuilder.Order(entries, PlayOrder.ShuffleBySource, Guid.Parse("11111111-1111-1111-1111-111111111111"), 0, 2);
 
         Assert.Equal(12, result.Count);
         Assert.Equal(
@@ -38,14 +39,14 @@ public class PlayOrderTests
     }
 
     [Fact]
-    public void WeightedShuffleAtOneHundredPercentStaysWithThePreviousSourceWhenPossible()
+    public void WeightedShuffleUsesPerSourceWeightsAndBlockSize()
     {
-        var entries = new[] { Entry("A1", "A"), Entry("A2", "A"), Entry("B1", "B"), Entry("B2", "B") };
+        var entries = new[] { Entry("A1", "A", 100), Entry("A2", "A", 100), Entry("A3", "A", 100), Entry("B1", "B", 0), Entry("B2", "B", 0) };
 
-        var result = ChannelPlaylistBuilder.Order(entries, PlayOrder.WeightedShuffle, Guid.Parse("22222222-2222-2222-2222-222222222222"), 0, 2, 100);
+        var result = ChannelPlaylistBuilder.Order(entries, PlayOrder.WeightedShuffle, Guid.Parse("22222222-2222-2222-2222-222222222222"), 0, 2);
 
         Assert.Equal(entries.Length, result.Count);
-        var switches = result.Zip(result.Skip(1), (first, second) => first.SourceKey != second.SourceKey).Count(changed => changed);
-        Assert.Equal(1, switches);
+        Assert.Equal("A1", result[0].Name);
+        Assert.Equal(["A", "A", "A", "B", "B"], result.Select(entry => entry.SourceKey!).ToArray());
     }
 }

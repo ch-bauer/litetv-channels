@@ -26,15 +26,14 @@
         channel.Id,
         channel.Order,
         channel.EpisodesPerBlock,
-        channel.SameSourceProbability,
-        channel.Sources.map((s) => [s.Type, s.ItemId, s.Url, s.Name].join(':')).join(','),
+        channel.Sources.map((s) => [s.Type, s.ItemId, s.Url, s.Name, s.Probability ?? 100].join(':')).join(','),
     ].join('|'));
 
     $effect(() => {
         const asked = signature;
         busy = true;
         failed = null;
-        deal(channel.Sources, channel.Order, channel.EpisodesPerBlock, channel.Id, channel.SameSourceProbability)
+        deal(channel.Sources, channel.Order, channel.EpisodesPerBlock, channel.Id)
             .then((dealt) => {
                 // A slow answer must not overwrite a newer question.
                 if (asked !== signature) { return; }

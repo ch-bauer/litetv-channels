@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "YouTube playlist entries now carry a stable source identity for source-aware scheduling, and the content-page preview expands playlists with the same source and order semantics as the server. Expired proof-of-origin tokens are now reported as expired instead of none held, while invalid resolution qualities remain unknown rather than being shown as a sentinel pixel value.",
+  "changelog": "Weighted random scheduling now assigns a probability to each source and draws a fresh source for every block. The 'some at a time' setting controls how many episodes are appended from the selected source; the configuration preview follows the same rule.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-09-03T01:00:00.000Z",
-  "version": "1.0.117.0",
+  "version": "1.0.118.0",
   "status": "Active",
   "autoUpdate": false
 }
