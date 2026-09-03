@@ -37,7 +37,40 @@
         families: [],
         refresh: 0,
         dismissed: [],
+        strictness: 45,
+        filmNight: 'auto',
+        trailers: true,
+        randomize: true,
+        minSources: 3,
+        maxSources: 12,
     });
+
+    /** Which suggestion's title list is open. Only one at a time; they are long. */
+    let opened = $state<string | null>(null);
+
+    const filmNights = [
+        { value: 'auto', de: 'wenn es passt', en: 'where it fits' },
+        { value: 'on', de: 'immer', en: 'always' },
+        { value: 'off', de: 'nie', en: 'never' },
+    ];
+
+    /** How the strictness reads at a glance, so the number is not the only clue. */
+    function strictnessWords(value: number): string {
+        if (value < 25) { return german ? 'weit gefasst' : 'broad'; }
+        if (value < 55) { return german ? 'verwandt' : 'related'; }
+        if (value < 80) { return german ? 'eng verwandt' : 'closely related'; }
+        return german ? 'fast dasselbe' : 'almost the same';
+    }
+
+    function sourceWords(source: { Name: string; Year?: number | null; Type: string; Titles?: number }): string {
+        const year = source.Year ? ' (' + source.Year + ')' : '';
+        const kind = source.Type === 'Series'
+            ? (german ? 'Serie' : 'series') + (source.Titles && source.Titles > 1
+                ? ', ' + source.Titles + (german ? ' Folgen' : ' episodes')
+                : '')
+            : (german ? 'Film' : 'film');
+        return source.Name + year + ' · ' + kind;
+    }
 
     const audiences = [
         { value: '', de: 'Alle Altersgruppen', en: 'Any audience' },
@@ -201,6 +234,65 @@
         </div>
 
         <div class="control">
+            <span class="label">{german ? 'Ähnlichkeit' : 'Similarity'}</span>
+            <div class="size">
+                <input type="range" min="0" max="100" step="5"
+                    bind:value={controls.strictness} onchange={() => void load()} />
+                <output>{strictnessWords(controls.strictness)}</output>
+            </div>
+            <p class="hint">
+                {german
+                    ? 'Wie eng die Titel zusammengehören müssen. Ein Studio allein macht keinen Sender: streng gestellt bleibt bei Animationsfilmen die Animation, und der Krimi desselben Studios fällt heraus.'
+                    : 'How closely the titles must belong together. A studio alone is not a channel: set tight, animation stays with animation and the same studio\'s thriller drops out.'}
+            </p>
+        </div>
+
+        <div class="control">
+            <span class="label">{german ? 'Filmabend' : 'Film night'}</span>
+            <div class="chips">
+                {#each filmNights as choice (choice.value)}
+                    <button type="button" class="chip" class:on={controls.filmNight === choice.value}
+                        onclick={() => { controls.filmNight = choice.value; void load(); }}>
+                        {german ? choice.de : choice.en}
+                    </button>
+                {/each}
+            </div>
+            <p class="hint">
+                {german
+                    ? 'Die Filme des Blocks sind nie zugleich der Kanalinhalt. Ein reiner Filmkanal bekommt gar keinen.'
+                    : 'The block\'s films are never also the channel\'s content. A film channel gets none at all.'}
+            </p>
+        </div>
+
+        <div class="control">
+            <span class="label">{german ? 'Quellen je Kanal' : 'Sources per channel'}</span>
+            <div class="size">
+                <input type="range" min="2" max="12" step="1"
+                    bind:value={controls.minSources} onchange={() => void load()} />
+                <output>{german ? 'mindestens' : 'at least'} {controls.minSources}</output>
+            </div>
+            <div class="size">
+                <input type="range" min={controls.minSources} max="24" step="1"
+                    bind:value={controls.maxSources} onchange={() => void load()} />
+                <output>{german ? 'höchstens' : 'at most'} {controls.maxSources}</output>
+            </div>
+        </div>
+
+        <div class="control">
+            <span class="label">{german ? 'Programm' : 'Programming'}</span>
+            <div class="chips">
+                <button type="button" class="chip" class:on={controls.trailers}
+                    onclick={() => { controls.trailers = !controls.trailers; void load(); }}>
+                    {german ? 'Trailer-Vorschau' : 'Trailer preview'}
+                </button>
+                <button type="button" class="chip" class:on={controls.randomize}
+                    onclick={() => { controls.randomize = !controls.randomize; void load(); }}>
+                    {german ? 'Serienfolgen mischen' : 'Shuffle episodes'}
+                </button>
+            </div>
+        </div>
+
+        <div class="control">
             <span class="label">{german ? 'Kanalarten' : 'Kinds of channel'}</span>
             <div class="chips">
                 <button type="button" class="chip" class:on={controls.families.length === 0}
@@ -261,12 +353,25 @@
                             {/each}
                         </div>
                         <div class="because">
+                            <button type="button" class="peek"
+                                onclick={() => (opened = opened === suggestion.Name ? null : suggestion.Name)}>
+                                {opened === suggestion.Name
+                                    ? (german ? 'Titel verbergen' : 'Hide titles')
+                                    : (german ? 'Titel ansehen' : 'See titles')}
+                            </button>
                             <span>{suggestion.Reason.Audience}</span>
                             {#each suggestion.Reason.Because as reason (reason)}
                                 <span>{reason}</span>
                             {/each}
                             {#if suggestion.Reason.Libraries.length > 0}
                                 <span>{suggestion.Reason.Libraries.join(', ')}</span>
+                            {/if}
+                            {#if suggestion.Reason.Engine === 'Rough'}
+                                <span class="rough">
+                                    {german
+                                        ? 'grob sortiert — Smart Similar hat nicht geantwortet'
+                                        : 'roughly sorted — Smart Similar did not answer'}
+                                </span>
                             {/if}
                         </div>
                         {#if suggestion.MovieNight}
@@ -280,6 +385,20 @@
                             <div class="movie-night muted">
                                 <span>{german ? 'Durchgehend aus der lokalen Bibliothek' : 'Continuous local programming'}</span>
                             </div>
+                        {/if}
+
+                        {#if opened === suggestion.Name}
+                            <ul class="titles">
+                                {#each suggestion.Sources as source (source.ItemId)}
+                                    <li>{sourceWords(source)}</li>
+                                {/each}
+                                {#if suggestion.MovieNight}
+                                    <li class="block">{german ? 'Filmabend:' : 'Film night:'}</li>
+                                    {#each suggestion.MovieNight.Sources as source (source.ItemId)}
+                                        <li class="of-block">{sourceWords(source)}</li>
+                                    {/each}
+                                {/if}
+                            </ul>
                         {/if}
                     </div>
                     <div class="decide">
@@ -317,6 +436,11 @@
     .size-badge { padding: 3px 6px; border: 1px solid var(--lt-queue); border-radius: 99px; color: var(--lt-queue); }
     .because { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px; color: var(--lt-text-dim); font-size: 10.5px; }
     .because span:not(:last-child)::after { content: ' ·'; }
+    .peek { padding: 0; border: 0; background: none; color: var(--lt-accent); font: 600 10.5px inherit; cursor: pointer; text-decoration: underline; }
+    .titles { display: flex; flex-direction: column; gap: 2px; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--lt-line); color: var(--lt-text-dim); font-size: 11px; list-style: none; }
+    .titles .block { margin-top: 5px; color: var(--lt-collection); font-weight: 700; }
+    .titles .of-block { padding-left: 10px; }
+    .rough { color: #e0a85b; }
     .decide { display: flex; flex-direction: column; gap: 6px; }
     .no { padding: 6px 10px; border: 1px solid var(--lt-line-strong); border-radius: var(--lt-radius-small); background: transparent; color: var(--lt-text-dim); font: 600 11px inherit; cursor: pointer; white-space: nowrap; }
     .no:hover { color: var(--lt-text-muted); }

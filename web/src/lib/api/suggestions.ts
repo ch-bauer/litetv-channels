@@ -8,12 +8,20 @@
 import { api } from '../jellyfin';
 import type { ChannelSource, PlayOrder, ProgramBlock, TrailerMode } from '../types';
 
+/** One proposed source, with what the preview before adding needs to name it. */
+export interface SuggestedSource extends ChannelSource {
+    Year?: number | null;
+    Genres?: string[];
+    /** Playable titles this source expands to; 1 for a film. */
+    Titles?: number;
+}
+
 export interface ReadyChannelSuggestion {
     Name: string;
     Description: string;
     Theme: string;
     Features: string[];
-    Sources: ChannelSource[];
+    Sources: SuggestedSource[];
     EpisodesPerBlock: number;
     Order: PlayOrder;
     RandomizeEpisodes: boolean;
@@ -46,6 +54,8 @@ export interface SuggestionReason {
     EstimatedTitles: number;
     /** The size this proposal was held to. */
     SizeLimit: number;
+    /** 'SmartSimilar', or 'Rough' when that plugin is absent or did not answer. */
+    Engine: string;
 }
 
 export interface SuggestionLibrary {
@@ -69,6 +79,16 @@ export interface SuggestionControls {
     refresh: number;
     /** Names already said no to. */
     dismissed: string[];
+    /** How tightly the titles must belong together, 0-100. The floor on the similarity score. */
+    strictness: number;
+    /** 'auto', 'on' or 'off'. A film channel never gets one whatever this says. */
+    filmNight: string;
+    /** Whether proposals come with the trailer preview turned on. */
+    trailers: boolean;
+    /** Whether a series' episodes are mixed before selection. */
+    randomize: boolean;
+    minSources: number;
+    maxSources: number;
 }
 
 /** The libraries the suggestions can be drawn from. */
@@ -86,6 +106,14 @@ export function readyChannels(controls?: SuggestionControls): Promise<ReadyChann
         if (controls.dismissed.length > 0) { query.dismissed = controls.dismissed.join(','); }
         query.maxTitles = controls.maxTitles;
         query.refresh = controls.refresh;
+        query.strictness = controls.strictness;
+        query.filmNight = controls.filmNight;
+        query.trailers = String(controls.trailers);
+        query.randomize = String(controls.randomize);
+        query.minSources = controls.minSources;
+        query.maxSources = controls.maxSources;
+        // Smart Similar applies the asking account's library access, so it has to be told who.
+        query.userId = api().getCurrentUserId();
     }
 
     return api().getJSON<ReadyChannelSuggestion[]>(api().getUrl('LiteTv/Suggestions', query));
