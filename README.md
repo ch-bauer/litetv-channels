@@ -9,31 +9,15 @@ always-on channels. Every channel has a real schedule: tune in and it starts at 
 that is on now, at the correct position. No tuner, no background stream and no transcoding layer
 are required.
 
-> [!WARNING]
-> LiteTV is experimental software. Use it on a test server first and keep backups of a server
-> before installing any third-party plugin.
-
-## See it in action
-
-<p align="center">
-  <img src="images/demo/tv-channel-list.png" alt="The LiteTV channel list on Android TV" width="49%" />
-  <img src="images/demo/tv-channel-detail.png" alt="A channel page with the programme that is on now and coming up" width="49%" />
-</p>
-
-The Android TV experience is designed around watching, not managing a fake live stream:
-
-- Choose a channel from a dedicated TV list, see what is live and what follows, then join it.
-- The player starts at the live position. A small action offers to restart the current programme
-  from its beginning when that is useful.
-- At the end of a scheduled episode, choose to continue the same series or follow the channel's
-  schedule. The choice respects recognised outro segments and never cuts a programme short just
-  because its runtime metadata ends early.
-- The upcoming queue remains available from the player, with chapters beneath it when present.
-
-<p align="center">
-  <img src="images/demo/tv-queue.png" alt="The upcoming LiteTV queue in the Android TV player" width="49%" />
-  <img src="images/demo/tv-continue-choice.png" alt="Compact choice to continue a series or follow the schedule" width="49%" />
-</p>
+> [!CAUTION]
+> **This is a proof of concept, written with AI.** It is purely for testing, and there are
+> many items that are known to be incorrect or broken. It is not advisable to use this on a
+> non-test server.
+>
+> For this reason it is offered as is, with **no guarantee of support, bug fixes, or
+> troubleshooting**.
+>
+> **It is NOT recommended to fork or build on top of this plugin!**
 
 ## What makes a channel live
 
