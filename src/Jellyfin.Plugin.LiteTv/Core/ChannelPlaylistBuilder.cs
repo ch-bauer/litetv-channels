@@ -597,6 +597,7 @@ public class ChannelPlaylistBuilder
             .GetResult();
 
         var skipped = 0;
+        var sourceKey = string.IsNullOrWhiteSpace(source.Url) ? source.Name : source.Url;
         foreach (var item in items)
         {
             if (item.Seconds <= 0)
@@ -612,7 +613,8 @@ public class ChannelPlaylistBuilder
                 null,
                 TimeSpan.FromSeconds(item.Seconds).Ticks)
             {
-                Url = item.Url
+                Url = item.Url,
+                SourceKey = sourceKey
             });
         }
 

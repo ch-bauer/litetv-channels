@@ -15,6 +15,7 @@
  * channel id and gives the same answer every time it is asked.
  */
 import { api } from './jellyfin';
+import { fetchPlaylist } from './api/playlist';
 import type { ChannelSource, PlayOrder } from './types';
 
 /**
@@ -61,6 +62,19 @@ function episodeLabel(item: LibraryItem): string {
  * expanding a 111-episode series in full to show six lines would be absurd.
  */
 async function expand(source: ChannelSource, cap: number): Promise<DealtItem[]> {
+    if (source.Type === 'YouTube' && source.Url) {
+        try {
+            const playlist = await fetchPlaylist(source.Url);
+            return playlist.Items.slice(0, cap).map((item) => ({
+                id: item.VideoId || item.Url,
+                label: item.Title,
+                sourceIndex: 0,
+            }));
+        } catch {
+            return [{ id: source.Url, label: source.Name || source.Url, sourceIndex: 0 }];
+        }
+    }
+
     /*
         A source with no library item behind it - a YouTube playlist - carries the all-zero id.
         Asking Jellyfin for `parentId=000...` is not an empty answer: `GetParentItem` hands it

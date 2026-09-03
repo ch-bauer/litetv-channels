@@ -27,7 +27,7 @@
         channel.Order,
         channel.EpisodesPerBlock,
         channel.SameSourceProbability,
-        channel.Sources.map((s) => s.ItemId).join(','),
+        channel.Sources.map((s) => [s.Type, s.ItemId, s.Url, s.Name].join(':')).join(','),
     ].join('|'));
 
     $effect(() => {
