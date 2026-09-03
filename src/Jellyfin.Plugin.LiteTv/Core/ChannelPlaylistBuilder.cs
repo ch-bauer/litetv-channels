@@ -598,13 +598,37 @@ public class ChannelPlaylistBuilder
             .GetAwaiter()
             .GetResult();
 
-        var skipped = 0;
+        entries.AddRange(YouTubeEntries(source, items));
+        var skipped = items.Count - entries.Count;
+
+        if (skipped > 0)
+        {
+            _logger.LogInformation(
+                "LiteTV channel {Channel}: {Skipped} of {Total} videos in {Source} had no length and were left out.",
+                channelName,
+                skipped,
+                items.Count,
+                source.Name.Length > 0 ? source.Name : source.Url);
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// Turns one fetched YouTube source into its scheduled entries. Kept separate from the
+    /// network read so the playlist identity, ordering and unavailable-item handling can be
+    /// exercised with the same path that creates a stored schedule.
+    /// </summary>
+    internal static IReadOnlyList<ScheduledEntry> YouTubeEntries(
+        ChannelSource source,
+        IReadOnlyList<Trailers.YouTubePlaylist.Item> items)
+    {
+        var entries = new List<ScheduledEntry>(items.Count);
         var sourceKey = string.IsNullOrWhiteSpace(source.Url) ? source.Name : source.Url;
         foreach (var item in items)
         {
             if (item.Seconds <= 0)
             {
-                skipped++;
                 continue;
             }
 
@@ -619,16 +643,6 @@ public class ChannelPlaylistBuilder
                 SourceKey = sourceKey,
                 SourceProbability = Math.Clamp(source.Probability, 0, 100)
             });
-        }
-
-        if (skipped > 0)
-        {
-            _logger.LogInformation(
-                "LiteTV channel {Channel}: {Skipped} of {Total} videos in {Source} had no length and were left out.",
-                channelName,
-                skipped,
-                items.Count,
-                source.Name.Length > 0 ? source.Name : source.Url);
         }
 
         return entries;
