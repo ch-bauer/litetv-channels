@@ -13,7 +13,7 @@
         "changelog": "Fixes weighted random scheduling: every draw, including the first, uses the selected block size; a source cannot immediately repeat while another positively weighted source still has episodes. The configuration preview now follows exactly the same rule.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.120.0/litetv-channels_1.0.120.0.zip",
-        "checksum": "",
+        "checksum": "955f3e4537e4af786222aab50beb1d80",
         "timestamp": "2026-09-03T13:00:00.000Z"
       },
       {
