@@ -43,6 +43,13 @@ interface LibraryItem {
     SeriesName?: string;
 }
 
+interface WeightedPool {
+    pool: DealtItem[];
+    index: number;
+    cursor: number;
+    weight: number;
+}
+
 interface LinkedChild {
     ItemId?: string;
     ItemName?: string;
@@ -203,28 +210,32 @@ export async function deal(
     const queue: DealtItem[] = [];
     const cursors = pools.map(() => 0);
 
-    // WeightedShuffle chooses a source for each block from its own configured weights. The first
-    // episode remains the first configured episode unless series randomisation is on; every
-    // later block gets a fresh lottery.
+    // WeightedShuffle chooses a source for each block from its own configured weights. A source
+    // does not immediately draw twice while another positively weighted source remains, so the
+    // preview cannot turn a small probability into an implausibly long visible run.
     if (order === 'WeightedShuffle') {
         const result: DealtItem[] = [];
-        const weightedPools = pools.map((pool, index) => ({
+        const weightedPools: WeightedPool[] = pools.map((pool, index) => ({
             pool,
             index,
             cursor: 0,
             weight: Math.max(0, Math.min(100, sources[index].Probability ?? 100)),
         }));
-        const first = weightedPools.find((candidate) => candidate.pool.length > 0);
-        if (!first) { return []; }
-        result.push(first.pool[first.cursor++]);
         const random = seeded(seed);
+        let previous: WeightedPool | null = null;
         while (result.length < want) {
-            const available = weightedPools.filter((candidate) => candidate.cursor < candidate.pool.length);
+            const available: WeightedPool[] = weightedPools.filter((candidate) => candidate.cursor < candidate.pool.length);
             if (available.length === 0) { break; }
-            const total = available.reduce((sum, candidate) => sum + candidate.weight, 0);
+            const alternatives: WeightedPool[] = previous === null
+                ? available
+                : available.filter((candidate) => candidate !== previous);
+            const candidates: WeightedPool[] = alternatives.reduce((sum, candidate) => sum + candidate.weight, 0) > 0
+                ? alternatives
+                : available;
+            const total = candidates.reduce((sum, candidate) => sum + candidate.weight, 0);
             let ticket = Math.floor(random() * (total > 0 ? total : available.length));
-            let selected = available[available.length - 1];
-            for (const candidate of available) {
+            let selected: WeightedPool = candidates[candidates.length - 1];
+            for (const candidate of candidates) {
                 const weight = total > 0 ? candidate.weight : 1;
                 if (ticket < weight) { selected = candidate; break; }
                 ticket -= weight;
@@ -235,6 +246,7 @@ export async function deal(
             for (let i = 0; i < count && result.length < want; i++) {
                 result.push(selected.pool[selected.cursor++]);
             }
+            previous = selected;
         }
         return result;
     }

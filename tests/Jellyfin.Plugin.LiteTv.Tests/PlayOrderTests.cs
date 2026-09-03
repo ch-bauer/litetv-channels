@@ -51,6 +51,41 @@ public class PlayOrderTests
     }
 
     [Fact]
+    public void WeightedShuffleOnlyRepeatsASourceAfterEveryOtherPositiveSourceIsExhausted()
+    {
+        var entries = new[]
+        {
+            Entry("A1", "A", 50), Entry("A2", "A", 50), Entry("A3", "A", 50), Entry("A4", "A", 50),
+            Entry("B1", "B", 10), Entry("B2", "B", 10), Entry("B3", "B", 10), Entry("B4", "B", 10),
+            Entry("C1", "C", 20), Entry("C2", "C", 20), Entry("C3", "C", 20), Entry("C4", "C", 20)
+        };
+
+        var result = ChannelPlaylistBuilder.Order(
+            entries,
+            PlayOrder.WeightedShuffle,
+            Guid.Parse("44444444-4444-4444-4444-444444444444"),
+            0,
+            1);
+
+        var remaining = entries
+            .GroupBy(entry => entry.SourceKey!)
+            .ToDictionary(group => group.Key, group => group.Count());
+        string? previous = null;
+        foreach (var entry in result)
+        {
+            var source = entry.SourceKey!;
+            if (source == previous)
+            {
+                Assert.DoesNotContain(
+                    remaining.Where(pair => pair.Key != source && pair.Value > 0),
+                    pair => entries.First(candidate => candidate.SourceKey == pair.Key).SourceProbability > 0);
+            }
+            remaining[source]--;
+            previous = source;
+        }
+    }
+
+    [Fact]
     public void WeightedShuffleCanShuffleEpisodesInsideTheSourceBeforeTheLotteryDrawsIt()
     {
         var entries = new[]

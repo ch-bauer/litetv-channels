@@ -722,22 +722,31 @@ public class ChannelPlaylistBuilder
                     }
                 }
             }
-            var first = streams[0];
-            result.Add(first.Entries[first.Cursor++]);
+            WeightedStream? previous = null;
 
             while (result.Count < shuffled.Count)
             {
                 var available = streams.Where(stream => stream.Cursor < stream.Entries.Count).ToList();
                 if (available.Count == 0) { break; }
 
-                var total = available.Sum(stream => stream.Weight);
-                if (total <= 0) { total = available.Count; }
+                // A percentage is a source's share of the next draw, not permission for a
+                // marathon. Once a source has supplied its configured block, let another
+                // positively weighted source take the next turn. This keeps 10% as an
+                // occasional source instead of allowing an implausible ten-episode run.
+                var alternatives = previous is null
+                    ? available
+                    : available.Where(stream => stream != previous).ToList();
+                var candidates = alternatives.Sum(stream => stream.Weight) > 0
+                    ? alternatives
+                    : available;
+                var total = candidates.Sum(stream => stream.Weight);
+                if (total <= 0) { total = candidates.Count; }
                 state = NextState(state);
                 var ticket = (int)(state % (ulong)total);
-                WeightedStream selected = available[^1];
-                foreach (var stream in available)
+                WeightedStream selected = candidates[^1];
+                foreach (var stream in candidates)
                 {
-                    var weight = total == available.Count ? 1 : stream.Weight;
+                    var weight = total == candidates.Count ? 1 : stream.Weight;
                     if (ticket < weight) { selected = stream; break; }
                     ticket -= weight;
                 }
@@ -749,6 +758,7 @@ public class ChannelPlaylistBuilder
                 {
                     result.Add(selected.Entries[selected.Cursor++]);
                 }
+                previous = selected;
             }
 
             return result;
