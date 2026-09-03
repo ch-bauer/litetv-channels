@@ -12,6 +12,12 @@ on:
 permissions:
   contents: write
 
+# Two tags may be pushed close together. The release assets can build independently, but their
+# checksum commits both touch manifest.json, so serialize that one shared follow-up.
+concurrency:
+  group: litetv-release-and-manifest
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -77,3 +83,30 @@ jobs:
         with:
           files: litetv-channels_*.zip
           generate_release_notes: true
+
+      # The release ZIP is the only trustworthy checksum source. The tag itself must remain
+      # immutable, so record the value in main after publishing rather than trying to amend the
+      # tag. Future updater checks therefore need no manual follow-up at all.
+      - name: Record package checksum in the updater manifest
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          PACKAGE="litetv-channels_${VERSION}.zip"
+          CHECKSUM="$(md5sum "$PACKAGE" | awk '{print $1}')"
+          test -n "$CHECKSUM"
+
+          git fetch origin main
+          git checkout -B main origin/main
+          test "$(jq --arg version "$VERSION" '[.[].versions[] | select(.version == $version)] | length' manifest.json)" = "1"
+          jq --arg version "$VERSION" --arg checksum "$CHECKSUM" \
+            'map(.versions |= map(if .version == $version then .checksum = $checksum else . end))' \
+            manifest.json > manifest.next.json
+          mv manifest.next.json manifest.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git diff --cached --quiet || git commit -m "Record ${VERSION} package checksum"
+          git push origin HEAD:main
