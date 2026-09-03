@@ -8,7 +8,7 @@
         name, some days and a stretch of hours; a row says exactly that, and the fields for the
         row you have picked sit underneath.
     */
-    import { measure } from '../runtime';
+    import { measure, measureWeeklySelection } from '../runtime';
     import SourceList from './SourceList.svelte';
     import SourceSearch from './SourceSearch.svelte';
     import type { ProgramBlock, TvChannel } from '../types';
@@ -74,9 +74,11 @@
             Sources: [],
             EpisodesPerBlock: 0,
             Order: 'Sequential',
+            RandomizeEpisodes: false,
             SameSourceProbability: 20,
             AdvanceOnePerWeek: false,
             FitToContent: true,
+            ShiftToAvoidLeadingGap: false,
             TrailerEnabled: false,
             TrailerProgramsBefore: 3,
         });
@@ -101,7 +103,7 @@
     let currentFilmMinutes = $state<Record<number, number>>({});
     let durationRequest = 0;
 
-    function currentWeeklySource(block: ProgramBlock): typeof block.Sources[number] | null {
+    function currentWeeklyOccurrence(block: ProgramBlock): number | null {
         if (!block.AdvanceOnePerWeek || block.Sources.length === 0) { return null; }
 
         const anchor = new Date(channel.AnchorUtc || '1970-01-05T00:00:00Z');
@@ -119,8 +121,7 @@
             const index = dayNames.indexOf(day);
             return index < todayIndex || (index === todayIndex && startsToday);
         }).length;
-        const occurrence = Math.max(0, week) * activeDays.length + Math.max(0, ordinal - 1);
-        return block.Sources[occurrence % block.Sources.length] ?? null;
+        return Math.max(0, week) * activeDays.length + Math.max(0, ordinal - 1);
     }
 
     async function refreshCurrentFilmDurations(): Promise<void> {
@@ -128,11 +129,14 @@
         const next: Record<number, number> = {};
         await Promise.all(blocks.map(async (block, index) => {
             if (!block.FitToContent) { return; }
-            const source = currentWeeklySource(block);
-            if (!source) { return; }
+            const occurrence = currentWeeklyOccurrence(block);
+            if (occurrence === null) { return; }
             try {
-                const measured = await measure([source], block.EpisodesPerBlock);
-                if (measured.minutes > 0) { next[index] = measured.minutes; }
+                const measured = await measureWeeklySelection(block.Sources, occurrence);
+                if (measured.minutes > 0) {
+                    next[index] = measured.minutes;
+                    account = measured.account;
+                }
             } catch { /* The row keeps its honest loading label. */ }
         }));
         if (request === durationRequest) { currentFilmMinutes = next; }
@@ -271,6 +275,18 @@
                 </small>
             </span>
         </label>
+
+        {#if current.AdvanceOnePerWeek}
+            <label class="weekly-film">
+                <input type="checkbox" bind:checked={current.ShiftToAvoidLeadingGap} />
+                <span>
+                    <strong>{german ? 'Filmstart an Programmende anpassen' : 'Move film start to a programme boundary'}</strong>
+                    <small>{german
+                        ? 'Der Film darf sich um die Wunschzeit verschieben, damit davor keine angebrochene Folge oder leere Pause entsteht. Seine tatsächliche Länge verschiebt das Ende entsprechend mit.'
+                        : 'The film may move around its preferred time so there is no cut episode or empty lead-in. Its actual running time moves the end with it.'}</small>
+                </span>
+            </label>
+        {/if}
 
         <label class="weekly-film">
             <input type="checkbox" bind:checked={current.TrailerEnabled} />

@@ -49,4 +49,28 @@ public class PlayOrderTests
         Assert.Equal("A1", result[0].Name);
         Assert.Equal(["A", "A", "A", "B", "B"], result.Select(entry => entry.SourceKey!).ToArray());
     }
+
+    [Fact]
+    public void WeightedShuffleCanShuffleEpisodesInsideTheSourceBeforeTheLotteryDrawsIt()
+    {
+        var entries = new[]
+        {
+            Entry("A1", "A", 100), Entry("A2", "A", 100), Entry("A3", "A", 100), Entry("A4", "A", 100),
+            Entry("B1", "B", 0), Entry("B2", "B", 0), Entry("B3", "B", 0), Entry("B4", "B", 0)
+        };
+
+        var result = ChannelPlaylistBuilder.Order(
+            entries,
+            PlayOrder.WeightedShuffle,
+            Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            0,
+            2,
+            randomizeEpisodes: true);
+
+        Assert.Equal(entries.Length, result.Count);
+        Assert.Equal(entries.Select(entry => entry.Name).Order(), result.Select(entry => entry.Name).Order());
+        Assert.NotEqual(
+            ["A1", "A2", "A3", "A4"],
+            result.Where(entry => entry.SourceKey == "A").Select(entry => entry.Name).ToArray());
+    }
 }

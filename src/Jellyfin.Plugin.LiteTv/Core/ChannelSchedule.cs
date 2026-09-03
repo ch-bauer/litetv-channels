@@ -170,6 +170,7 @@ public sealed class ChannelSchedule
     private readonly IReadOnlyDictionary<int, string> _blockNames;
     private readonly IReadOnlySet<int> _weeklySequenceBlocks;
     private readonly IReadOnlySet<int> _autoSizedBlocks;
+    private readonly IReadOnlySet<int> _shiftToAvoidLeadingGapBlocks;
     private readonly IReadOnlyDictionary<int, BlockWindow> _blockWindows;
     private readonly TimeZoneInfo _timeZone;
     private readonly DateTime _anchorUtc;
@@ -190,13 +191,15 @@ public sealed class ChannelSchedule
         DateTime anchorUtc,
         TimeZoneInfo timeZone,
         IReadOnlySet<int>? autoSizedBlocks = null,
-        IReadOnlyDictionary<int, BlockWindow>? blockWindows = null)
+        IReadOnlyDictionary<int, BlockWindow>? blockWindows = null,
+        IReadOnlySet<int>? shiftToAvoidLeadingGapBlocks = null)
     {
         _timeline = timeline;
         _lineups = lineups;
         _blockNames = blockNames;
         _weeklySequenceBlocks = weeklySequenceBlocks;
         _autoSizedBlocks = autoSizedBlocks ?? new HashSet<int>();
+        _shiftToAvoidLeadingGapBlocks = shiftToAvoidLeadingGapBlocks ?? new HashSet<int>();
         _blockWindows = blockWindows ?? new Dictionary<int, BlockWindow>();
         _anchorUtc = anchorUtc;
         _timeZone = timeZone;
@@ -231,6 +234,7 @@ public sealed class ChannelSchedule
         DateTime? baseResumeAt = null;
         DateTime? baseResumeEnd = null;
         var releasedAutoSpans = new HashSet<long>();
+        var shiftedFilmBlocks = new List<ShiftedFilmBlock>();
 
         // A window is walked, not solved: a block boundary can cut a program short and the
         // next lineup starts wherever it left off, so each step depends on the one before.
@@ -252,6 +256,13 @@ public sealed class ChannelSchedule
             var spanStartMinute = _timeline.SpanStartAt(absoluteMinute);
             var spanStart = MinuteToLocal(spanStartMinute, DateTime.MinValue);
             var spanEnd = MinuteToLocal(_timeline.NextChangeAfter(absoluteMinute), DateTime.MaxValue);
+            var shiftedFilm = shiftedFilmBlocks.FirstOrDefault(block => cursor >= block.NominalStart && cursor < block.End);
+            if (shiftedFilm is not null)
+            {
+                owner = shiftedFilm.Owner;
+                spanStart = shiftedFilm.Start;
+                spanEnd = shiftedFilm.End;
+            }
 
             // An auto-sized weekly film block releases the channel back to its base lineup as
             // soon as this week's selected film ends, rather than keeping the rest of its
@@ -336,6 +347,58 @@ public sealed class ChannelSchedule
             var offsetAtStart = phaseElapsed - (cursor - phaseStart).Ticks;
             var phaseEnd = Min(phaseStart + TimeSpan.FromTicks(phaseLength - offsetAtStart), spanEnd);
 
+            // A scheduled block is a promise about its clock time.  Do not begin a base
+            // programme that would be cut by that promise: reserve the tail as a break so the
+            // guide can offer the upcoming film's trailer (and its normal Skip action) instead.
+            // The base queue keeps its clock position, so the episode is never aired in two
+            // pieces on opposite sides of the film block.
+            if (owner == WeekTimeline.BaseLineup
+                && inProgram
+                && phaseEnd == spanEnd
+                && spanEnd != DateTime.MaxValue
+                && phaseStart + TimeSpan.FromTicks(phaseLength - offsetAtStart) > spanEnd)
+            {
+                var nextOwner = _timeline.OwnerAt(WeekTimeline.AbsoluteMinute(spanEnd));
+                if (nextOwner != WeekTimeline.BaseLineup
+                    && _lineups.TryGetValue(nextOwner, out var nextLineup)
+                    && !nextLineup.IsEmpty)
+                {
+                    var naturalEnd = phaseStart + TimeSpan.FromTicks(phaseLength - offsetAtStart);
+                    if (_shiftToAvoidLeadingGapBlocks.Contains(nextOwner)
+                        && naturalEnd > spanEnd
+                        && naturalEnd - spanEnd <= TimeSpan.FromMinutes(30))
+                    {
+                        // Keep the episode whole and let the film follow it. The effective
+                        // block window moves by exactly that small overrun, including its end,
+                        // so a film's measured length remains whole as well.
+                        var originalBlockEnd = MinuteToLocal(
+                            _timeline.NextChangeAfter(WeekTimeline.AbsoluteMinute(spanEnd)),
+                            DateTime.MaxValue);
+                        shiftedFilmBlocks.Add(new ShiftedFilmBlock(
+                            nextOwner,
+                            spanEnd,
+                            naturalEnd,
+                            originalBlockEnd + (naturalEnd - spanEnd)));
+                        yield return new Airing(
+                            entry.IsTrailer ? AiringKind.Trailer : AiringKind.Program,
+                            entry,
+                            ToUtc(phaseStart),
+                            ToUtc(naturalEnd),
+                            offsetAtStart,
+                            BlockName(owner),
+                            lineup.After(index));
+                        cursor = naturalEnd;
+                        continue;
+                    }
+                    var (_, nextProgram, _, _) = _weeklySequenceBlocks.Contains(nextOwner)
+                        ? nextLineup.AtWeeklyOccurrence(BlockOccurrence(nextOwner, spanEnd, anchorLocal))
+                        : nextLineup.At(Airtime(nextOwner, spanEnd) - Airtime(nextOwner, anchorLocal));
+                    yield return new Airing(AiringKind.Interstitial, null, ToUtc(phaseStart), ToUtc(spanEnd), 0, null, nextProgram);
+                    cursor = spanEnd;
+                    continue;
+                }
+            }
+
             yield return new Airing(
                 inProgram
                     ? (entry.IsTrailer ? AiringKind.Trailer : AiringKind.Program)
@@ -405,8 +468,15 @@ public sealed class ChannelSchedule
     /// <returns>The airing covering it, or null when the channel has nothing at all.</returns>
     public Airing? At(DateTime utc)
     {
-        return Enumerate(utc, utc.AddMinutes(1)).FirstOrDefault();
+        // A movable film start is determined by the programme immediately before it. Walk from
+        // the local day boundary so a one-minute lookup has the same decision as the full guide.
+        var localStart = ToLocal(utc).Date;
+        var fromUtc = ToUtc(localStart);
+        return Enumerate(fromUtc, utc.AddMinutes(1))
+            .LastOrDefault(airing => airing.StartUtc <= utc && airing.EndUtc > utc);
     }
+
+    private sealed record ShiftedFilmBlock(int Owner, DateTime NominalStart, DateTime Start, DateTime End);
 
     private string? BlockName(int owner)
         => _blockNames.TryGetValue(owner, out var name) ? name : null;

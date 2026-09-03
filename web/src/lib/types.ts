@@ -38,10 +38,12 @@ export interface ProgramBlock {
     Sources: ChannelSource[];
     EpisodesPerBlock: number;
     Order: PlayOrder;
+    RandomizeEpisodes: boolean;
     SameSourceProbability: number;
     /** Start the next selected item on each weekly block occurrence. */
     AdvanceOnePerWeek: boolean;
     FitToContent: boolean;
+    ShiftToAvoidLeadingGap: boolean;
     TrailerEnabled: boolean;
     TrailerProgramsBefore: number;
 }
@@ -64,6 +66,7 @@ export interface TvChannel {
     ScheduleEdits: unknown[];
     EpisodesPerBlock: number;
     Order: PlayOrder;
+    RandomizeEpisodes: boolean;
     SameSourceProbability: number;
     SlotMinutes: number;
     TrailersInGaps: boolean;

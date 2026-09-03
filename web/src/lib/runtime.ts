@@ -31,6 +31,52 @@ interface Timed {
     RunTimeTicks?: number;
 }
 
+/** The one library item a weekly film block has selected for this occurrence. */
+export async function measureWeeklySelection(
+    sources: ChannelSource[],
+    occurrence: number,
+): Promise<Measured> {
+    const items: Timed[] = [];
+    for (const source of sources) {
+        if (isEmptyId(source.ItemId)) { continue; }
+        if (source.Type === 'Movie') {
+            items.push(await api().getJSON<Timed>(api().getUrl('Items/' + source.ItemId)));
+            continue;
+        }
+
+        if (source.Type === 'Collection') {
+            const collection = await api().getJSON<{ LinkedChildren?: Array<{ ItemId?: string }> }>(
+                api().getUrl('Items/' + source.ItemId, { fields: 'LinkedChildren' }),
+            );
+            const children = (collection.LinkedChildren ?? []).filter((child) => Boolean(child.ItemId));
+            items.push(...await Promise.all(children.map((child) =>
+                api().getJSON<Timed>(api().getUrl('Items/' + child.ItemId)),
+            )));
+            continue;
+        }
+
+        const answer = await api().getItems<{ Items?: Timed[] }>(api().getCurrentUserId(), {
+            parentId: source.ItemId,
+            includeItemTypes: source.Type === 'Series' ? 'Episode' : undefined,
+            recursive: source.Type === 'Series',
+            sortBy: 'ParentIndexNumber,IndexNumber',
+            sortOrder: 'Ascending',
+            limit: 500,
+            fields: 'RunTimeTicks',
+        });
+        items.push(...(answer.Items ?? []));
+    }
+
+    const selected = items.filter((item) => (item.RunTimeTicks ?? 0) > 0);
+    if (selected.length === 0) {
+        return { minutes: 0, account: 'This block has no measurable film for this week.', unknown: [] };
+    }
+
+    const item = selected[((occurrence % selected.length) + selected.length) % selected.length];
+    const minutes = Math.max(1, Math.round((item.RunTimeTicks ?? 0) / TICKS_PER_MINUTE));
+    return { minutes, account: 'This week: ' + item.Name + ' — ' + minutes + ' min.', unknown: [] };
+}
+
 /** Whether an id names nothing - dash-less or not; see the note in deal.ts. */
 function isEmptyId(id: string | null | undefined): boolean {
     return !id || id.replace(/-/g, '').replace(/0/g, '').length === 0;

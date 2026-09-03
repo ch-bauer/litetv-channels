@@ -26,6 +26,7 @@
         channel.Id,
         channel.Order,
         channel.EpisodesPerBlock,
+        channel.RandomizeEpisodes,
         channel.Sources.map((s) => [s.Type, s.ItemId, s.Url, s.Name, s.Probability ?? 100].join(':')).join(','),
     ].join('|'));
 
@@ -33,7 +34,7 @@
         const asked = signature;
         busy = true;
         failed = null;
-        deal(channel.Sources, channel.Order, channel.EpisodesPerBlock, channel.Id)
+        deal(channel.Sources, channel.Order, channel.EpisodesPerBlock, channel.Id, channel.RandomizeEpisodes)
             .then((dealt) => {
                 // A slow answer must not overwrite a newer question.
                 if (asked !== signature) { return; }

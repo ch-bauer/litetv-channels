@@ -56,6 +56,7 @@ public class ChannelFingerprintTests
     public static TheoryData<string, Action<TvChannel>> Edits() => new()
     {
         { "play order", c => c.Order = PlayOrder.Shuffle },
+        { "randomize episodes", c => c.RandomizeEpisodes = true },
         { "source probability", c => c.Sources[0].Probability = 80 },
         { "slot minutes", c => c.SlotMinutes = 30 },
         { "trailers in gaps", c => c.TrailersInGaps = false },
@@ -74,6 +75,8 @@ public class ChannelFingerprintTests
         { "block weekdays", c => { var b = Block(); b.Days = new List<DayOfWeek> { DayOfWeek.Monday }; c.Blocks.Add(b); } },
         { "block switched off", c => { var b = Block(); b.Enabled = false; c.Blocks.Add(b); } },
         { "block order", c => { var b = Block(); b.Order = PlayOrder.Shuffle; c.Blocks.Add(b); } },
+        { "block randomize episodes", c => { var b = Block(); b.RandomizeEpisodes = true; c.Blocks.Add(b); } },
+        { "block shifts film start", c => { var b = Block(); b.ShiftToAvoidLeadingGap = true; c.Blocks.Add(b); } },
         { "block sources", c => { var b = Block(); b.Sources.Clear(); c.Blocks.Add(b); } },
     };
 

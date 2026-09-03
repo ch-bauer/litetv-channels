@@ -212,6 +212,54 @@ public class ChannelScheduleTests
         Assert.Equal(Anchor.AddHours(20).AddMinutes(15), airing.StartUtc);
     }
 
+    [Fact]
+    public void At_BeforeAFilmBlock_UsesABreakInsteadOfSplittingTheEpisode()
+    {
+        var schedule = Schedule(
+            new[] { new BlockWindow(0, (20 * 60) + 15, 180, Array.Empty<DayOfWeek>()) },
+            (WeekTimeline.BaseLineup, Queue(0, ("Episode", 30))),
+            (0, Queue(0, ("Film", 100))));
+
+        var beforeFilm = schedule.At(Anchor.AddHours(20).AddMinutes(10));
+        var film = schedule.At(Anchor.AddHours(20).AddMinutes(15));
+
+        Assert.Equal(AiringKind.Interstitial, beforeFilm!.Kind);
+        Assert.Equal(Anchor.AddHours(20), beforeFilm.StartUtc);
+        Assert.Equal(Anchor.AddHours(20).AddMinutes(15), beforeFilm.EndUtc);
+        Assert.Equal("Film", beforeFilm.NextProgram!.Name);
+        Assert.Equal("Film", film!.Entry!.Name);
+        Assert.Equal(Anchor.AddHours(20).AddMinutes(15), film.StartUtc);
+    }
+
+    [Fact]
+    public void At_MovableFilmBlockWaitsForTheCurrentEpisodeAndMovesTheFilmWithIt()
+    {
+        var block = new BlockWindow(0, (20 * 60) + 15, 180, Array.Empty<DayOfWeek>());
+        var schedule = new ChannelSchedule(
+            WeekTimeline.Build(new[] { block }),
+            new Dictionary<int, Lineup>
+            {
+                [WeekTimeline.BaseLineup] = Queue(0, ("Episode", 30)),
+                [0] = Queue(0, ("Film", 100))
+            },
+            new Dictionary<int, string> { [0] = "Filmabend" },
+            new HashSet<int> { 0 },
+            Anchor,
+            TimeZoneInfo.Utc,
+            new HashSet<int> { 0 },
+            new Dictionary<int, BlockWindow> { [0] = block },
+            new HashSet<int> { 0 });
+
+        var episode = schedule.At(Anchor.AddHours(20).AddMinutes(16));
+        var film = schedule.At(Anchor.AddHours(20).AddMinutes(30));
+
+        Assert.Equal("Episode", episode!.Entry!.Name);
+        Assert.Equal(Anchor.AddHours(20), episode.StartUtc);
+        Assert.Equal(Anchor.AddHours(20).AddMinutes(30), episode.EndUtc);
+        Assert.Equal("Film", film!.Entry!.Name);
+        Assert.Equal(Anchor.AddHours(20).AddMinutes(30), film.StartUtc);
+    }
+
     // ------------------------------------------------------------------ program blocks
 
     [Fact]

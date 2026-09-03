@@ -187,6 +187,17 @@ With two, it plays two before moving on - which is what makes a channel that air
                 >{german ? 'Gewichtet zufällig' : 'Weighted random'}</button>
             </div>
             <p class="note">{orderNote}</p>
+            {#if channel.Order === 'WeightedShuffle'}
+                <label class="weighted-randomize">
+                    <input type="checkbox" bind:checked={channel.RandomizeEpisodes} />
+                    <span>
+                        <strong>{german ? 'Serienfolgen mischen' : 'Shuffle episodes within series'}</strong>
+                        <small>{german
+                            ? 'Die Wahrscheinlichkeit wählt weiterhin die Quelle. Innerhalb der gewählten Serie werden ihre Folgen zufällig statt in Reihenfolge genommen.'
+                            : 'Probability still chooses the source. Episodes inside the chosen series are drawn in a shuffled order.'}</small>
+                    </span>
+                </label>
+            {/if}
         </div>
 
         <div class="group">
@@ -254,6 +265,20 @@ With two, it plays two before moving on - which is what makes a channel that air
     }
 
     .group { display: flex; flex-direction: column; gap: 7px; }
+
+    .weighted-randomize {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--lt-text-muted);
+        cursor: pointer;
+    }
+
+    .weighted-randomize input { margin: 2px 0 0; }
+    .weighted-randomize strong { display: block; color: var(--lt-text-body); }
+    .weighted-randomize small { display: block; margin-top: 2px; line-height: 1.35; }
 
     .row { display: flex; align-items: center; gap: 9px; }
 

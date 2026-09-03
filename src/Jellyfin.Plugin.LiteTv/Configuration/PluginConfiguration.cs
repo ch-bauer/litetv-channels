@@ -385,6 +385,12 @@ public class TvChannel
     /// </summary>
     public PlayOrder Order { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether weighted random order also shuffles the episodes
+    /// inside every source before it draws from that source.
+    /// </summary>
+    public bool RandomizeEpisodes { get; set; }
+
     /// <summary>Gets or sets the chance that weighted random order keeps the current source (0-100).</summary>
     public int SameSourceProbability { get; set; } = 20;
 
@@ -518,6 +524,12 @@ public class ProgramBlock
     /// </summary>
     public PlayOrder Order { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether weighted random order also shuffles the episodes
+    /// inside every source before it draws from that source.
+    /// </summary>
+    public bool RandomizeEpisodes { get; set; }
+
     /// <summary>Gets or sets the chance that weighted random order keeps the current source (0-100).</summary>
     public int SameSourceProbability { get; set; } = 20;
 
@@ -529,6 +541,12 @@ public class ProgramBlock
 
     /// <summary>Gets or sets whether the block length is calculated from its content.</summary>
     public bool FitToContent { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a film night may move to the nearest programme
+    /// boundary around its preferred time, so it starts without a preceding gap.
+    /// </summary>
+    public bool ShiftToAvoidLeadingGap { get; set; }
 
     /// <summary>Gets or sets whether this block advertises its selected programme.</summary>
     public bool TrailerEnabled { get; set; }

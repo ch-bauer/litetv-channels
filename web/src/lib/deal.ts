@@ -177,6 +177,7 @@ export async function deal(
     order: PlayOrder,
     episodesPerBlock: number,
     seed: string,
+    randomizeEpisodes = false,
     want = 6,
 ): Promise<DealtItem[]> {
     if (sources.length === 0) { return []; }
@@ -186,7 +187,7 @@ export async function deal(
             items.map((it) => ({ ...it, sourceIndex: i })))),
     );
 
-    const pools = order === 'ShuffleBySource'
+    const pools = order === 'ShuffleBySource' || (order === 'WeightedShuffle' && randomizeEpisodes)
         ? sourcePools.map((pool) => {
             const random = seeded(seed + ':' + pool[0]?.sourceIndex);
             const shuffled = [...pool];
@@ -203,7 +204,8 @@ export async function deal(
     const cursors = pools.map(() => 0);
 
     // WeightedShuffle chooses a source for each block from its own configured weights. The first
-    // episode remains the first configured episode; every later block gets a fresh lottery.
+    // episode remains the first configured episode unless series randomisation is on; every
+    // later block gets a fresh lottery.
     if (order === 'WeightedShuffle') {
         const result: DealtItem[] = [];
         const weightedPools = pools.map((pool, index) => ({

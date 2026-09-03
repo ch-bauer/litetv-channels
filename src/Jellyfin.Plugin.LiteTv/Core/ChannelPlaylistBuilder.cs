@@ -108,6 +108,7 @@ public class ChannelPlaylistBuilder
         text.Append(channel.AnchorUtc.Ticks).Append('|')
             .Append(channel.EpisodesPerBlock).Append('|')
             .Append((int)channel.Order).Append('|')
+            .Append(channel.RandomizeEpisodes).Append('|')
             .Append(channel.SlotMinutes).Append('|')
             .Append(channel.TrailersInGaps).Append('|')
             .Append((int)channel.Trailers).Append('|')
@@ -126,8 +127,10 @@ public class ChannelPlaylistBuilder
                 .Append(string.Join('+', block.Days)).Append(',')
                 .Append(block.EpisodesPerBlock).Append(',')
                 .Append((int)block.Order).Append(',')
+                .Append(block.RandomizeEpisodes).Append(',')
                 .Append(block.AdvanceOnePerWeek).Append(',')
                 .Append(block.FitToContent).Append(',')
+                .Append(block.ShiftToAvoidLeadingGap).Append(',')
                 .Append(block.TrailerEnabled).Append(',')
                 .Append(block.TrailerProgramsBefore).Append(':');
             AppendSources(text, block.Sources);
@@ -363,6 +366,7 @@ public class ChannelPlaylistBuilder
         var names = new Dictionary<int, string>();
         var weeklySequenceBlocks = new HashSet<int>();
         var autoSizedBlocks = new HashSet<int>();
+        var shiftToAvoidLeadingGapBlocks = new HashSet<int>();
         var windows = new List<BlockWindow>();
         var blockWindows = new Dictionary<int, BlockWindow>();
 
@@ -379,8 +383,12 @@ public class ChannelPlaylistBuilder
             {
                 weeklySequenceBlocks.Add(i);
             }
+            if (block.AdvanceOnePerWeek && block.ShiftToAvoidLeadingGap)
+            {
+                shiftToAvoidLeadingGapBlocks.Add(i);
+            }
             lineups[i] = new Lineup(
-                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i, block.EpisodesPerBlock),
+                Order(Interleave(Expand(block.Sources, channel.Name), block.EpisodesPerBlock), block.Order, channel.Id, i, block.EpisodesPerBlock, block.RandomizeEpisodes),
                 slotTicks);
             var duration = block.FitToContent
                 ? ContentMinutes(lineups[i], slotTicks, block.AdvanceOnePerWeek)
@@ -399,7 +407,8 @@ public class ChannelPlaylistBuilder
             channel.AnchorUtc,
             TimeZoneInfo.Local,
             autoSizedBlocks,
-            blockWindows);
+            blockWindows,
+            shiftToAvoidLeadingGapBlocks);
     }
 
     private static int ContentMinutes(
@@ -424,7 +433,8 @@ public class ChannelPlaylistBuilder
                 channel.Order,
                 channel.Id,
                 WeekTimeline.BaseLineup,
-                channel.EpisodesPerBlock),
+                channel.EpisodesPerBlock,
+                channel.RandomizeEpisodes),
             channel);
     }
 
@@ -659,7 +669,8 @@ public class ChannelPlaylistBuilder
         PlayOrder order,
         Guid channelId,
         int owner,
-        int episodesPerBlock)
+        int episodesPerBlock,
+        bool randomizeEpisodes = false)
     {
         if ((order != PlayOrder.Shuffle && order != PlayOrder.ShuffleBySource && order != PlayOrder.WeightedShuffle) || entries.Count < 2)
         {
@@ -699,6 +710,18 @@ public class ChannelPlaylistBuilder
                 .GroupBy(entry => entry.SourceKey)
                 .Select(group => new WeightedStream(group.Key, group.ToList(), Math.Clamp(group.First().SourceProbability, 0, 100)))
                 .ToList();
+            if (randomizeEpisodes)
+            {
+                foreach (var stream in streams)
+                {
+                    for (var i = stream.Entries.Count - 1; i > 0; i--)
+                    {
+                        state = NextState(state);
+                        var j = (int)(state % (ulong)(i + 1));
+                        (stream.Entries[i], stream.Entries[j]) = (stream.Entries[j], stream.Entries[i]);
+                    }
+                }
+            }
             var first = streams[0];
             result.Add(first.Entries[first.Cursor++]);
 
