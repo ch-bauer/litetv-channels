@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Film night now resumes with the next complete episode after the film, never a short tail of the episode before it. Shorter series repeat within a channel cycle until the longest series has completed once, so all configured series remain present through the week. The schedule grid now shows series name and episode title together.",
+  "changelog": "Source probabilities are now a true 100% distribution. Editing one percentage proportionally adjusts the others; removing a source redistributes its share, and new sources start at 0% so they never silently change an existing channel.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-03T14:00:00.000Z",
-  "version": "1.0.121.0",
+  "timestamp": "2026-09-03T16:00:00.000Z",
+  "version": "1.0.122.0",
   "status": "Active",
   "autoUpdate": false
 }

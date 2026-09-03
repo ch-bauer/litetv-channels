@@ -62,7 +62,11 @@
 
     function add(hit: SearchHit): void {
         if (already(hit)) { return; }
-        sources.push(toSource(hit));
+        const source = toSource(hit);
+        // A new source is opt-in: it must not silently steal probability from the distribution
+        // the owner already set. The first and only source is necessarily 100%.
+        source.Probability = sources.length === 0 ? 100 : 0;
+        sources.push(source);
         // The box is cleared on a link, because an address is a thing you add once and there is
         // nothing else in the answer to pick from. A title search is left alone: adding three
         // episodes of one series in a row should not be three searches.

@@ -122,8 +122,45 @@
 
     function remove(index: number): void {
         sources.splice(index, 1);
+        distributeEvenly();
         if (selected !== null && selected >= sources.length) {
             selected = sources.length ? sources.length - 1 : null;
+        }
+    }
+
+    const probabilityTotal = $derived(sources.reduce((total, source) => total + (source.Probability ?? 100), 0));
+
+    /** Makes the listed values a genuine 100% distribution, preserving their proportions. */
+    function distributeEvenly(): void {
+        if (sources.length === 0) { return; }
+        const total = sources.reduce((sum, source) => sum + Math.max(0, source.Probability ?? 100), 0);
+        let assigned = 0;
+        for (let i = 0; i < sources.length; i++) {
+            const source = sources[i]!;
+            const value = total > 0
+                ? Math.round((Math.max(0, source.Probability ?? 100) / total) * 100)
+                : Math.floor(100 / sources.length);
+            source.Probability = i === sources.length - 1 ? 100 - assigned : value;
+            assigned += source.Probability;
+        }
+    }
+
+    function setProbability(index: number, value: number): void {
+        const next = Math.max(0, Math.min(100, Math.floor(value)));
+        const others = sources.filter((_, candidate) => candidate !== index);
+        sources[index].Probability = next;
+        if (others.length === 0) { return; }
+
+        const remainder = 100 - next;
+        const total = others.reduce((sum, source) => sum + Math.max(0, source.Probability ?? 0), 0);
+        let assigned = 0;
+        for (let i = 0; i < others.length; i++) {
+            const other = others[i]!;
+            const value = total > 0
+                ? Math.round((Math.max(0, other.Probability ?? 0) / total) * remainder)
+                : Math.floor(remainder / others.length);
+            other.Probability = i === others.length - 1 ? remainder - assigned : value;
+            assigned += other.Probability;
         }
     }
 
@@ -246,7 +283,7 @@
                     value={source.Probability ?? 100}
                     oninput={(e) => {
                         const n = Number(e.currentTarget.value);
-                        source.Probability = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.floor(n))) : 100;
+                        setProbability(index, Number.isFinite(n) ? n : 0);
                     }}
                     aria-label={german ? `Wahrscheinlichkeit für ${source.Name}` : `Probability for ${source.Name}`}
                     onclick={(e) => e.stopPropagation()}
@@ -271,6 +308,15 @@
         <p class="none">{empty}</p>
     {/each}
 </div>
+
+{#if sources.length > 0}
+    <div class:wrong-total={probabilityTotal !== 100} class="probability-total">
+        <span>{german ? 'Gewichtung insgesamt:' : 'Total weight:'} {probabilityTotal}%</span>
+        {#if probabilityTotal !== 100}
+            <button type="button" onclick={distributeEvenly}>{german ? 'auf 100 % verteilen' : 'distribute to 100%'}</button>
+        {/if}
+    </div>
+{/if}
 
 {#if chosen}
     <div class="chosen">
@@ -304,6 +350,26 @@
         background: var(--lt-accent-soft);
         font-size: 12px;
         color: var(--lt-text-muted);
+    }
+
+    .probability-total {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 13px;
+        border-top: 1px solid var(--lt-line-soft);
+        font-size: 11.5px;
+        color: var(--lt-text-muted);
+    }
+
+    .probability-total.wrong-total { color: #e0a16e; }
+    .probability-total button {
+        border: 0;
+        padding: 0;
+        background: none;
+        color: var(--lt-accent);
+        font: inherit;
+        cursor: pointer;
     }
 
     .chosen-name {
