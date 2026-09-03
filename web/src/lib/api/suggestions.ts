@@ -6,6 +6,29 @@
  * a fault that cannot be reported.
  */
 import { api } from '../jellyfin';
+import type { ChannelSource, PlayOrder, ProgramBlock, TrailerMode } from '../types';
+
+export interface ReadyChannelSuggestion {
+    Name: string;
+    Description: string;
+    Theme: string;
+    Features: string[];
+    Sources: ChannelSource[];
+    EpisodesPerBlock: number;
+    Order: PlayOrder;
+    RandomizeEpisodes: boolean;
+    Trailers: TrailerMode;
+    TrailerEveryPrograms: number;
+    TrailerLookahead: number;
+    TrailersInGaps: boolean;
+    MovieNight: Omit<ProgramBlock, 'Enabled' | 'DurationMinutes' | 'SameSourceProbability'> | null;
+    Artwork: { ItemId: string; ItemName: string };
+}
+
+/** Finished local channel concepts: media, look and programme blocks included. */
+export function readyChannels(): Promise<ReadyChannelSuggestion[]> {
+    return api().getJSON<ReadyChannelSuggestion[]>(api().getUrl('LiteTv/Suggestions'));
+}
 
 export interface SiblingPluginStatus {
     Name: string;

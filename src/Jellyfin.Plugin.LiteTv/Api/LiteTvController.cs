@@ -1522,8 +1522,8 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
-    /// Suggests channels based on the media present in the library: genre channels,
-    /// collection marathons and a kids channel. Used by the configuration page.
+    /// Suggests ready-to-air channels from the media present in the library. Each answer carries
+    /// its play order, trailer treatment, artwork source and (where films allow it) a film night.
     /// </summary>
     /// <returns>The suggestions; already-existing channel names are skipped.</returns>
     [HttpGet("Suggestions")]
@@ -1533,8 +1533,6 @@ public class LiteTvController : ControllerBase
         var existingNames = new HashSet<string>(
             _channels.All().Select(c => c.Name),
             StringComparer.OrdinalIgnoreCase);
-        var suggestions = new List<ChannelSuggestionDto>();
-
         var series = _libraryManager.GetItemList(new InternalItemsQuery
         {
             IncludeItemTypes = new[] { BaseItemKind.Series },
@@ -1546,37 +1544,10 @@ public class LiteTvController : ControllerBase
             Recursive = true
         }).OfType<Movie>().Where(m => (m.RunTimeTicks ?? 0) > 0).ToList();
 
-        // Genre channels: the most common genres across series and movies.
-        var byGenre = new Dictionary<string, List<BaseItem>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in series.Cast<BaseItem>().Concat(movies))
-        {
-            foreach (var genre in item.Genres ?? Array.Empty<string>())
-            {
-                if (!byGenre.TryGetValue(genre, out var list))
-                {
-                    byGenre[genre] = list = new List<BaseItem>();
-                }
+        var suggestions = ChannelSuggestionBuilder.Build(series, movies, existingNames);
 
-                list.Add(item);
-            }
-        }
-
-        foreach (var genre in byGenre.Where(g => g.Value.Count >= 4).OrderByDescending(g => g.Value.Count).Take(5))
-        {
-            var name = genre.Key + "-Kanal";
-            if (existingNames.Contains(name))
-            {
-                continue;
-            }
-
-            var picks = genre.Value
-                .OrderByDescending(i => i is Series)
-                .ThenByDescending(i => i.CommunityRating ?? 0)
-                .Take(8);
-            suggestions.Add(BuildSuggestion(name, genre.Value.Count + " Titel mit dem Genre \"" + genre.Key + "\"", picks));
-        }
-
-        // Marathon channels from collections with enough content.
+        // Collections remain a useful one-click channel in their own right. Keep the familiar
+        // marathon suggestion, but give it the same complete wire shape as the richer templates.
         var boxSets = _libraryManager.GetItemList(new InternalItemsQuery
         {
             IncludeItemTypes = new[] { BaseItemKind.BoxSet },
@@ -1584,14 +1555,8 @@ public class LiteTvController : ControllerBase
         }).OfType<BoxSet>();
         foreach (var boxSet in boxSets)
         {
-            var children = boxSet.GetLinkedChildren();
-            if (children.Count < 3)
-            {
-                continue;
-            }
-
             var name = "Marathon: " + boxSet.Name;
-            if (existingNames.Contains(name))
+            if (suggestions.Count >= 8 || existingNames.Contains(name) || boxSet.GetLinkedChildren().Count < 3)
             {
                 continue;
             }
@@ -1599,41 +1564,28 @@ public class LiteTvController : ControllerBase
             suggestions.Add(new ChannelSuggestionDto
             {
                 Name = name,
-                Description = children.Count + " Filme aus der Sammlung \"" + boxSet.Name + "\" in Dauerschleife",
+                Theme = "Sammlung",
+                Description = "Die Sammlung \"" + boxSet.Name + "\" als eigener fortlaufender Kanal.",
                 Sources = new List<SuggestedSourceDto>
                 {
-                    new() { Type = nameof(ChannelSourceType.Collection), ItemId = boxSet.Id, Name = boxSet.Name ?? string.Empty }
-                }
+                    new()
+                    {
+                        Type = nameof(ChannelSourceType.Collection),
+                        ItemId = boxSet.Id,
+                        Name = boxSet.Name ?? string.Empty,
+                        Probability = 100
+                    }
+                },
+                EpisodesPerBlock = 0,
+                Order = nameof(PlayOrder.Sequential),
+                RandomizeEpisodes = false,
+                Trailers = nameof(TrailerMode.Preview),
+                Artwork = new SuggestedArtworkDto { ItemId = boxSet.Id, ItemName = boxSet.Name ?? string.Empty },
+                Features = new List<string> { "Sammlung in Reihenfolge", "Trailer-Vorschau" }
             });
         }
 
-        // Kids channel from FSK-0/FSK-6 rated content.
-        var kids = series.Cast<BaseItem>().Concat(movies)
-            .Where(i => i.OfficialRating is "FSK-0" or "FSK-6" or "0" or "6")
-            .OrderByDescending(i => i is Series)
-            .ThenBy(i => i.SortName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (kids.Count >= 3 && !existingNames.Contains("Kinderprogramm"))
-        {
-            suggestions.Add(BuildSuggestion("Kinderprogramm", kids.Count + " Titel mit FSK 0/6", kids.Take(10)));
-        }
-
         return suggestions;
-    }
-
-    private static ChannelSuggestionDto BuildSuggestion(string name, string description, IEnumerable<BaseItem> items)
-    {
-        return new ChannelSuggestionDto
-        {
-            Name = name,
-            Description = description,
-            Sources = items.Select(i => new SuggestedSourceDto
-            {
-                Type = i is Series ? nameof(ChannelSourceType.Series) : nameof(ChannelSourceType.Movie),
-                ItemId = i.Id,
-                Name = i.Name ?? string.Empty
-            }).ToList()
-        };
     }
 
     private static Dictionary<Guid, BaseItem?> NewArtworkCache() => new();
@@ -2486,8 +2438,41 @@ public class ChannelSuggestionDto
     /// <summary>Gets or sets a short human-readable rationale.</summary>
     public string Description { get; set; } = string.Empty;
 
+    /// <summary>Gets or sets the short programme identity shown by the configuration page.</summary>
+    public string Theme { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the configuration choices this ready-made suggestion enables.</summary>
+    public List<string> Features { get; set; } = new();
+
     /// <summary>Gets or sets the suggested sources.</summary>
     public List<SuggestedSourceDto> Sources { get; set; } = new();
+
+    /// <summary>Gets or sets the number of consecutive programmes selected at once.</summary>
+    public int EpisodesPerBlock { get; set; } = 1;
+
+    /// <summary>Gets or sets the configured order enum name.</summary>
+    public string Order { get; set; } = nameof(PlayOrder.WeightedShuffle);
+
+    /// <summary>Gets or sets whether episodes within a series are mixed before selection.</summary>
+    public bool RandomizeEpisodes { get; set; }
+
+    /// <summary>Gets or sets the trailer mode enum name.</summary>
+    public string Trailers { get; set; } = nameof(TrailerMode.Preview);
+
+    /// <summary>Gets or sets how often a programme trailer runs.</summary>
+    public int TrailerEveryPrograms { get; set; } = 3;
+
+    /// <summary>Gets or sets how many programmes a trailer looks ahead.</summary>
+    public int TrailerLookahead { get; set; } = 3;
+
+    /// <summary>Gets or sets whether spare grid time is filled with trailers.</summary>
+    public bool TrailersInGaps { get; set; } = true;
+
+    /// <summary>Gets or sets the optional weekly film-night block.</summary>
+    public SuggestedProgramBlockDto? MovieNight { get; set; }
+
+    /// <summary>Gets or sets the local title whose artwork gives the channel a finished look.</summary>
+    public SuggestedArtworkDto Artwork { get; set; } = new();
 }
 
 /// <summary>
@@ -2503,6 +2488,33 @@ public class SuggestedSourceDto
 
     /// <summary>Gets or sets the item display name.</summary>
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets this source's share of the weighted draw; all suggestions total 100.</summary>
+    public int Probability { get; set; } = 100;
+}
+
+/// <summary>A ready-made weekly film-night block belonging to a channel suggestion.</summary>
+public class SuggestedProgramBlockDto
+{
+    public string Name { get; set; } = "Filmabend";
+    public int StartMinutes { get; set; }
+    public List<string> Days { get; set; } = new();
+    public List<SuggestedSourceDto> Sources { get; set; } = new();
+    public int EpisodesPerBlock { get; set; } = 1;
+    public string Order { get; set; } = nameof(PlayOrder.WeightedShuffle);
+    public bool RandomizeEpisodes { get; set; }
+    public bool AdvanceOnePerWeek { get; set; }
+    public bool FitToContent { get; set; } = true;
+    public bool ShiftToAvoidLeadingGap { get; set; } = true;
+    public bool TrailerEnabled { get; set; } = true;
+    public int TrailerProgramsBefore { get; set; } = 3;
+}
+
+/// <summary>The library artwork to borrow for a channel suggestion.</summary>
+public class SuggestedArtworkDto
+{
+    public Guid ItemId { get; set; }
+    public string ItemName { get; set; } = string.Empty;
 }
 
 /// <summary>

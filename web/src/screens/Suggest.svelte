@@ -17,12 +17,13 @@
     import { search, type SearchHit } from '../lib/search';
     import { engineWords, scored, type ScoredSuggestions, type SuggestionMatch } from '../lib/api/suggestions';
     import type { ChannelSource } from '../lib/types';
+    import ReadyChannels from './ReadyChannels.svelte';
 
     let { onDone, onBlank }: { onDone: () => void; onBlank: () => void } = $props();
     const german = $derived(store.config?.PageLanguage === 'de'
         || (store.config?.PageLanguage === 'auto' && typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('de')));
 
-    let half = $state<'titles' | 'library'>('titles');
+    let half = $state<'titles' | 'library' | 'ready'>('titles');
 
     // --- from titles ---------------------------------------------------------------------
     let term = $state('');
@@ -450,8 +451,12 @@
     <nav class="halves">
         <button type="button" class:on={half === 'titles'} onclick={() => (half = 'titles')}>{german ? 'Aus Lieblingstiteln' : 'From titles I like'}</button>
         <button type="button" class:on={half === 'library'} onclick={() => (half = 'library')}>{german ? 'Aus Bibliothek und Genres' : 'From a library and genres'}</button>
+        <button type="button" class:on={half === 'ready'} onclick={() => (half = 'ready')}>{german ? 'Fertige Kanalvorschläge' : 'Ready channel ideas'}</button>
     </nav>
 
+    {#if half === 'ready'}
+        <ReadyChannels {onDone} />
+    {:else}
     <div class="body">
         <div class="left">
             {#if half === 'titles'}
@@ -676,6 +681,7 @@
             </Card>
         </div>
     </div>
+    {/if}
 </div>
 
 <style>

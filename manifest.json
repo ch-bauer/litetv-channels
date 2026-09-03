@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.123.0",
+        "changelog": "Fertige Kanalvorschläge bauen nun aus der eigenen Bibliothek komplette Sender: lokale Quellen mit einer echten 100%-Gewichtung, gemischte Serienfolgen, Trailer-Vorschau, passendes geliehenes Artwork und – bei genügend Filmen – einen samstäglichen Filmabend um 20:15 ohne Leerlauf. Vorschläge wie Werkstatt & Wildnis, Kinderzeit, Disney & Pixar (nur bei passenden Studio-Metadaten) und Genre-Sender sind bewusst keine Kopien echter Sender. Die bisherigen Wege zum Erstellen aus Lieblingstiteln sowie aus Bibliothek und Genres bleiben unverändert; Sammlungs-Marathons sind ebenfalls weiter verfügbar.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.123.0/litetv-channels_1.0.123.0.zip",
+        "checksum": "",
+        "timestamp": "2026-09-03T17:00:00.000Z"
+      },
+      {
         "version": "1.0.122.0",
         "changelog": "Source probabilities are now a true 100% distribution. Editing one percentage proportionally adjusts the others; removing a source redistributes its share, and new sources start at 0% so they never silently change an existing channel.",
         "targetAbi": "10.11.0.0",
