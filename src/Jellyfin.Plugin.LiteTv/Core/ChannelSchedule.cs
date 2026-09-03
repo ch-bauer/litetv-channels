@@ -233,6 +233,7 @@ public sealed class ChannelSchedule
         var baseAirtimeTail = 0L;
         DateTime? baseResumeAt = null;
         DateTime? baseResumeEnd = null;
+        long? baseResumeAirtime = null;
         var releasedAutoSpans = new HashSet<long>();
         var shiftedFilmBlocks = new List<ShiftedFilmBlock>();
 
@@ -246,9 +247,14 @@ public sealed class ChannelSchedule
                 // The virtual base run has reached the original block boundary. From here on
                 // the normal timeline airtime is short by the released tail, so carry that tail
                 // forward and return to the ordinary calculation.
-                baseAirtimeTail += (resumeEnd - resumeAt).Ticks;
+                if (baseResumeAirtime is { } resumeAirtime)
+                {
+                    baseAirtimeTail = resumeAirtime + (resumeEnd - resumeAt).Ticks
+                        - (Airtime(WeekTimeline.BaseLineup, resumeEnd) - Airtime(WeekTimeline.BaseLineup, anchorLocal));
+                }
                 baseResumeAt = null;
                 baseResumeEnd = null;
+                baseResumeAirtime = null;
             }
 
             var absoluteMinute = WeekTimeline.AbsoluteMinute(cursor);
@@ -281,6 +287,18 @@ public sealed class ChannelSchedule
                     {
                         baseResumeAt = release;
                         baseResumeEnd = spanEnd;
+                        if (_lineups.TryGetValue(WeekTimeline.BaseLineup, out var baseLineup) && !baseLineup.IsEmpty)
+                        {
+                            // The film replaces the programme that would have crossed its
+                            // start. Resume at the NEXT complete base slot, never at that
+                            // programme's old clock position: otherwise it reappears after the
+                            // film as a few-minute tail.
+                            var baseAtBlock = Airtime(WeekTimeline.BaseLineup, spanStart)
+                                - Airtime(WeekTimeline.BaseLineup, anchorLocal)
+                                + baseAirtimeTail;
+                            var (_, _, elapsed, baseSlotLength) = baseLineup.At(baseAtBlock);
+                            baseResumeAirtime = baseAtBlock - elapsed + baseSlotLength;
+                        }
                     }
 
                     owner = WeekTimeline.BaseLineup;
@@ -307,14 +325,14 @@ public sealed class ChannelSchedule
                 airtime += baseAirtimeTail;
                 if (baseResumeAt is { } currentResumeAt
                     && baseResumeEnd is { } currentResumeEnd
+                    && baseResumeAirtime is { } currentResumeAirtime
                     && cursor < currentResumeEnd)
                 {
                     // The timeline still calls this part of the day a block, but an auto-sized
                     // film has already ended. Let the base queue advance with the wall clock
                     // until that original span ends; otherwise every airing starts at the same
                     // pre-film cursor.
-                    airtime = Airtime(owner, currentResumeAt) - Airtime(owner, anchorLocal)
-                        + (cursor - currentResumeAt).Ticks;
+                    airtime = currentResumeAirtime + (cursor - currentResumeAt).Ticks;
                 }
             }
 

@@ -108,4 +108,25 @@ public class PlayOrderTests
             ["A1", "A2", "A3", "A4"],
             result.Where(entry => entry.SourceKey == "A").Select(entry => entry.Name).ToArray());
     }
+
+    [Fact]
+    public void InterleaveRepeatsShorterSourcesUntilTheLongestSourceHasCompleted()
+    {
+        var entries = new[]
+        {
+            Entry("A1", "A"), Entry("B1", "B"),
+            Entry("A2", "A"), Entry("A3", "A")
+        };
+
+        var result = ChannelPlaylistBuilder.Order(
+            entries,
+            PlayOrder.ShuffleBySource,
+            Guid.Parse("55555555-5555-5555-5555-555555555555"),
+            0,
+            1);
+
+        Assert.Equal(6, result.Count);
+        Assert.Equal(3, result.Count(entry => entry.SourceKey == "A"));
+        Assert.Equal(3, result.Count(entry => entry.SourceKey == "B"));
+    }
 }

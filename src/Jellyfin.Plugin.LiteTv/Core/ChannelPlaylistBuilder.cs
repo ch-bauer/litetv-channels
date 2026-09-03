@@ -810,34 +810,48 @@ public class ChannelPlaylistBuilder
     /// order (each source in full). A positive block size rotates through the sources
     /// taking up to that many items from each per round, so multiple series air in
     /// alternating blocks, e.g. block 2 over [S1, S2] gives S1E1, S1E2, S2E1, S2E2,
-    /// S1E3, S1E4, ... Uneven streams simply drop out once exhausted.
+    /// S1E3, S1E4, ... A shorter source loops from its first episode until the longest
+    /// source has completed once; only then does the whole channel cycle begin again.
     /// </summary>
     private static IReadOnlyList<ScheduledEntry> Interleave(List<List<ScheduledEntry>> streams, int blockSize)
     {
+        if (streams.Count == 0)
+        {
+            return Array.Empty<ScheduledEntry>();
+        }
+
+        var longest = streams.Max(stream => stream.Count);
         if (blockSize <= 0 || streams.Count <= 1)
         {
-            return streams.SelectMany(s => s).ToList();
+            return streams.SelectMany(stream => RepeatToLength(stream, longest)).ToList();
         }
 
         var result = new List<ScheduledEntry>();
         var cursors = new int[streams.Count];
-        bool progressed;
-        do
+        var supplied = new int[streams.Count];
+        while (supplied.Any(count => count < longest))
         {
-            progressed = false;
             for (var i = 0; i < streams.Count; i++)
             {
                 var stream = streams[i];
-                for (var k = 0; k < blockSize && cursors[i] < stream.Count; k++)
+                for (var k = 0; k < blockSize && supplied[i] < longest; k++)
                 {
                     result.Add(stream[cursors[i]++]);
-                    progressed = true;
+                    supplied[i]++;
+                    if (cursors[i] == stream.Count) { cursors[i] = 0; }
                 }
             }
         }
-        while (progressed);
 
         return result;
+    }
+
+    private static IEnumerable<ScheduledEntry> RepeatToLength(IReadOnlyList<ScheduledEntry> stream, int length)
+    {
+        for (var i = 0; i < length; i++)
+        {
+            yield return stream[i % stream.Count];
+        }
     }
 
     private void AddSeries(List<ScheduledEntry> entries, Series series)

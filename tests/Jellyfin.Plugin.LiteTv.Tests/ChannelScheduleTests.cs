@@ -77,7 +77,7 @@ public class ChannelScheduleTests
             .Select(a => a.Entry!.Name)
             .ToList();
 
-        Assert.Equal(new[] { "Episode 2", "Episode 3", "Episode 1", "Episode 2", "Episode 3" }, programmes);
+        Assert.Equal(new[] { "Episode 3", "Episode 1", "Episode 2", "Episode 3", "Episode 1" }, programmes);
     }
 
     [Fact]
