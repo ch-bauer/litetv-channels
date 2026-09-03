@@ -24,16 +24,46 @@ namespace Jellyfin.Plugin.LiteTv.Api;
 /// rather than the same ones reordered.
 /// </param>
 /// <param name="Dismissed">Names the owner has already said no to.</param>
+/// <param name="Strictness">
+/// How tightly the titles must belong together, 0 to 100. It is the floor on the similarity
+/// score, and it is the setting that decides whether a studio channel is a studio channel or a
+/// list of everything that studio ever put its name on.
+/// </param>
+/// <param name="FilmNight">
+/// <c>auto</c>, <c>on</c> or <c>off</c>. A film channel never gets one whatever this says: a
+/// block of films inside a channel that is already films is the same programme twice.
+/// </param>
+/// <param name="Trailers">Whether proposals come with the trailer preview turned on.</param>
+/// <param name="RandomizeEpisodes">Whether a series' episodes are mixed before selection.</param>
+/// <param name="MinSources">The fewest sources a proposal may be built from.</param>
+/// <param name="MaxSources">The most sources a proposal may be built from.</param>
 internal sealed record SuggestionOptions(
     AudienceBand Audience,
     int MaxTitles,
     IReadOnlyCollection<string> Families,
     int Refresh,
-    IReadOnlyCollection<string> Dismissed)
+    IReadOnlyCollection<string> Dismissed,
+    int Strictness = 45,
+    string FilmNight = "auto",
+    bool Trailers = true,
+    bool RandomizeEpisodes = true,
+    int MinSources = 3,
+    int MaxSources = 12)
 {
     /// <summary>The default: everything, at a size that fills an evening without a marathon.</summary>
     internal static SuggestionOptions Default { get; } =
         new(AudienceBand.Unknown, 60, Array.Empty<string>(), 0, Array.Empty<string>());
+
+    /// <summary>Whether a film night may be offered for a channel of this family.</summary>
+    /// <param name="family">The family being composed.</param>
+    /// <returns>Whether to consider one at all.</returns>
+    internal bool WantsFilmNight(string family) =>
+        !string.Equals(family, SuggestionFamily.Film, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(FilmNight, "off", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether a film night should be offered even where it is a squeeze.</summary>
+    internal bool InsistsOnFilmNight =>
+        string.Equals(FilmNight, "on", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whether a family of channel was asked for.</summary>
     /// <param name="family">The family.</param>
@@ -96,18 +126,6 @@ internal static class SuggestionFamily
 /// </remarks>
 internal static class ChannelSuggestionBuilder
 {
-    /// <summary>
-    /// The most sources one channel is given, whatever the size cap allows.
-    /// <para>
-    /// A weighting is a share of the next draw, so twelve sources already means most of them are
-    /// rare. More would be a list rather than a channel.
-    /// </para>
-    /// </summary>
-    private const int MaximumSources = 12;
-
-    /// <summary>The fewest titles that make a channel rather than a loop of two.</summary>
-    private const int MinimumSources = 3;
-
     /// <summary>How many proposals are offered at once.</summary>
     private const int Offered = 6;
 
@@ -123,6 +141,12 @@ internal static class ChannelSuggestionBuilder
     /// can ask the library, and because a test can then state the number outright.
     /// </param>
     /// <param name="libraries">The libraries the pool was taken from, for the stated reason.</param>
+    /// <param name="cohesion">
+    /// Trims a pool to the titles that really belong together, given the pool and the anchor it
+    /// is mostly about. Supplied by the caller because the good answer comes from the Smart
+    /// Similar plugin over HTTP; null keeps every title, which is what a test wants unless it is
+    /// testing this.
+    /// </param>
     /// <returns>The proposals, most interesting first.</returns>
     internal static List<ChannelSuggestionDto> Build(
         IEnumerable<Series> series,
@@ -130,7 +154,8 @@ internal static class ChannelSuggestionBuilder
         IEnumerable<string> existingNames,
         SuggestionOptions? options = null,
         Func<Series, int>? episodeCount = null,
-        IReadOnlyCollection<string>? libraries = null)
+        IReadOnlyCollection<string>? libraries = null,
+        Func<IReadOnlyList<BaseItem>, BaseItem, IReadOnlyList<BaseItem>>? cohesion = null)
     {
         var settings = options ?? SuggestionOptions.Default;
         var count = episodeCount ?? (_ => 1);
@@ -166,7 +191,7 @@ internal static class ChannelSuggestionBuilder
                 continue;
             }
 
-            var built = Compose(candidate, settings, count, libraries ?? Array.Empty<string>());
+            var built = Compose(candidate, settings, count, libraries ?? Array.Empty<string>(), cohesion);
             if (built is null)
             {
                 continue;
@@ -237,7 +262,7 @@ internal static class ChannelSuggestionBuilder
         foreach (var studio in named)
         {
             var titles = pool.Where(item => HasStudio(item, studio.Studios)).ToList();
-            if (titles.Count < MinimumSources)
+            if (titles.Count < options.MinSources)
             {
                 continue;
             }
@@ -263,7 +288,7 @@ internal static class ChannelSuggestionBuilder
         // children's channel; an age rating is the one field that was written to answer this
         // exact question, and a title without one is left off rather than guessed at.
         var titles = pool.Where(item => SuggestionAudience.Of(item) is AudienceBand.Child or AudienceBand.Family).ToList();
-        if (titles.Count < MinimumSources)
+        if (titles.Count < options.MinSources)
         {
             return;
         }
@@ -285,7 +310,7 @@ internal static class ChannelSuggestionBuilder
         }
 
         var titles = WithGenre(pool, "Documentary", "Dokumentation", "Reality", "History", "Geschichte", "Nature").ToList();
-        if (titles.Count < MinimumSources)
+        if (titles.Count < options.MinSources)
         {
             return;
         }
@@ -331,7 +356,7 @@ internal static class ChannelSuggestionBuilder
         }
 
         var films = pool.OfType<Movie>().Where(movie => (movie.RunTimeTicks ?? 0) > 0).Cast<BaseItem>().ToList();
-        if (films.Count < MinimumSources)
+        if (films.Count < options.MinSources)
         {
             return;
         }
@@ -360,7 +385,8 @@ internal static class ChannelSuggestionBuilder
         Candidate candidate,
         SuggestionOptions options,
         Func<Series, int> episodeCount,
-        IReadOnlyCollection<string> libraries)
+        IReadOnlyCollection<string> libraries,
+        Func<IReadOnlyList<BaseItem>, BaseItem, IReadOnlyList<BaseItem>>? cohesion)
     {
         var band = options.Audience == AudienceBand.Unknown
             ? SuggestionAudience.Dominant(candidate.Pool)
@@ -370,18 +396,74 @@ internal static class ChannelSuggestionBuilder
             ? candidate.Pool
             : candidate.Pool.Where(item => SuggestionAudience.Fits(SuggestionAudience.Of(item), band)).ToList();
 
+        /*
+            Then the second cut, and the one the owner asked for after a DreamWorks channel came
+            out holding Catch Me If You Can beside Kung Fu Panda. Sharing a studio is not being
+            the same kind of thing - and the studio is often not even the main one on the film.
+            So the pool is trimmed again, this time to the titles that resemble the one it is
+            mostly about. Animation stays with animation.
+
+            The anchor is the title most representative of the pool: the one sharing the most
+            genres with the rest. Getting it wrong is survivable, because everything is measured
+            against it and the pool's own majority decides who that is.
+        */
+        var anchor = Anchor(coherent);
+        if (cohesion != null && anchor != null && coherent.Count > options.MinSources)
+        {
+            var kept = cohesion(coherent, anchor);
+            if (kept.Count >= options.MinSources)
+            {
+                coherent = kept.ToList();
+            }
+        }
+
+        /*
+            The film night is decided first, because its films are then kept out of the channel's
+            own sources.
+
+            It used to be built from the sources themselves, which put the same films on twice -
+            once as the channel's content and again as its Saturday block. Reserving them is the
+            useful half of the fix: the channel runs its series, and the films it would otherwise
+            have padded itself with become the evening that is worth sitting down for. A channel
+            that is films already never gets one at all.
+        */
+        var reserved = new List<BaseItem>();
+        if (options.WantsFilmNight(candidate.Family))
+        {
+            var films = coherent
+                .OfType<Movie>()
+                .Where(movie => (movie.RunTimeTicks ?? 0) > 0)
+                .OrderByDescending(movie => movie.CommunityRating ?? 0)
+                .ThenBy(movie => movie.SortName, StringComparer.OrdinalIgnoreCase)
+                .Take(options.MaxSources)
+                .Cast<BaseItem>()
+                .ToList();
+
+            // Only worth reserving when what is left is still a channel on its own.
+            var remaining = coherent.Count - films.Count;
+            if (films.Count >= options.MinSources && remaining >= options.MinSources)
+            {
+                reserved = films;
+            }
+        }
+
+        var reservedIds = reserved.Select(item => item.Id).ToHashSet();
         var ranked = coherent
+            .Where(item => !reservedIds.Contains(item.Id))
             .OrderByDescending(item => item is Series)
             .ThenByDescending(item => item.CommunityRating ?? 0)
             .ThenBy(item => item.SortName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var budget = Math.Max(options.MaxTitles, MinimumSources);
+        // The same count the size cap is measured in, so the preview and the limit agree.
+        int Titles(BaseItem item) => item is Series show ? Math.Max(episodeCount(show), 1) : 1;
+
+        var budget = Math.Max(options.MaxTitles, options.MinSources);
         var chosen = new List<BaseItem>();
         var titles = 0;
         foreach (var item in ranked)
         {
-            if (chosen.Count >= MaximumSources)
+            if (chosen.Count >= options.MaxSources)
             {
                 break;
             }
@@ -396,22 +478,21 @@ internal static class ChannelSuggestionBuilder
             titles += cost;
         }
 
-        if (chosen.Count < MinimumSources)
+        if (chosen.Count < options.MinSources)
         {
             return null;
         }
 
-        var films = chosen.OfType<Movie>().Cast<BaseItem>().ToList();
         var suggestion = new ChannelSuggestionDto
         {
             Name = candidate.Name,
             Description = candidate.Description,
             Theme = candidate.Theme,
-            Sources = Sources(chosen),
+            Sources = Sources(chosen, Titles),
             EpisodesPerBlock = 1,
             Order = nameof(PlayOrder.WeightedShuffle),
-            RandomizeEpisodes = chosen.Any(item => item is Series),
-            Trailers = nameof(TrailerMode.Preview),
+            RandomizeEpisodes = options.RandomizeEpisodes && chosen.Any(item => item is Series),
+            Trailers = options.Trailers ? nameof(TrailerMode.Preview) : nameof(TrailerMode.Off),
             TrailerEveryPrograms = 3,
             TrailerLookahead = 3,
             TrailersInGaps = true,
@@ -434,25 +515,35 @@ internal static class ChannelSuggestionBuilder
             suggestion.Features.Add("Serienfolgen mischen");
         }
 
-        suggestion.Features.Add("Trailer-Vorschau");
+        if (options.Trailers)
+        {
+            suggestion.Features.Add("Trailer-Vorschau");
+        }
 
-        // The film night is a second schedule of its own, so it is only offered when there are
-        // films to fill it and when it fits inside what is left of the size the owner allowed.
-        if (films.Count >= MinimumSources && titles + films.Count <= budget)
+        /*
+            The film night is a second programme, so it needs its own films.
+
+            It used to be built from the channel's own sources, which put the same films on twice
+            - once as the channel's content and again as its Saturday block. A film channel gets
+            none at all now, for the same reason said plainly: a block of films inside a channel
+            that is already films is the same evening twice.
+        */
+        var roomForFilmNight = options.InsistsOnFilmNight || titles + reserved.Count <= budget;
+        if (reserved.Count >= options.MinSources && roomForFilmNight)
         {
             suggestion.MovieNight = new SuggestedProgramBlockDto
             {
                 Name = "Filmabend",
                 StartMinutes = (20 * 60) + 15,
                 Days = new List<string> { nameof(DayOfWeek.Saturday) },
-                Sources = Sources(films),
+                Sources = Sources(reserved, Titles),
                 EpisodesPerBlock = 1,
                 Order = nameof(PlayOrder.WeightedShuffle),
-                RandomizeEpisodes = true,
+                RandomizeEpisodes = options.RandomizeEpisodes,
                 AdvanceOnePerWeek = true,
                 FitToContent = true,
                 ShiftToAvoidLeadingGap = true,
-                TrailerEnabled = true,
+                TrailerEnabled = options.Trailers,
                 TrailerProgramsBefore = 3
             };
             suggestion.Features.Add("Filmabend · Sa 20:15");
@@ -461,7 +552,40 @@ internal static class ChannelSuggestionBuilder
         return suggestion;
     }
 
-    private static List<SuggestedSourceDto> Sources(IReadOnlyList<BaseItem> items)
+    /// <summary>
+    /// The title a pool is most about: the one sharing the most genres with the rest of it.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not the highest rated or the newest. The question being asked is "what kind
+    /// of thing is this pool", and the answer is whatever most of it looks like - a pool of six
+    /// animated films and one thriller is about animation whichever of them scored best.
+    /// </remarks>
+    /// <param name="pool">The pool.</param>
+    /// <returns>The anchor, or null when the pool is empty.</returns>
+    private static BaseItem? Anchor(IReadOnlyList<BaseItem> pool)
+    {
+        BaseItem? best = null;
+        var bestScore = -1;
+
+        foreach (var item in pool)
+        {
+            var genres = item.Genres ?? Array.Empty<string>();
+            var score = pool
+                .Where(other => other.Id != item.Id)
+                .Sum(other => (other.Genres ?? Array.Empty<string>())
+                    .Count(genre => genres.Contains(genre, StringComparer.OrdinalIgnoreCase)));
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = item;
+            }
+        }
+
+        return best;
+    }
+
+    private static List<SuggestedSourceDto> Sources(IReadOnlyList<BaseItem> items, Func<BaseItem,int>? titles = null)
     {
         var baseWeight = 100 / items.Count;
         var remainder = 100 % items.Count;
@@ -470,7 +594,10 @@ internal static class ChannelSuggestionBuilder
             Type = item is Series ? nameof(ChannelSourceType.Series) : nameof(ChannelSourceType.Movie),
             ItemId = item.Id,
             Name = item.Name ?? string.Empty,
-            Probability = baseWeight + (index < remainder ? 1 : 0)
+            Probability = baseWeight + (index < remainder ? 1 : 0),
+            Year = item.ProductionYear,
+            Genres = (item.Genres ?? Array.Empty<string>()).Take(3).ToList(),
+            Titles = titles?.Invoke(item) ?? 1
         }).ToList();
     }
 

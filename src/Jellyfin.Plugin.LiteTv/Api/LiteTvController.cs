@@ -1537,16 +1537,32 @@ public class LiteTvController : ControllerBase
     /// </param>
     /// <param name="refresh">Turn of the wheel: a higher number offers different ideas.</param>
     /// <param name="dismissed">Names already said no to, comma-separated.</param>
+    /// <param name="strictness">How tightly the titles must belong together, 0 to 100.</param>
+    /// <param name="filmNight">auto, on or off. A film channel never gets one.</param>
+    /// <param name="trailers">Whether proposals come with the trailer preview turned on.</param>
+    /// <param name="randomize">Whether a series' episodes are mixed before selection.</param>
+    /// <param name="minSources">The fewest sources a proposal may be built from.</param>
+    /// <param name="maxSources">The most sources a proposal may be built from.</param>
+    /// <param name="userId">The account whose library access Smart Similar should apply.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The suggestions; already-existing channel names are skipped.</returns>
     [HttpGet("Suggestions")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public ActionResult<List<ChannelSuggestionDto>> GetSuggestions(
+    public async Task<ActionResult<List<ChannelSuggestionDto>>> GetSuggestions(
         [FromQuery] string? libraries = null,
         [FromQuery] string? audience = null,
         [FromQuery] int maxTitles = 60,
         [FromQuery] string? families = null,
         [FromQuery] int refresh = 0,
-        [FromQuery] string? dismissed = null)
+        [FromQuery] string? dismissed = null,
+        [FromQuery] int strictness = 45,
+        [FromQuery] string? filmNight = null,
+        [FromQuery] bool trailers = true,
+        [FromQuery] bool randomize = true,
+        [FromQuery] int minSources = 3,
+        [FromQuery] int maxSources = 12,
+        [FromQuery] Guid userId = default,
+        CancellationToken cancellationToken = default)
     {
         var existingNames = new HashSet<string>(
             _channels.All().Select(c => c.Name),
@@ -1569,7 +1585,15 @@ public class LiteTvController : ControllerBase
             Math.Clamp(maxTitles, 5, 2000),
             Words(families),
             refresh,
-            Words(dismissed));
+            Words(dismissed),
+            Math.Clamp(strictness, 0, 100),
+            string.IsNullOrWhiteSpace(filmNight) ? "auto" : filmNight,
+            trailers,
+            randomize,
+            Math.Clamp(minSources, 2, 12),
+            Math.Clamp(maxSources, Math.Clamp(minSources, 2, 12), 24));
+
+        var cohesion = await Cohesion(options, userId, cancellationToken).ConfigureAwait(false);
 
         var suggestions = ChannelSuggestionBuilder.Build(
             series,
@@ -1577,7 +1601,13 @@ public class LiteTvController : ControllerBase
             existingNames,
             options,
             EpisodeCount,
-            wanted.Select(folder => folder.Name ?? string.Empty).Where(name => name.Length > 0).ToList());
+            wanted.Select(folder => folder.Name ?? string.Empty).Where(name => name.Length > 0).ToList(),
+            cohesion);
+
+        foreach (var suggestion in suggestions)
+        {
+            suggestion.Reason.Engine = SuggestionEngine;
+        }
 
         // Collections remain a useful one-click channel in their own right. Keep the familiar
         // marathon suggestion, but give it the same complete wire shape as the richer templates.
@@ -1637,6 +1667,82 @@ public class LiteTvController : ControllerBase
             })
             .OrderBy(folder => folder.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    /// <summary>
+    /// Builds the thing that decides which titles in a pool really belong together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Answered by the Smart Similar plugin. Sharing a studio is not being the same kind of
+    /// thing - a DreamWorks channel came out holding <i>Catch Me If You Can</i> beside
+    /// <i>Kung Fu Panda</i>, and the studio is often not even the main one on the film. Similarity
+    /// is the signal that separates them, and Smart Similar is the engine that has it.
+    /// </para>
+    /// <para>
+    /// It is asked once per pool, seeded with the pool's anchor, and the answer is intersected
+    /// with the pool. When the plugin is absent or silent this falls back to
+    /// <see cref="RoughSimilarity"/>, which weighs shared genres, nearness in years and the
+    /// community rating - a worse answer of the same shape. Which one answered is on the wire,
+    /// because a fallback nobody can see is a fault nobody can report.
+    /// </para>
+    /// </remarks>
+    private async Task<Func<IReadOnlyList<BaseItem>, BaseItem, IReadOnlyList<BaseItem>>> Cohesion(
+        SuggestionOptions options,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var usable = _siblings.IsUsable(SiblingPlugins.SmartSimilarId);
+        SuggestionEngine = usable ? "SmartSimilar" : "Rough";
+
+        var baseUri = new Uri(Request.Scheme + "://" + Request.Host.Value);
+        var authorization = Request.Headers.Authorization.ToString();
+        var embyToken = Request.Headers["X-Emby-Token"].ToString();
+
+        // Warm the engine once so a pool that cannot be scored does not silently claim to have
+        // been: if the very first call fails, every later one would too.
+        await Task.CompletedTask.ConfigureAwait(false);
+
+        return (pool, anchor) =>
+        {
+            var floor = options.Strictness;
+            var poolIds = pool.Select(item => item.Id).ToHashSet();
+
+            if (usable)
+            {
+                var scored = _smartSimilar.ScoreAsync(
+                    baseUri, authorization, embyToken, new[] { anchor.Id }, userId, floor, 400, cancellationToken)
+                    .GetAwaiter().GetResult();
+
+                if (scored is { Active: true })
+                {
+                    var keep = scored.Results
+                        .Where(match => match.Score >= floor && poolIds.Contains(match.Id))
+                        .Select(match => match.Id)
+                        .ToHashSet();
+                    keep.Add(anchor.Id);
+                    return pool.Where(item => keep.Contains(item.Id)).ToList();
+                }
+
+                SuggestionEngine = "Rough";
+            }
+
+            var seeds = new[] { Similarity(anchor) };
+            var matches = RoughSimilarity.Rank(seeds, pool.Select(Similarity), floor, 0);
+            var rough = matches.Select(match => match.Id).ToHashSet();
+            rough.Add(anchor.Id);
+            return pool.Where(item => rough.Contains(item.Id)).ToList();
+        };
+    }
+
+    private static SimilarityInput Similarity(BaseItem item) => new(
+        item.Id,
+        item is Series ? "Series" : "Movie",
+        (item.Genres ?? Array.Empty<string>()).ToList(),
+        item.ProductionYear,
+        item.CommunityRating);
+
+    /// <summary>Which engine answered the last suggestion request, for the page to show.</summary>
+    private string SuggestionEngine { get; set; } = "None";
 
     private List<Folder> LibraryFolders() =>
         _libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
@@ -2638,6 +2744,16 @@ public class SuggestionReasonDto
 
     /// <summary>Gets or sets the size the proposal was held to.</summary>
     public int SizeLimit { get; set; }
+
+    /// <summary>
+    /// Gets or sets what decided which titles belong together: <c>SmartSimilar</c>, or
+    /// <c>Rough</c> when that plugin is absent or did not answer.
+    /// <para>
+    /// Shown on the page, always. The rough scorer is a worse answer of the same shape, and a
+    /// fallback nobody can see is a fault nobody can report.
+    /// </para>
+    /// </summary>
+    public string Engine { get; set; } = "None";
 }
 
 /// <summary>
@@ -2656,6 +2772,15 @@ public class SuggestedSourceDto
 
     /// <summary>Gets or sets this source's share of the weighted draw; all suggestions total 100.</summary>
     public int Probability { get; set; } = 100;
+
+    /// <summary>Gets or sets the production year, for the preview shown before the channel is added.</summary>
+    public int? Year { get; set; }
+
+    /// <summary>Gets or sets a few of the title's genres, for the same preview.</summary>
+    public List<string> Genres { get; set; } = new();
+
+    /// <summary>Gets or sets how many playable titles this source expands to; 1 for a film.</summary>
+    public int Titles { get; set; } = 1;
 }
 
 /// <summary>A ready-made weekly film-night block belonging to a channel suggestion.</summary>
