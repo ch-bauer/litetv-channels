@@ -13,4 +13,20 @@ claude-memory/
 # anybody noticed - which is the whole reason this line exists.
 cfg*.json
 chan*.json
-publish/
+
+# Local build output and release staging. Every released ZIP lives on GitHub; these are
+# throwaway copies of it.
+publish-*/
+package-*/
+release-package-*/
+release-github-*/
+release-candidate-*/
+.release-check-*/
+
+# Screenshots taken off the emulator while testing.
+emulator-*.png
+
+# Caches from tools run out of this folder.
+.gradle-user/
+.pnpm-store/
+.android-user/
