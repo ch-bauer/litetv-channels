@@ -24,6 +24,51 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The tag is the only version this workflow trusts, but meta.json is copied into the
+      # package unchecked - and meta.json is what Jellyfin reads for the installed version.
+      # 1.0.123.0 shipped that way: manifest.json and the csproj were bumped, meta.json was not,
+      # and the published package reported 1.0.122.0 with nothing failing anywhere. So check the
+      # places that must agree before a build is spent on them. Only from a tag: dispatching
+      # against a branch is for building and testing, and GITHUB_REF_NAME is a branch name there.
+      - name: Check every version agrees with the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          CSPROJ=src/Jellyfin.Plugin.LiteTv/Jellyfin.Plugin.LiteTv.csproj
+          fail=0
+
+          agrees() {
+            if [ "$2" != "$VERSION" ]; then
+              echo "::error::$1 says '$2', the tag says '$VERSION'."
+              fail=1
+            fi
+          }
+
+          # sed, not grep -oP: PCRE is a build option and refuses to run under some locales.
+          tag_value() { sed -n "s|.*<$1>\([^<]*\)</$1>.*|\1|p" "$CSPROJ" | head -1; }
+
+          agrees "meta.json version" "$(jq -r '.version' meta.json)"
+          agrees "$CSPROJ AssemblyVersion" "$(tag_value AssemblyVersion)"
+          agrees "$CSPROJ FileVersion" "$(tag_value FileVersion)"
+
+          # The checksum step already requires this entry, but only after the release is public.
+          # Finding it missing here costs a failed run instead of a published one.
+          ENTRIES="$(jq --arg v "$VERSION" '[.[].versions[] | select(.version == $v)] | length' manifest.json)"
+          if [ "$ENTRIES" != "1" ]; then
+            echo "::error::manifest.json holds $ENTRIES entries for $VERSION, expected exactly 1."
+            fail=1
+          else
+            META_ABI="$(jq -r '.targetAbi' meta.json)"
+            ENTRY_ABI="$(jq -r --arg v "$VERSION" 'first(.[].versions[] | select(.version == $v) | .targetAbi)' manifest.json)"
+            if [ "$META_ABI" != "$ENTRY_ABI" ]; then
+              echo "::error::targetAbi disagrees - meta.json '$META_ABI', manifest.json '$ENTRY_ABI'."
+              fail=1
+            fi
+          fi
+
+          test "$fail" = 0
+          echo "meta.json, the csproj and manifest.json all say $VERSION."
+
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 9.0.x
