@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fertige Kanalvorschläge bauen nun aus der eigenen Bibliothek komplette Sender: lokale Quellen mit einer echten 100%-Gewichtung, gemischte Serienfolgen, Trailer-Vorschau, passendes geliehenes Artwork und – bei genügend Filmen – einen samstäglichen Filmabend um 20:15 ohne Leerlauf. Vorschläge wie Werkstatt & Wildnis, Kinderzeit, Disney & Pixar (nur bei passenden Studio-Metadaten) und Genre-Sender sind bewusst keine Kopien echter Sender. Die bisherigen Wege zum Erstellen aus Lieblingstiteln sowie aus Bibliothek und Genres bleiben unverändert; Sammlungs-Marathons sind ebenfalls weiter verfügbar.",
+  "changelog": "Fertige Kanalvorschläge lassen sich jetzt steuern: Bibliotheken ein- oder ausschließen, eine Altersgruppe wählen, die Kanalgröße über einen Regler begrenzen – gezählt in abspielbaren Titeln, also Folgen statt Serien – und die gewünschten Kanalarten auswählen. Jeder Vorschlag nennt Altersband, Studios oder Genres, Bibliotheken und seine geschätzte Größe, bevor er hinzugefügt wird; ein Entwurf, der nicht in die erlaubte Größe passt, wird gar nicht erst angeboten. Ein Kanal wird auf die Altersgruppe getrimmt, um die er überwiegend geht, damit kein Jugend-Actionsender Vorschulserien über ein gemeinsames Studio oder ein gemeinsames Genrewort einsammelt. Studio-Sender für Disney, DreamWorks, Marvel, Warner, Nickelodeon und Cartoon Network erscheinen nur, wenn die Metadaten sie belegen. »Andere Ideen zeigen« liefert wirklich andere Vorschläge, und eine abgelehnte Idee kommt nicht zurück. Außerdem: die Altersangabe des Herkunftsnachweises ist jetzt so formuliert wie die übrigen Zeitangaben der Seite.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-03T17:00:00.000Z",
-  "version": "1.0.123.0",
+  "timestamp": "2026-09-03T19:00:00.000Z",
+  "version": "1.0.124.0",
   "status": "Active",
   "autoUpdate": false
 }
