@@ -23,11 +23,72 @@ export interface ReadyChannelSuggestion {
     TrailersInGaps: boolean;
     MovieNight: Omit<ProgramBlock, 'Enabled' | 'DurationMinutes' | 'SameSourceProbability'> | null;
     Artwork: { ItemId: string; ItemName: string };
+    Reason: SuggestionReason;
+}
+
+/**
+ * Why a channel was proposed, and what adding it would cost.
+ *
+ * `EstimatedTitles` is the field the whole control panel exists for: a suggestion once expanded
+ * to 453 titles and said nothing until it had been added.
+ */
+export interface SuggestionReason {
+    /** studio, kids, factual, genre, film or collection. */
+    Family: string;
+    /** The audience band in words, already in German. */
+    Audience: string;
+    /** The studios or genres that selected these titles. */
+    Because: string[];
+    /** The libraries the titles came from. */
+    Libraries: string[];
+    SourceCount: number;
+    /** Playable titles - episodes, not series. */
+    EstimatedTitles: number;
+    /** The size this proposal was held to. */
+    SizeLimit: number;
+}
+
+export interface SuggestionLibrary {
+    Id: string;
+    Name: string;
+    /** movies, tvshows, boxsets and so on, as the server names them. */
+    Kind: string;
+}
+
+/** What the owner chose before the suggestions were built. */
+export interface SuggestionControls {
+    /** Empty means every library, which is the default. */
+    libraries: string[];
+    /** child, family, teen, adult, or '' for any. */
+    audience: string;
+    /** The largest schedule a proposal may expand to, in playable titles. */
+    maxTitles: number;
+    /** Empty means every family. */
+    families: string[];
+    /** Turn of the wheel: a higher number offers different ideas. */
+    refresh: number;
+    /** Names already said no to. */
+    dismissed: string[];
+}
+
+/** The libraries the suggestions can be drawn from. */
+export function suggestionLibraries(): Promise<SuggestionLibrary[]> {
+    return api().getJSON<SuggestionLibrary[]>(api().getUrl('LiteTv/Suggestions/Libraries'));
 }
 
 /** Finished local channel concepts: media, look and programme blocks included. */
-export function readyChannels(): Promise<ReadyChannelSuggestion[]> {
-    return api().getJSON<ReadyChannelSuggestion[]>(api().getUrl('LiteTv/Suggestions'));
+export function readyChannels(controls?: SuggestionControls): Promise<ReadyChannelSuggestion[]> {
+    const query: Record<string, string | number> = {};
+    if (controls) {
+        if (controls.libraries.length > 0) { query.libraries = controls.libraries.join(','); }
+        if (controls.audience) { query.audience = controls.audience; }
+        if (controls.families.length > 0) { query.families = controls.families.join(','); }
+        if (controls.dismissed.length > 0) { query.dismissed = controls.dismissed.join(','); }
+        query.maxTitles = controls.maxTitles;
+        query.refresh = controls.refresh;
+    }
+
+    return api().getJSON<ReadyChannelSuggestion[]>(api().getUrl('LiteTv/Suggestions', query));
 }
 
 export interface SiblingPluginStatus {

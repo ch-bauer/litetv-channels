@@ -1525,38 +1525,71 @@ public class LiteTvController : ControllerBase
     /// Suggests ready-to-air channels from the media present in the library. Each answer carries
     /// its play order, trailer treatment, artwork source and (where films allow it) a film night.
     /// </summary>
+    /// <param name="libraries">
+    /// Which libraries may contribute, comma-separated. Empty means all of them, which is the
+    /// default and what almost everybody wants.
+    /// </param>
+    /// <param name="audience">The audience band: child, family, teen, adult, or empty for any.</param>
+    /// <param name="maxTitles">The largest schedule a proposal may expand to, in playable titles.</param>
+    /// <param name="families">
+    /// Which kinds of channel to offer, comma-separated: studio, kids, factual, genre, film,
+    /// collection. Empty means all.
+    /// </param>
+    /// <param name="refresh">Turn of the wheel: a higher number offers different ideas.</param>
+    /// <param name="dismissed">Names already said no to, comma-separated.</param>
     /// <returns>The suggestions; already-existing channel names are skipped.</returns>
     [HttpGet("Suggestions")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public ActionResult<List<ChannelSuggestionDto>> GetSuggestions()
+    public ActionResult<List<ChannelSuggestionDto>> GetSuggestions(
+        [FromQuery] string? libraries = null,
+        [FromQuery] string? audience = null,
+        [FromQuery] int maxTitles = 60,
+        [FromQuery] string? families = null,
+        [FromQuery] int refresh = 0,
+        [FromQuery] string? dismissed = null)
     {
         var existingNames = new HashSet<string>(
             _channels.All().Select(c => c.Name),
             StringComparer.OrdinalIgnoreCase);
-        var series = _libraryManager.GetItemList(new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { BaseItemKind.Series },
-            Recursive = true
-        }).OfType<Series>().ToList();
-        var movies = _libraryManager.GetItemList(new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { BaseItemKind.Movie },
-            Recursive = true
-        }).OfType<Movie>().Where(m => (m.RunTimeTicks ?? 0) > 0).ToList();
 
-        var suggestions = ChannelSuggestionBuilder.Build(series, movies, existingNames);
+        var chosen = Ids(libraries);
+        var folders = LibraryFolders();
+        var wanted = chosen.Count == 0
+            ? folders
+            : folders.Where(folder => chosen.Contains(folder.Id)).ToList();
+
+        var series = InLibraries<Series>(BaseItemKind.Series, wanted, chosen.Count > 0);
+        var movies = InLibraries<Movie>(BaseItemKind.Movie, wanted, chosen.Count > 0)
+            .Where(m => (m.RunTimeTicks ?? 0) > 0).ToList();
+
+        var options = new SuggestionOptions(
+            SuggestionAudience.Requested(audience),
+            // Clamped rather than validated away: the page offers a wide slider on purpose, and
+            // a number outside it is a caller's typo, not a reason to refuse the request.
+            Math.Clamp(maxTitles, 5, 2000),
+            Words(families),
+            refresh,
+            Words(dismissed));
+
+        var suggestions = ChannelSuggestionBuilder.Build(
+            series,
+            movies,
+            existingNames,
+            options,
+            EpisodeCount,
+            wanted.Select(folder => folder.Name ?? string.Empty).Where(name => name.Length > 0).ToList());
 
         // Collections remain a useful one-click channel in their own right. Keep the familiar
         // marathon suggestion, but give it the same complete wire shape as the richer templates.
-        var boxSets = _libraryManager.GetItemList(new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { BaseItemKind.BoxSet },
-            Recursive = true
-        }).OfType<BoxSet>();
-        foreach (var boxSet in boxSets)
+        var boxSets = InLibraries<BoxSet>(BaseItemKind.BoxSet, wanted, chosen.Count > 0);
+        var refused = new HashSet<string>(Words(dismissed), StringComparer.OrdinalIgnoreCase);
+        foreach (var boxSet in options.Wants(SuggestionFamily.Collection) ? boxSets : [])
         {
             var name = "Marathon: " + boxSet.Name;
-            if (suggestions.Count >= 8 || existingNames.Contains(name) || boxSet.GetLinkedChildren().Count < 3)
+            if (suggestions.Count >= 8
+                || existingNames.Contains(name)
+                || refused.Contains(name)
+                || boxSet.GetLinkedChildren().Count < 3)
             {
                 continue;
             }
@@ -1587,6 +1620,88 @@ public class LiteTvController : ControllerBase
 
         return suggestions;
     }
+
+    /// <summary>
+    /// The libraries the owner can choose between.
+    /// </summary>
+    /// <returns>The top-level media folders.</returns>
+    [HttpGet("Suggestions/Libraries")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<List<SuggestionLibraryDto>> GetSuggestionLibraries() =>
+        LibraryFolders()
+            .Select(folder => new SuggestionLibraryDto
+            {
+                Id = folder.Id,
+                Name = folder.Name ?? string.Empty,
+                Kind = (folder as ICollectionFolder)?.CollectionType?.ToString() ?? string.Empty
+            })
+            .OrderBy(folder => folder.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private List<Folder> LibraryFolders() =>
+        _libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
+
+    /// <summary>
+    /// Reads a comma-separated query value into a list, dropping the empties a trailing comma
+    /// leaves behind.
+    /// </summary>
+    private static List<string> Words(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? new List<string>()
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private static HashSet<Guid> Ids(string? value) =>
+        Words(value).Select(word => Guid.TryParse(word, out var id) ? id : Guid.Empty)
+            .Where(id => id != Guid.Empty)
+            .ToHashSet();
+
+    /// <summary>
+    /// Items of one kind, from the chosen libraries.
+    /// </summary>
+    /// <remarks>
+    /// Asking per library rather than once with every ancestor keeps the "which library did this
+    /// come from" question answerable, and asking once for the unfiltered case keeps the common
+    /// path as cheap as it was.
+    /// </remarks>
+    private List<T> InLibraries<T>(BaseItemKind kind, IReadOnlyList<Folder> folders, bool filtered)
+        where T : BaseItem
+    {
+        if (!filtered)
+        {
+            return _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { kind },
+                Recursive = true
+            }).OfType<T>().ToList();
+        }
+
+        return folders
+            .SelectMany(folder => _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { kind },
+                AncestorIds = new[] { folder.Id },
+                Recursive = true
+            }))
+            .OfType<T>()
+            .DistinctBy(item => item.Id)
+            .ToList();
+    }
+
+    /// <summary>
+    /// How many playable episodes a series expands to.
+    /// </summary>
+    /// <remarks>
+    /// The number the size cap is counted in, and the reason it is asked here rather than in the
+    /// builder: this is the same question <c>ChannelPlaylistBuilder</c> asks when it really
+    /// expands the series, so a proposal's stated size and the schedule it produces are counting
+    /// the same thing.
+    /// </remarks>
+    private int EpisodeCount(Series series) => _libraryManager.GetCount(new InternalItemsQuery
+    {
+        AncestorIds = new[] { series.Id },
+        IncludeItemTypes = new[] { BaseItemKind.Episode },
+        Recursive = true
+    });
 
     private static Dictionary<Guid, BaseItem?> NewArtworkCache() => new();
 
@@ -2473,6 +2588,56 @@ public class ChannelSuggestionDto
 
     /// <summary>Gets or sets the local title whose artwork gives the channel a finished look.</summary>
     public SuggestedArtworkDto Artwork { get; set; } = new();
+
+    /// <summary>Gets or sets why this was proposed and how big it is.</summary>
+    public SuggestionReasonDto Reason { get; set; } = new();
+}
+
+/// <summary>
+/// One library the suggestions may be drawn from.
+/// </summary>
+public class SuggestionLibraryDto
+{
+    /// <summary>Gets or sets the library's id.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Gets or sets the library's name, as the owner named it.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets what the library holds: movies, tvshows, and so on.</summary>
+    public string Kind { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Why a channel was proposed, and what adding it would cost.
+/// <para>
+/// On the wire because a proposal nobody can see the shape of is a proposal nobody can judge.
+/// The size is the part that was actually missing: a suggestion once expanded to 453 titles and
+/// said nothing about it until it had been added.
+/// </para>
+/// </summary>
+public class SuggestionReasonDto
+{
+    /// <summary>Gets or sets the family this belongs to: studio, kids, factual, genre or film.</summary>
+    public string Family { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the audience band, in words.</summary>
+    public string Audience { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the studios or genres that selected these titles.</summary>
+    public List<string> Because { get; set; } = new();
+
+    /// <summary>Gets or sets the libraries the titles came from.</summary>
+    public List<string> Libraries { get; set; } = new();
+
+    /// <summary>Gets or sets how many sources the channel would have.</summary>
+    public int SourceCount { get; set; }
+
+    /// <summary>Gets or sets how many playable titles those sources expand to.</summary>
+    public int EstimatedTitles { get; set; }
+
+    /// <summary>Gets or sets the size the proposal was held to.</summary>
+    public int SizeLimit { get; set; }
 }
 
 /// <summary>

@@ -1,7 +1,13 @@
 <script lang="ts">
     import { store } from '../lib/config.svelte';
     import { failureWords } from '../lib/jellyfin';
-    import { readyChannels, type ReadyChannelSuggestion } from '../lib/api/suggestions';
+    import {
+        readyChannels,
+        suggestionLibraries,
+        type ReadyChannelSuggestion,
+        type SuggestionControls,
+        type SuggestionLibrary,
+    } from '../lib/api/suggestions';
     import type { ChannelSource, ProgramBlock } from '../lib/types';
 
     let { onDone }: { onDone: () => void } = $props();
@@ -11,6 +17,59 @@
     let suggestions = $state<ReadyChannelSuggestion[]>([]);
     let loading = $state(true);
     let error = $state<string | null>(null);
+    let libraries = $state<SuggestionLibrary[]>([]);
+
+    /*
+        The slider runs the whole useful range rather than offering three named sizes. A cap is
+        the thing that stops a proposal quietly expanding to 453 titles, and where it should sit
+        depends on the library behind it - a shortlist would be a guess presented as a question.
+
+        Counted in playable titles, which is episodes rather than series: a channel of four
+        series is not small when they are four long-running ones.
+    */
+    const SMALLEST = 5;
+    const LARGEST = 500;
+
+    let controls = $state<SuggestionControls>({
+        libraries: [],
+        audience: '',
+        maxTitles: 60,
+        families: [],
+        refresh: 0,
+        dismissed: [],
+    });
+
+    const audiences = [
+        { value: '', de: 'Alle Altersgruppen', en: 'Any audience' },
+        { value: 'child', de: 'Kinder', en: 'Children' },
+        { value: 'family', de: 'Familie', en: 'Family' },
+        { value: 'teen', de: 'Jugendliche', en: 'Teen' },
+        { value: 'adult', de: 'Erwachsene', en: 'Adult' },
+    ];
+
+    const families = [
+        { value: 'studio', de: 'Studio & Franchise', en: 'Studio & franchise' },
+        { value: 'kids', de: 'Kinderprogramm', en: 'Children' },
+        { value: 'factual', de: 'Doku & Fakten', en: 'Factual' },
+        { value: 'genre', de: 'Genre-Sender', en: 'Genre' },
+        { value: 'film', de: 'Filmkanal', en: 'Film' },
+        { value: 'collection', de: 'Sammlungs-Marathon', en: 'Collection marathon' },
+    ];
+
+    function toggle(list: string[], value: string): string[] {
+        return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+    }
+
+    /** Say no to an idea: it goes, and it does not come back on the next turn of the wheel. */
+    function dismiss(name: string): void {
+        controls.dismissed = [...controls.dismissed, name];
+        suggestions = suggestions.filter((candidate) => candidate.Name !== name);
+    }
+
+    function differentIdeas(): void {
+        controls.refresh += 1;
+        void load();
+    }
 
     function source(source: ChannelSource): ChannelSource {
         return { Type: source.Type, ItemId: source.ItemId, Name: source.Name, Url: source.Url, Probability: source.Probability };
@@ -59,7 +118,7 @@
         loading = true;
         error = null;
         try {
-            suggestions = await readyChannels();
+            suggestions = await readyChannels(controls);
         } catch (reason) {
             error = failureWords(reason);
         } finally {
@@ -67,7 +126,19 @@
         }
     }
 
-    void load();
+    async function start(): Promise<void> {
+        // The library list is not worth failing the screen over: with none of them known the
+        // filter simply has nothing to offer and every library contributes, which is the default.
+        try {
+            libraries = await suggestionLibraries();
+        } catch {
+            libraries = [];
+        }
+
+        await load();
+    }
+
+    void start();
 </script>
 
 <div class="ready">
@@ -79,7 +150,85 @@
                 ? 'Jeder Entwurf bringt seine lokalen Quellen, Gewichtung, Trailer-Vorschau und – wenn genug Filme passen – einen Filmabend gleich mit.'
                 : 'Every concept includes local sources, weighting, trailer previews and — where enough films fit — a movie night.'}</p>
         </div>
-        <button type="button" class="refresh" onclick={load} disabled={loading}>{german ? 'Neu prüfen' : 'Check again'}</button>
+        <button type="button" class="refresh" onclick={differentIdeas} disabled={loading}>
+            {german ? 'Andere Ideen zeigen' : 'Show different ideas'}
+        </button>
+    </div>
+
+    <div class="controls">
+        {#if libraries.length > 1}
+            <div class="control">
+                <span class="label">{german ? 'Bibliotheken' : 'Libraries'}</span>
+                <div class="chips">
+                    <button type="button" class="chip" class:on={controls.libraries.length === 0}
+                        onclick={() => { controls.libraries = []; void load(); }}>
+                        {german ? 'Alle' : 'All'}
+                    </button>
+                    {#each libraries as library (library.Id)}
+                        <button type="button" class="chip" class:on={controls.libraries.includes(library.Id)}
+                            onclick={() => { controls.libraries = toggle(controls.libraries, library.Id); void load(); }}>
+                            {library.Name}
+                        </button>
+                    {/each}
+                </div>
+            </div>
+        {/if}
+
+        <div class="control">
+            <span class="label">{german ? 'Altersgruppe' : 'Audience'}</span>
+            <div class="chips">
+                {#each audiences as audience (audience.value)}
+                    <button type="button" class="chip" class:on={controls.audience === audience.value}
+                        onclick={() => { controls.audience = audience.value; void load(); }}>
+                        {german ? audience.de : audience.en}
+                    </button>
+                {/each}
+            </div>
+        </div>
+
+        <div class="control">
+            <span class="label">{german ? 'Kanalgröße' : 'Channel size'}</span>
+            <div class="size">
+                <input type="range" min={SMALLEST} max={LARGEST} step="5"
+                    bind:value={controls.maxTitles} onchange={() => void load()} />
+                <output>{controls.maxTitles} {german ? 'Titel' : 'titles'}</output>
+            </div>
+            <p class="hint">
+                {german
+                    ? 'Höchstzahl abspielbarer Titel, also Folgen statt Serien. Ein Entwurf, der nicht hineinpasst, wird gar nicht erst angeboten.'
+                    : 'The most playable titles a proposal may reach — episodes, not series. A concept that will not fit is not offered at all.'}
+            </p>
+        </div>
+
+        <div class="control">
+            <span class="label">{german ? 'Kanalarten' : 'Kinds of channel'}</span>
+            <div class="chips">
+                <button type="button" class="chip" class:on={controls.families.length === 0}
+                    onclick={() => { controls.families = []; void load(); }}>
+                    {german ? 'Alle' : 'All'}
+                </button>
+                {#each families as family (family.value)}
+                    <button type="button" class="chip" class:on={controls.families.includes(family.value)}
+                        onclick={() => { controls.families = toggle(controls.families, family.value); void load(); }}>
+                        {german ? family.de : family.en}
+                    </button>
+                {/each}
+            </div>
+        </div>
+
+        {#if controls.dismissed.length > 0}
+            <div class="control">
+                <span class="label">{german ? 'Abgelehnt' : 'Dismissed'}</span>
+                <div class="chips">
+                    {#each controls.dismissed as name (name)}
+                        <button type="button" class="chip gone"
+                            onclick={() => { controls.dismissed = controls.dismissed.filter((item) => item !== name); void load(); }}>
+                            {name} ×
+                        </button>
+                    {/each}
+                </div>
+            </div>
+        {/if}
     </div>
 
     {#if loading}
@@ -104,9 +253,21 @@
                     <div class="programme">
                         <div class="lineup">
                             <span>{suggestion.Sources.length} {german ? 'Quellen' : 'sources'}</span>
+                            <span class="size-badge">
+                                ~{suggestion.Reason.EstimatedTitles} {german ? 'Titel' : 'titles'}
+                            </span>
                             {#each suggestion.Features as feature (feature)}
                                 <span class="feature">{feature}</span>
                             {/each}
+                        </div>
+                        <div class="because">
+                            <span>{suggestion.Reason.Audience}</span>
+                            {#each suggestion.Reason.Because as reason (reason)}
+                                <span>{reason}</span>
+                            {/each}
+                            {#if suggestion.Reason.Libraries.length > 0}
+                                <span>{suggestion.Reason.Libraries.join(', ')}</span>
+                            {/if}
                         </div>
                         {#if suggestion.MovieNight}
                             <div class="movie-night">
@@ -121,7 +282,12 @@
                             </div>
                         {/if}
                     </div>
-                    <button type="button" class="add" onclick={() => add(suggestion)}>{german ? 'Kanal hinzufügen' : 'Add channel'}</button>
+                    <div class="decide">
+                        <button type="button" class="add" onclick={() => add(suggestion)}>{german ? 'Kanal hinzufügen' : 'Add channel'}</button>
+                        <button type="button" class="no" onclick={() => dismiss(suggestion.Name)}>
+                            {german ? 'Nicht mehr zeigen' : 'Not this one'}
+                        </button>
+                    </div>
                 </article>
             {/each}
         </div>
@@ -136,6 +302,24 @@
     .intro > div > p:last-child { max-width: 670px; margin: 9px 0 0; color: var(--lt-text-dim); font-size: 13px; line-height: 1.48; }
     .refresh, .problem button { padding: 7px 11px; border: 1px solid var(--lt-line-strong); border-radius: var(--lt-radius-small); background: var(--lt-card); color: var(--lt-text-muted); font: 600 12px inherit; cursor: pointer; white-space: nowrap; }
     .refresh:disabled { opacity: .55; cursor: default; }
+    .controls { display: flex; flex-direction: column; gap: 13px; max-width: 880px; margin: 0 auto 22px; padding: 15px 17px; border: 1px solid var(--lt-line); border-radius: var(--lt-radius); background: var(--lt-card); }
+    .control { display: flex; flex-direction: column; gap: 7px; }
+    .label { color: var(--lt-text-muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { padding: 5px 9px; border: 1px solid var(--lt-line-strong); border-radius: 99px; background: transparent; color: var(--lt-text-dim); font: 600 11.5px inherit; cursor: pointer; }
+    .chip:hover { color: var(--lt-text-muted); }
+    .chip.on { border-color: var(--lt-accent); background: var(--lt-accent); color: #fff; }
+    .chip.gone { border-style: dashed; color: var(--lt-text-dim); }
+    .size { display: flex; align-items: center; gap: 12px; }
+    .size input { flex-grow: 1; max-width: 420px; accent-color: var(--lt-accent); }
+    .size output { min-width: 88px; color: var(--lt-text-muted); font: 700 12px inherit; }
+    .hint { margin: 0; color: var(--lt-text-dim); font-size: 11px; line-height: 1.4; }
+    .size-badge { padding: 3px 6px; border: 1px solid var(--lt-queue); border-radius: 99px; color: var(--lt-queue); }
+    .because { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px; color: var(--lt-text-dim); font-size: 10.5px; }
+    .because span:not(:last-child)::after { content: ' ·'; }
+    .decide { display: flex; flex-direction: column; gap: 6px; }
+    .no { padding: 6px 10px; border: 1px solid var(--lt-line-strong); border-radius: var(--lt-radius-small); background: transparent; color: var(--lt-text-dim); font: 600 11px inherit; cursor: pointer; white-space: nowrap; }
+    .no:hover { color: var(--lt-text-muted); }
     .state, .problem { max-width: 880px; margin: 50px auto; color: var(--lt-text-dim); font-size: 13px; text-align: center; }
     .problem { color: #e08585; }
     .problem button { color: var(--lt-text-muted); }
