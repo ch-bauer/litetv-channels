@@ -544,8 +544,8 @@
                     >
                         {#if timed(height)}
                             <span class="when">{spanOf(airing)}</span>
-                            <span class="what">{airing.Name}</span>
-                        {:else if labelled(height)}{airing.Name}{/if}
+                            <span class="what">{airing.SeriesName ? airing.SeriesName + ' · ' + airing.Name : airing.Name}</span>
+                        {:else if labelled(height)}{airing.SeriesName ? airing.SeriesName + ' · ' + airing.Name : airing.Name}{/if}
                     </button>
                 {/each}
 
