@@ -13,7 +13,7 @@
         "changelog": "Film night now resumes with the next complete episode after the film, never a short tail of the episode before it. Shorter series repeat within a channel cycle until the longest series has completed once, so all configured series remain present through the week. The schedule grid now shows series name and episode title together.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.121.0/litetv-channels_1.0.121.0.zip",
-        "checksum": "",
+        "checksum": "4946c3b01339a2b5135b93891602d3e5",
         "timestamp": "2026-09-03T14:00:00.000Z"
       },
       {
