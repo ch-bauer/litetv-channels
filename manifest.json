@@ -18,7 +18,7 @@
       },
       {
         "version": "1.0.127.0",
-        "changelog": "Fertige Kanalvorschläge zeigen jetzt ein Bild je Vorschlag. Findet die Bibliothek kein eigenes Bild für ein Studio, holt sich ein Studio-Kanal dessen Logo online von TMDb – mit einem eigenen, kostenlosen API-Schlüssel unter Server-Einstellungen; ohne Schlüssel entfällt nur diese eine Grafik. Deutlich mehr Auswahl: zehn weitere Studio-Vorlagen (u. a. Universal, Paramount, Sony, Illumination, Ghibli, A24, HBO, BBC, Netflix), mehr berücksichtigte Genres, und mehr Vorschläge je Anfrage, damit »Andere Ideen zeigen« wirklich andere zeigt. Die Grenzen für die Anzahl der Quellen je Kanal waren mit 3 bis 12 zu eng gefasst und liegen jetzt bei 2 bis 30, der Regler reicht bis 80 – eine Quelle bleibt dabei ein Film oder eine ganze Serie, nie eine einzelne Folge.",
+        "changelog": "Ready-made channel suggestions now show a picture for every proposal. When the library has no picture of its own for a studio, a studio channel fetches its logo online from TMDb - with your own free API key under Server settings; without a key, only that one picture is skipped. Much more variety: ten more studio templates (including Universal, Paramount, Sony, Illumination, Ghibli, A24, HBO, BBC, Netflix), more genres considered, and more proposals per request, so \"Show different ideas\" actually shows different ones. The bounds on how many sources a channel may have were too tight at 3 to 12 and are now 2 to 30, with the slider reaching 80 - a source stays one film or one whole series, never a single episode.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.127.0/litetv-channels_1.0.127.0.zip",
         "checksum": "cebb2bfd483b80ffe6f4916bb66ca64a",
@@ -26,7 +26,7 @@
       },
       {
         "version": "1.0.126.0",
-        "changelog": "Ein Studio-Kanal kann jetzt das Logo des Studios selbst tragen statt nur das Bild des erstplatzierten Titels: findet die Bibliothek ein Bild zum passenden Studio-Eintrag – etwa durch ein Studio-Bilder-Plugin –, wird es als Banner, Backdrop und Poster des Kanals übernommen, ausgewählt anhand der tatsächlich verwendeten Titel statt der losen Suchbegriffe. Außerdem: der leere Vorschau-Rahmen für das Poster einer Kanal-Grafik hatte das falsche Seitenverhältnis, solange kein Bild gesetzt war – behoben.",
+        "changelog": "A studio channel can now wear the studio's own logo instead of just the top-ranked title's picture: when the library holds a picture for the matching studio entry - for example from a studio-images plugin - it is used as the channel's banner, backdrop and poster, chosen from the studios the titles actually used rather than the loose search terms that found them. Also: the empty preview frame for a channel picture's poster had the wrong aspect ratio whenever no picture was set - fixed.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.126.0/litetv-channels_1.0.126.0.zip",
         "checksum": "0e91ecc3fec4e2eb8eb07cab6506ce57",
@@ -34,7 +34,7 @@
       },
       {
         "version": "1.0.125.0",
-        "changelog": "Kanalvorschläge urteilen jetzt über Ähnlichkeit statt nur über das Studio: ein Pool wird zusätzlich auf den Titel getrimmt, um den er überwiegend geht – gemessen mit Smart Similar, mit einem groben Rückfall, wenn dieses Plugin fehlt oder nicht antwortet. Ein DreamWorks-Sender hält damit keinen Thriller mehr neben Animationsfilmen, nur weil beide vom selben Studio sind. Der Filmabend eines Vorschlags verwendet nun eigens reservierte Filme statt der Kanalinhalte selbst, sodass kein Titel doppelt läuft; ein reiner Filmkanal bekommt gar keinen Filmabend mehr. Dazu vier weitere Einstellungen – Ähnlichkeitsstrenge, Filmabend immer/passend/nie, Trailer und Folgenmischen einzeln, sowie Mindest- und Höchstzahl der Quellen – und eine aufklappbare Titelliste je Vorschlag vor dem Hinzufügen.",
+        "changelog": "Channel suggestions now judge by similarity, not just by studio: a pool is further trimmed to the title it is mostly about - scored with Smart Similar, with a rough fallback when that plugin is absent or does not answer. A DreamWorks channel no longer holds a thriller next to animated films just because both are from the same studio. A suggestion's film night now uses films reserved specifically for it rather than the channel's own content, so no title plays twice; a pure film channel gets no film night at all. Plus four more settings - similarity strictness, film night always/where it fits/never, trailers and episode shuffling on their own, and a minimum and maximum source count - and an expandable title list per suggestion before adding it.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.125.0/litetv-channels_1.0.125.0.zip",
         "checksum": "a2bac8b0c0d68aedc5f91e4ca9946b6c",
@@ -42,7 +42,7 @@
       },
       {
         "version": "1.0.124.0",
-        "changelog": "Fertige Kanalvorschläge lassen sich jetzt steuern: Bibliotheken ein- oder ausschließen, eine Altersgruppe wählen, die Kanalgröße über einen Regler begrenzen – gezählt in abspielbaren Titeln, also Folgen statt Serien – und die gewünschten Kanalarten auswählen. Jeder Vorschlag nennt Altersband, Studios oder Genres, Bibliotheken und seine geschätzte Größe, bevor er hinzugefügt wird; ein Entwurf, der nicht in die erlaubte Größe passt, wird gar nicht erst angeboten. Ein Kanal wird auf die Altersgruppe getrimmt, um die er überwiegend geht, damit kein Jugend-Actionsender Vorschulserien über ein gemeinsames Studio oder ein gemeinsames Genrewort einsammelt. Studio-Sender für Disney, DreamWorks, Marvel, Warner, Nickelodeon und Cartoon Network erscheinen nur, wenn die Metadaten sie belegen. »Andere Ideen zeigen« liefert wirklich andere Vorschläge, und eine abgelehnte Idee kommt nicht zurück. Außerdem: die Altersangabe des Herkunftsnachweises ist jetzt so formuliert wie die übrigen Zeitangaben der Seite.",
+        "changelog": "Ready-made channel suggestions can now be steered: include or exclude libraries, choose an audience band, cap the channel size with a slider - counted in playable titles, so episodes rather than series - and pick the kinds of channel wanted. Every suggestion names its audience band, studios or genres, libraries and estimated size before it is added; a proposal that does not fit the allowed size is not offered at all. A channel is trimmed to the audience band it is mostly about, so a teen action channel does not pick up preschool series over a shared studio or a shared genre word. Studio channels for Disney, DreamWorks, Marvel, Warner, Nickelodeon and Cartoon Network appear only when the metadata backs them up. \"Show different ideas\" now genuinely offers different proposals, and a dismissed idea does not come back. Also: the proof-of-origin token's age is now phrased the same way as the page's other time statements.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.124.0/litetv-channels_1.0.124.0.zip",
         "checksum": "4086af504fa34baa8bccd5657905f495",
@@ -50,7 +50,7 @@
       },
       {
         "version": "1.0.123.0",
-        "changelog": "Fertige Kanalvorschläge bauen nun aus der eigenen Bibliothek komplette Sender: lokale Quellen mit einer echten 100%-Gewichtung, gemischte Serienfolgen, Trailer-Vorschau, passendes geliehenes Artwork und – bei genügend Filmen – einen samstäglichen Filmabend um 20:15 ohne Leerlauf. Vorschläge wie Werkstatt & Wildnis, Kinderzeit, Disney & Pixar (nur bei passenden Studio-Metadaten) und Genre-Sender sind bewusst keine Kopien echter Sender. Die bisherigen Wege zum Erstellen aus Lieblingstiteln sowie aus Bibliothek und Genres bleiben unverändert; Sammlungs-Marathons sind ebenfalls weiter verfügbar.",
+        "changelog": "Ready-made channel suggestions now build complete channels straight from your own library: local sources with a true 100% weighting, shuffled episodes, trailer previews, matching borrowed artwork and - with enough films - a Saturday film night at 20:15 with no dead air. Suggestions like Workshop & Wilderness, Kids' Time, Disney & Pixar (only with matching studio metadata) and genre channels are deliberately not copies of real channels. The existing ways to build from favourite titles and from a library and genres are unchanged; collection marathons also remain available.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.123.0/litetv-channels_1.0.123.0.zip",
         "checksum": "14a869a5d4d371a149b6d276ba376e62",
@@ -114,7 +114,7 @@
       },
       {
         "version": "1.0.110.0",
-        "changelog": "Die Tagesansicht kann jetzt durch alle Tage der ausgewählten Woche navigieren. Online-Bilder bleiben nach dem Speichern erhalten. Block-Trailer folgen bei wechselnden Filmabend-Filmen automatisch dem Film der jeweiligen Woche.",
+        "changelog": "The day view can now navigate through every day of the selected week. Online pictures are kept after saving. A block's trailer now follows that week's own film automatically when the film night's film changes week to week.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.110.0/litetv-channels_1.0.110.0.zip",
         "checksum": "6a931cdea2cad6ba20682cbb59b86d00",
@@ -122,7 +122,7 @@
       },
       {
         "version": "1.0.109.0",
-        "changelog": "Der Schedule-Anfang lässt sich jetzt minutengenau mit Sekunden setzen; ein Button schlägt eine passende volle Stunde vor. Die Inhaltsvorschau folgt nun der Server-Reihenfolge, ausgewählte Starttitel bleiben erhalten und Wochenblöcke sind im Schedule farblich hervorgehoben.",
+        "changelog": "The schedule start can now be set to the minute, with seconds; a button suggests the nearest full hour. The content preview now follows the server's own order, chosen starting titles are kept, and weekly blocks are highlighted by colour in the schedule.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.109.0/litetv-channels_1.0.109.0.zip",
         "checksum": "c64a327cf103489dbf96590c97ef4d26",
@@ -130,7 +130,7 @@
       },
       {
         "version": "1.0.107.0",
-        "changelog": "Channels werden sofort gespeichert, während die Schedule-Erzeugung im Hintergrund läuft. Collections aus der Titelsuche werden als echte Quellen erkannt, und die Bibliotheksansicht hat für große Bibliotheken eine Suchleiste. Die doppelte Spracheinstellung wurde entfernt.",
+        "changelog": "Channels are now saved immediately while schedule generation runs in the background. Collections found through title search are now recognised as real sources, and the library view has a search field for large libraries. The duplicate language setting was removed.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.107.0/litetv-channels_1.0.107.0.zip",
         "checksum": "5d80d0e0d19ae3c12cc4dab8b4407f1d",
@@ -138,7 +138,7 @@
       },
       {
         "version": "1.0.105.0",
-        "changelog": "**Collections können jetzt direkt als einzige Channel-Quelle verwendet werden.** YouTube-Quellen zeigen wieder passende Vorschaubilder, sofern YouTube sie bereitstellt. Außerdem wurde die doppelte Beschriftung **Sprache der Konfigurationsseite** entfernt und die Servereinstellung korrekt als **Wiedergabe & Trailer** bezeichnet.",
+        "changelog": "**Collections can now be used directly as a channel's only source.** YouTube sources show matching thumbnails again, where YouTube provides them. Also removed the duplicate **Configuration page language** label, and correctly named the server setting **Playback & trailers**.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.105.0/litetv-channels_1.0.105.0.zip",
         "checksum": "6bc62046d9ed420251b447f56c575438",
@@ -146,7 +146,7 @@
       },
       {
         "version": "1.0.104.0",
-        "changelog": "**Kanal- und Servereinstellungen werden automatisch gespeichert.** Mehrere Änderungen können mit **Änderungen zurücksetzen** gemeinsam auf den Stand beim Öffnen der Seite zurückgesetzt werden. Das Löschen eines Channels bleibt sofort endgültig. Die Sprache der Konfigurationsseite wird nur noch unter den Servereinstellungen angezeigt.",
+        "changelog": "**Channel and server settings are now saved automatically.** Several changes can be reset together back to how the page was when opened, using **Reset changes**. Deleting a channel is still immediately final. The configuration page's language is now shown only under server settings.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.104.0/litetv-channels_1.0.104.0.zip",
         "checksum": "911bfe9686531e628eabbc0d6e67c9d8",
