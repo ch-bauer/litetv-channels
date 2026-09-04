@@ -145,6 +145,29 @@
         }
     }
 
+    /** Whether every source already carries the same share - so the button has nothing to fix. */
+    const allEqual = $derived.by(() => {
+        if (sources.length === 0) { return true; }
+        const first = sources[0]!.Probability ?? 100;
+        return sources.every((source) => (source.Probability ?? 100) === first);
+    });
+
+    /*
+        Distinct from "distribute to 100%": that one keeps whatever ratio is already there and
+        only rescales it to add up to 100, so a channel weighted 50/30/20 stays 50/30/20. This
+        throws the ratio away and gives every source the same share instead - the report was a
+        weighted-random channel where the sources plainly were not equally likely, and rescaling
+        an unequal split does not touch that at all.
+    */
+    function equalizeAll(): void {
+        if (sources.length === 0) { return; }
+        const base = Math.floor(100 / sources.length);
+        const remainder = 100 - (base * sources.length);
+        for (let i = 0; i < sources.length; i++) {
+            sources[i]!.Probability = base + (i < remainder ? 1 : 0);
+        }
+    }
+
     function setProbability(index: number, value: number): void {
         const next = Math.max(0, Math.min(100, Math.floor(value)));
         const others = sources.filter((_, candidate) => candidate !== index);
@@ -314,6 +337,15 @@
         <span>{german ? 'Gewichtung insgesamt:' : 'Total weight:'} {probabilityTotal}%</span>
         {#if probabilityTotal !== 100}
             <button type="button" onclick={distributeEvenly}>{german ? 'auf 100 % verteilen' : 'distribute to 100%'}</button>
+        {/if}
+        {#if sources.length > 1 && !allEqual}
+            <button
+                type="button"
+                onclick={equalizeAll}
+                title={german
+                    ? 'Setzt jede Quelle auf den gleichen Anteil, statt das bestehende Verhältnis nur auf 100 % zu skalieren.'
+                    : 'Gives every source the same share, instead of only rescaling the existing ratio to 100%.'}
+            >{german ? 'alle gleich gewichten' : 'make all equal'}</button>
         {/if}
     </div>
 {/if}

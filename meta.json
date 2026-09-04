@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes a duplicate quality copy of the same film - \"Spider-Man\" and \"Spider-Man (4K)\", most often - still showing up as two separate search results after the last release's fix: that one only caught the case where both copies shared the same provider id, but a separately organised \"(4K)\" copy is often matched to its own metadata and carries none. Now also matched by a normalized title (quality and edition tags such as 4K, 1080p, HDR, Remux, Extended stripped) plus the same year where both have one, keeping whichever copy's name carries no such tag.",
+  "changelog": "Channels in the rail can now be reordered by dragging - the server has always stored a position for each one, but nothing let you change it. Also adds a \"make all equal\" button next to a channel's sources: distinct from the existing \"distribute to 100%\", which only rescales whatever ratio is already there, this gives every source the same share outright - for a weighted-random channel whose sources plainly were not equally likely.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-05T00:45:00.000Z",
-  "version": "1.0.134.0",
+  "timestamp": "2026-09-05T01:10:00.000Z",
+  "version": "1.0.135.0",
   "status": "Active",
   "autoUpdate": false
 }

@@ -21,6 +21,32 @@
         return store.channels.filter((c) => c.Name.toLowerCase().includes(needle));
     });
 
+    /*
+        Dragging reorders the real list, so it only makes sense unfiltered - dragging a row past
+        others the filter is hiding would put it somewhere nobody watching the filtered view
+        could see coming. The filter already narrows what is shown; it should not also let a
+        drag silently jump past hidden rows.
+    */
+    const reorderable = $derived(filter.trim().length === 0);
+
+    let dragging = $state<number | null>(null);
+    let over = $state<number | null>(null);
+
+    /** Moves a channel and renumbers Position for the whole list, so the server saves the order. */
+    function move(from: number, to: number): void {
+        const list = store.channels;
+        if (to < 0 || to >= list.length || from === to) { return; }
+        const [taken] = list.splice(from, 1);
+        list.splice(to, 0, taken);
+        list.forEach((channel, index) => { channel.Position = index + 1; });
+    }
+
+    function onDrop(target: number): void {
+        if (dragging !== null) { move(dragging, target); }
+        dragging = null;
+        over = null;
+    }
+
     const count = $derived.by(() => {
         const all = store.channels.length;
         const german = store.config?.PageLanguage === 'de'
@@ -79,13 +105,29 @@
     </div>
 
     <div class="list">
-        {#each shown as channel (channel.Id)}
+        {#each shown as channel, index (channel.Id)}
             <button
                 type="button"
                 class="row"
                 class:on={destination === 'channel' && store.channel?.Id === channel.Id}
+                class:over={reorderable && over === index && dragging !== index}
+                draggable={reorderable}
                 onclick={() => pick(channel)}
+                ondragstart={(e) => {
+                    if (!reorderable) { e.preventDefault(); return; }
+                    dragging = index;
+                    e.dataTransfer?.setData('text/plain', channel.Id);
+                }}
+                ondragend={() => { dragging = null; over = null; }}
+                ondragover={(e) => { if (reorderable && dragging !== null) { e.preventDefault(); over = index; } }}
+                ondrop={(e) => { if (reorderable) { e.preventDefault(); onDrop(index); } }}
             >
+                {#if reorderable}
+                    <svg class="grip" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <circle cx="9" cy="5" r="1.7" /><circle cx="9" cy="12" r="1.7" /><circle cx="9" cy="19" r="1.7" />
+                        <circle cx="15" cy="5" r="1.7" /><circle cx="15" cy="12" r="1.7" /><circle cx="15" cy="19" r="1.7" />
+                    </svg>
+                {/if}
                 <span class="dot" class:live={channel.Enabled}></span>
                 <span class="who">
                     <span class="label">{channel.Name}</span>
@@ -216,6 +258,9 @@
 
     .row:hover { background: var(--lt-hover); }
     .row.on { background: rgba(119, 91, 244, .16); }
+    .row.over { background: rgba(119, 91, 244, .12); }
+
+    .grip { flex: 0 0 auto; color: rgba(255, 255, 255, .28); cursor: grab; }
 
     .dot {
         flex: 0 0 auto;
