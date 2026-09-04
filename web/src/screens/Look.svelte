@@ -869,7 +869,7 @@
         face of its own rather than one at all. This restores that on request instead. An
         explicitly set picture above still wins over it regardless.
     */
-    const followNowPlaying = $derived(artwork['FollowNowPlaying'] === true);
+    const followNowPlaying = $derived(!!artwork['FollowNowPlaying']);
     function toggleFollowNowPlaying(): void {
         channel.Artwork = { ...(channel.Artwork ?? {}), FollowNowPlaying: !followNowPlaying };
     }

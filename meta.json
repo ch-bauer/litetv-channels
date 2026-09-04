@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-05T00:15:00.000Z",
-  "version": "1.0.132.0",
+  "timestamp": "2026-09-05T00:25:00.000Z",
+  "version": "1.0.133.0",
   "status": "Active",
   "autoUpdate": false
 }
