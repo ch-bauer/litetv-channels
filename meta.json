@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes broken-image icons on every ready-made channel suggestion's thumbnail: a studio suggestion often borrows a Studio library item, and a studio-images provider commonly gives it a Banner or Backdrop rather than a Primary picture, which was the only kind asked for. The thumbnail now tries Primary, Thumb, Banner and Backdrop in turn, and a picture that still fails to load falls back to the same placeholder already used for no artwork at all. Also fixes two library items for the same film - a plain copy and a separately organised \"(4K)\" one, most often - showing up as two separate search results when adding content: now shown once, matched by the library's own provider id rather than by name.",
+  "changelog": "A channel's own picture can now follow whatever is actually airing right now, instead of always wearing a fixed borrowed or configured picture - a new \"Follow what is on now\" toggle on the Look page, off by default. It restores the channel's face tracking live content on request; an explicitly set picture always wins over it regardless, and it never applies unless turned on, so every existing channel is unaffected.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-04T23:45:00.000Z",
-  "version": "1.0.131.0",
+  "timestamp": "2026-09-05T00:15:00.000Z",
+  "version": "1.0.132.0",
   "status": "Active",
   "autoUpdate": false
 }

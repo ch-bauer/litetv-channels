@@ -862,6 +862,17 @@
         setArtworkField('ImageItemId', null);
         setArtworkField('ImageItemName', null);
     }
+
+    /*
+        Off by default, on purpose: a channel's face used to be pointed at whatever was on, and
+        the report was that it flickered between films as the clock moved - a channel with no
+        face of its own rather than one at all. This restores that on request instead. An
+        explicitly set picture above still wins over it regardless.
+    */
+    const followNowPlaying = $derived(artwork['FollowNowPlaying'] === true);
+    function toggleFollowNowPlaying(): void {
+        channel.Artwork = { ...(channel.Artwork ?? {}), FollowNowPlaying: !followNowPlaying };
+    }
 </script>
 
 <div class="screen">
@@ -1287,6 +1298,21 @@
                 Cropped here exactly as the television crops: this is the one place a picture
                 being cut off is the truth rather than a fault in the preview.
             </p>
+        </Card>
+
+        <Card>
+            <h3>Follow what is on now</h3>
+            <label class="follow-now">
+                <input type="checkbox" checked={followNowPlaying} onchange={toggleFollowNowPlaying} />
+                <span>
+                    <strong>Use the currently playing title's own picture</strong>
+                    <small>
+                        Off by default: a channel's face used to track whatever was airing and the
+                        report was that it flickered between films as the clock moved. Turn this on
+                        to get that back - a picture set above always wins over it regardless.
+                    </small>
+                </span>
+            </label>
         </Card>
 
         <Card>
@@ -2031,6 +2057,20 @@
 
     .hint { font-size: 12px; color: var(--lt-text-dim); margin: 9px 0 0; line-height: 1.5; }
     .hint.tight { margin: 6px 0 10px; color: var(--lt-text-muted); font-size: 12.5px; }
+
+    .follow-now {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, .1);
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .follow-now input { flex: 0 0 auto; margin: 2px 0 0; }
+    .follow-now strong { display: block; font-size: 12.5px; color: var(--lt-text-title); }
+    .follow-now small { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.4; color: var(--lt-text-dim); }
 
     .borrowed {
         display: flex;

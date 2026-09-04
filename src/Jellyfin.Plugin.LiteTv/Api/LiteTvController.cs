@@ -121,7 +121,7 @@ public class LiteTvController : ControllerBase
                 // A client drawing a channel card falls back to this when the program on air
                 // has no wide artwork - or when nothing is on air at all, which is when the
                 // card used to go black.
-                Image = ChannelImage(channel, artwork)
+                Image = ChannelImage(channel, artwork, now)
             });
         }
 
@@ -224,7 +224,7 @@ public class LiteTvController : ControllerBase
             // The same fallback the overview gets. A channel screen with a black background is
             // the commonest way for a genre channel to look broken, and it is at its blackest
             // exactly when a break is on - which is when the screen has nothing else to draw.
-            Image = ChannelImage(channel, artwork),
+            Image = ChannelImage(channel, artwork, current),
             Upcoming = listed.Take(Math.Clamp(upcoming, 0, 64)).Select(a => ToProgram(a, artwork)).ToList()
         };
     }
@@ -2145,7 +2145,7 @@ public class LiteTvController : ControllerBase
     /// it has no wide artwork, and during a break there is nothing on to borrow from at all.
     /// </para>
     /// </summary>
-    private ChannelImageDto ChannelImage(TvChannel channel, Dictionary<Guid, BaseItem?> cache)
+    private ChannelImageDto ChannelImage(TvChannel channel, Dictionary<Guid, BaseItem?> cache, Airing? nowPlaying)
     {
         var configured = channel.Artwork ?? new ChannelArtwork();
         var dto = new ChannelImageDto
@@ -2154,6 +2154,16 @@ public class LiteTvController : ControllerBase
             BackdropUrl = NullIfBlank(configured.BackdropUrl),
             PosterUrl = NullIfBlank(configured.PosterUrl)
         };
+
+        // Opt-in: see ChannelArtwork.FollowNowPlaying for why this is off by default. An
+        // explicitly set picture above has already filled the dto and wins regardless; this
+        // only fills what is still empty, ahead of the borrowed item and the lineup scan below.
+        if (configured.FollowNowPlaying
+            && nowPlaying is { Kind: AiringKind.Program, Entry: { ItemId: var nowItemId } } && nowItemId != Guid.Empty
+            && FillChannelImage(dto, Artwork(cache, nowItemId), null))
+        {
+            return dto;
+        }
 
         // A named item fills whatever it can; the scan below tops up anything it did not have,
         // so pointing a channel at a series that has no backdrop still gets it a backdrop.

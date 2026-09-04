@@ -743,4 +743,18 @@ public class ChannelArtwork
     /// channel is borrowing from without looking it up again.
     /// </summary>
     public string? ImageItemName { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the channel's face tracks whatever is actually
+    /// airing right now, ahead of a borrowed item and the lineup scan below it.
+    /// <para>
+    /// Off by default, and deliberately so: a channel's own icon used to be pointed at "what is
+    /// on" and the report was that it flickered between films as the clock moved, which reads
+    /// as a channel with no identity of its own rather than a face at all. This is that same
+    /// behaviour, restored on request rather than by default - an explicitly set picture still
+    /// wins over it regardless, since a picture somebody chose by hand is a deliberate choice
+    /// this should never override.
+    /// </para>
+    /// </summary>
+    public bool FollowNowPlaying { get; set; }
 }
