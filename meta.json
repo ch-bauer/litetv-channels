@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes a genuine schedule fault: an auto-sized weekly film-night block (\"fit block to content\") could report the base queue's episode split into two identical-looking back-to-back airings around the block's nominal end, on any occurrence after the first - the episode itself played once, correctly, but the schedule reported it as repeating. Caused by a stale window boundary left over from the block's original (pre-film-length) span; the base queue now looks past it to the real next change once the film has released it back.",
+  "changelog": "Channel artwork now correctly uses a currently airing episode's series backdrop for the channel and programme background. Episode artwork remains available for posters and thumbnails, while the series image provides the intended contextual wide background.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-05T02:00:00.000Z",
-  "version": "1.0.137.0",
+  "timestamp": "2026-09-04T20:06:47.011Z",
+  "version": "1.0.138.0",
   "status": "Active",
   "autoUpdate": false
 }

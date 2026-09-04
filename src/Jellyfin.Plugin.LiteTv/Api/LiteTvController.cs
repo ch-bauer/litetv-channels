@@ -2116,12 +2116,18 @@ public class LiteTvController : ControllerBase
             dto.PosterType = poster.Type.ToString();
         }
 
-        // Landscape: what a wide card wants. Falls back to the portrait image rather than
-        // leaving the card empty - a card with the wrong shape still says what is on.
-        if (Pick(new[] { ImageType.Thumb, ImageType.Backdrop }, item, series) is { } wide)
+        // An episode's contextual background belongs to its series. Its own artwork
+        // remains available as the poster/thumbnail, but should not replace the
+        // show's backdrop in the channel and detail views.
+        var wide = item is Episode
+            ? Pick(new[] { ImageType.Backdrop, ImageType.Thumb }, series)
+                ?? Pick(new[] { ImageType.Backdrop, ImageType.Thumb }, item)
+            : Pick(new[] { ImageType.Backdrop, ImageType.Thumb }, item, series);
+
+        if (wide is { } selectedWide)
         {
-            dto.BackdropItemId = wide.ItemId;
-            dto.BackdropType = wide.Type.ToString();
+            dto.BackdropItemId = selectedWide.ItemId;
+            dto.BackdropType = selectedWide.Type.ToString();
         }
         else
         {
@@ -2167,10 +2173,15 @@ public class LiteTvController : ControllerBase
         if ((configured.FollowNowPlaying || configured.FollowNowPlayingBackdrop)
             && nowPlaying is { Kind: AiringKind.Program, Entry: { ItemId: var nowItemId } } && nowItemId != Guid.Empty)
         {
+            var nowItem = Artwork(cache, nowItemId);
+            var nowSeries = nowPlaying.Entry?.SeriesId is { } seriesId && seriesId != Guid.Empty
+                ? Artwork(cache, seriesId)
+                : null;
+
             FillChannelImage(
                 dto,
-                Artwork(cache, nowItemId),
-                null,
+                nowItem,
+                nowSeries,
                 poster: configured.FollowNowPlaying,
                 banner: configured.FollowNowPlaying,
                 backdrop: configured.FollowNowPlayingBackdrop);
