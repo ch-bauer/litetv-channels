@@ -239,6 +239,39 @@ public class SuggestionControlsTests
         Assert.NotNull(roomy.MovieNight);
     }
 
+    /// <summary>
+    /// The floor and ceiling on sources were 3 and 12, which an owner reported as too little on
+    /// any real library. They are 2 and 30 by default now, and the ceiling is a genuine ceiling
+    /// rather than something every real pool hits.
+    /// </summary>
+    [Fact]
+    public void TheDefaultSourceCeilingAllowsMoreThanTwelve()
+    {
+        var series = Enumerable.Range(1, 20)
+            .Select(index => Show("Show " + index, "FSK-12", genres: ["Action"]))
+            .ToList();
+
+        var suggestion = ChannelSuggestionBuilder.Build(
+            series, [], [], SuggestionOptions.Default with { MaxTitles = 2000 }, Episodes(1)).First();
+
+        Assert.True(suggestion.Sources.Count > 12, "expected more than the old ceiling of 12 sources");
+    }
+
+    /// <summary>Two sources are enough to be offered at all now, not just three.</summary>
+    [Fact]
+    public void TwoSourcesAreEnoughByDefault()
+    {
+        var series = new[]
+        {
+            Show("One", "FSK-12", genres: ["Action"]),
+            Show("Two", "FSK-12", genres: ["Action"])
+        };
+
+        var suggestions = ChannelSuggestionBuilder.Build(series, [], [], SuggestionOptions.Default, Episodes(4));
+
+        Assert.NotEmpty(suggestions);
+    }
+
     // ------------------------------------------------------------------ families and rotation
 
     [Fact]

@@ -35,8 +35,11 @@ namespace Jellyfin.Plugin.LiteTv.Api;
 /// </param>
 /// <param name="Trailers">Whether proposals come with the trailer preview turned on.</param>
 /// <param name="RandomizeEpisodes">Whether a series' episodes are mixed before selection.</param>
-/// <param name="MinSources">The fewest sources a proposal may be built from.</param>
-/// <param name="MaxSources">The most sources a proposal may be built from.</param>
+/// <param name="MinSources">
+/// The fewest sources a proposal may be built from. A source is one film or one series -
+/// never one episode - so this is a floor on variety, not on runtime.
+/// </param>
+/// <param name="MaxSources">The most sources a proposal may be built from, same unit.</param>
 internal sealed record SuggestionOptions(
     AudienceBand Audience,
     int MaxTitles,
@@ -47,8 +50,8 @@ internal sealed record SuggestionOptions(
     string FilmNight = "auto",
     bool Trailers = true,
     bool RandomizeEpisodes = true,
-    int MinSources = 3,
-    int MaxSources = 12)
+    int MinSources = 2,
+    int MaxSources = 30)
 {
     /// <summary>The default: everything, at a size that fills an evening without a marathon.</summary>
     internal static SuggestionOptions Default { get; } =
@@ -127,7 +130,7 @@ internal static class SuggestionFamily
 internal static class ChannelSuggestionBuilder
 {
     /// <summary>How many proposals are offered at once.</summary>
-    private const int Offered = 6;
+    private const int Offered = 14;
 
     /// <summary>
     /// Builds the useful, distinct channel templates the current library can support.
@@ -256,7 +259,17 @@ internal static class ChannelSuggestionBuilder
             ("Marvel & Lucasfilm", "Action & Abenteuer", ["marvel", "lucasfilm"]),
             ("Warner-Kino", "Kino", ["warner"]),
             ("Nickelodeon", "Kinderprogramm", ["nickelodeon"]),
-            ("Cartoon Network", "Animation", ["cartoon network"])
+            ("Cartoon Network", "Animation", ["cartoon network"]),
+            ("Universal", "Kino", ["universal"]),
+            ("Paramount", "Kino", ["paramount"]),
+            ("Sony Pictures", "Kino", ["sony pictures", "columbia"]),
+            ("Illumination", "Familie & Animation", ["illumination"]),
+            ("Studio Ghibli", "Animation", ["ghibli", "studio ghibli"]),
+            ("A24", "Kino", ["a24"]),
+            ("20th Century", "Kino", ["20th century", "fox"]),
+            ("HBO", "Serien", ["hbo"]),
+            ("BBC", "Serien", ["bbc"]),
+            ("Netflix", "Serien", ["netflix"])
         };
 
         foreach (var studio in named)
@@ -332,10 +345,10 @@ internal static class ChannelSuggestionBuilder
         }
 
         foreach (var genre in ByGenre(pool)
-            .Where(pair => pair.Value.Count >= 4)
+            .Where(pair => pair.Value.Count >= options.MinSources)
             .OrderByDescending(pair => pair.Value.Count)
             .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-            .Take(8))
+            .Take(16))
         {
             var profile = GenreProfile(genre.Key);
             candidates.Add(new Candidate(

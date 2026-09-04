@@ -105,4 +105,9 @@ export interface PluginConfig {
     ProofOfOriginToken: string;
     ProofOfOriginVisitorData: string;
     ProofOfOriginMintedUtc: string | null;
+    /**
+     * A TMDb API key, used only to fetch a studio's own logo for a studio/franchise channel
+     * suggestion when the library has no picture for that studio itself. Empty skips the lookup.
+     */
+    TmdbApiKey: string;
 }

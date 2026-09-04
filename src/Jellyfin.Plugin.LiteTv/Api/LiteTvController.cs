@@ -42,6 +42,7 @@ public class LiteTvController : ControllerBase
     private readonly SmartSimilarClient _smartSimilar;
     private readonly YouTubePlaylist _playlists;
     private readonly ChannelStore _channels;
+    private readonly StudioLogoProvider _studioLogos;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LiteTvController"/> class.
@@ -57,6 +58,7 @@ public class LiteTvController : ControllerBase
     /// <param name="smartSimilar">Scores suggestions, when that plugin is there.</param>
     /// <param name="playlists">Reads YouTube playlists.</param>
     /// <param name="channels">The channels, a file each.</param>
+    /// <param name="studioLogos">Fetches a studio's own logo from TMDb, when configured.</param>
     public LiteTvController(
         ChannelGuide guide,
         WeekStore weeks,
@@ -68,7 +70,8 @@ public class LiteTvController : ControllerBase
         SiblingPlugins siblings,
         SmartSimilarClient smartSimilar,
         YouTubePlaylist playlists,
-        ChannelStore channels)
+        ChannelStore channels,
+        StudioLogoProvider studioLogos)
     {
         _guide = guide;
         _weeks = weeks;
@@ -81,6 +84,7 @@ public class LiteTvController : ControllerBase
         _smartSimilar = smartSimilar;
         _playlists = playlists;
         _channels = channels;
+        _studioLogos = studioLogos;
     }
 
     /// <summary>
@@ -1559,8 +1563,8 @@ public class LiteTvController : ControllerBase
         [FromQuery] string? filmNight = null,
         [FromQuery] bool trailers = true,
         [FromQuery] bool randomize = true,
-        [FromQuery] int minSources = 3,
-        [FromQuery] int maxSources = 12,
+        [FromQuery] int minSources = 2,
+        [FromQuery] int maxSources = 30,
         [FromQuery] Guid userId = default,
         CancellationToken cancellationToken = default)
     {
@@ -1590,8 +1594,8 @@ public class LiteTvController : ControllerBase
             string.IsNullOrWhiteSpace(filmNight) ? "auto" : filmNight,
             trailers,
             randomize,
-            Math.Clamp(minSources, 2, 12),
-            Math.Clamp(maxSources, Math.Clamp(minSources, 2, 12), 24));
+            Math.Clamp(minSources, 1, 40),
+            Math.Clamp(maxSources, Math.Clamp(minSources, 1, 40), 80));
 
         var cohesion = await Cohesion(options, userId, cancellationToken).ConfigureAwait(false);
 
@@ -1609,9 +1613,10 @@ public class LiteTvController : ControllerBase
             suggestion.Reason.Engine = SuggestionEngine;
 
             // A studio channel's face should be the studio's own mark, not whichever title
-            // happened to rank first - see StudioArtwork for why and how.
+            // happened to rank first - see StudioArtworkAsync for why and how, and for the
+            // online fallback that answers when the library never scraped the studio at all.
             if (string.Equals(suggestion.Reason.Family, SuggestionFamily.Studio, StringComparison.OrdinalIgnoreCase)
-                && StudioArtwork(suggestion) is { } studio)
+                && await StudioArtworkAsync(suggestion, cancellationToken).ConfigureAwait(false) is { } studio)
             {
                 suggestion.Artwork = studio;
             }
@@ -1775,16 +1780,11 @@ public class LiteTvController : ControllerBase
     /// </para>
     /// </remarks>
     /// <param name="suggestion">The composed proposal, already carrying its sources.</param>
-    /// <returns>The studio's own artwork, or null when no matching studio has any.</returns>
-    private SuggestedArtworkDto? StudioArtwork(ChannelSuggestionDto suggestion)
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The studio's own artwork, or null when nothing - local or online - has any.</returns>
+    private async Task<SuggestedArtworkDto?> StudioArtworkAsync(ChannelSuggestionDto suggestion, CancellationToken cancellationToken)
     {
-        var studioNames = suggestion.Sources
-            .Select(source => _libraryManager.Find(source.ItemId))
-            .Where(item => item is not null)
-            .SelectMany(item => item!.Studios ?? Array.Empty<string>())
-            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .OrderByDescending(group => group.Count())
-            .Select(group => group.Key);
+        var studioNames = StudioNames(suggestion).ToList();
 
         foreach (var name in studioNames)
         {
@@ -1799,8 +1799,38 @@ public class LiteTvController : ControllerBase
             }
         }
 
+        // Nothing in the library has a picture for any of these. Ask TMDb for the studio's own
+        // logo, when the owner has given it a key to ask with - see StudioLogoProvider for why
+        // this is opt-in and silent on failure.
+        var apiKey = Plugin.Instance?.Configuration.TmdbApiKey;
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return null;
+        }
+
+        foreach (var name in studioNames)
+        {
+            var logo = await _studioLogos.FindLogoAsync(apiKey, name, cancellationToken).ConfigureAwait(false);
+            if (logo is not null)
+            {
+                return new SuggestedArtworkDto { ItemName = name, ExternalUrl = logo };
+            }
+        }
+
         return null;
     }
+
+    /// <summary>The studios behind a suggestion's sources, most common first.</summary>
+    /// <param name="suggestion">The composed proposal, already carrying its sources.</param>
+    /// <returns>Studio names, de-duplicated and ranked.</returns>
+    private IEnumerable<string> StudioNames(ChannelSuggestionDto suggestion) =>
+        suggestion.Sources
+            .Select(source => _libraryManager.Find(source.ItemId))
+            .Where(item => item is not null)
+            .SelectMany(item => item!.Studios ?? Array.Empty<string>())
+            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(group => group.Count())
+            .Select(group => group.Key);
 
     private List<Folder> LibraryFolders() =>
         _libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
@@ -2863,6 +2893,13 @@ public class SuggestedArtworkDto
 {
     public Guid ItemId { get; set; }
     public string ItemName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a direct picture address to use instead of <see cref="ItemId"/> - a studio
+    /// logo fetched from TMDb, when the library itself has no picture for that studio. Empty
+    /// for every other suggestion, where the library item is the whole answer.
+    /// </summary>
+    public string? ExternalUrl { get; set; }
 }
 
 /// <summary>

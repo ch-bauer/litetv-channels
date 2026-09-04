@@ -324,6 +324,21 @@
                 </div>
 
                 <div class="field">
+                    <span class="label">{german ? 'TMDb-API-Schlüssel (optional)' : 'TMDb API key (optional)'}</span>
+                    <input
+                        class="text"
+                        type="password"
+                        bind:value={config.TmdbApiKey}
+                        placeholder={german ? 'ohne Schlüssel: kein Studio-Logo online' : 'without a key: no online studio logo'}
+                    />
+                    <p class="note">
+                        {german
+                            ? 'Nur für ein Studio-Logo bei Studio-Kanalvorschlägen, wenn die Bibliothek selbst keins hat. Ein kostenloser Schlüssel von themoviedb.org/settings/api genügt; ohne Schlüssel entfällt nur diese eine Grafik.'
+                            : 'Used only to fetch a studio\'s own logo for a studio channel suggestion when the library has no picture for it. A free key from themoviedb.org/settings/api is enough; without one, only that one picture is skipped.'}
+                    </p>
+                </div>
+
+                <div class="field">
                     <span class="label">{german ? 'Sprache der Konfigurationsseite' : 'Configuration page language'}</span>
                     <select class="text" bind:value={config.PageLanguage}>
                         <option value="auto">{german ? 'Automatisch' : 'Automatic'}</option>

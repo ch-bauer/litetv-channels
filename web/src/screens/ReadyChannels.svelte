@@ -4,6 +4,7 @@
     import {
         readyChannels,
         suggestionLibraries,
+        suggestionThumb,
         type ReadyChannelSuggestion,
         type SuggestionControls,
         type SuggestionLibrary,
@@ -41,8 +42,8 @@
         filmNight: 'auto',
         trailers: true,
         randomize: true,
-        minSources: 3,
-        maxSources: 12,
+        minSources: 2,
+        maxSources: 30,
     });
 
     /** Which suggestion's title list is open. Only one at a time; they are long. */
@@ -120,10 +121,20 @@
         channel.TrailerEveryPrograms = suggestion.TrailerEveryPrograms;
         channel.TrailerLookahead = suggestion.TrailerLookahead;
         channel.TrailersInGaps = suggestion.TrailersInGaps;
-        channel.Artwork = {
-            ImageItemId: suggestion.Artwork.ItemId,
-            ImageItemName: suggestion.Artwork.ItemName,
-        };
+        // A studio logo fetched from TMDb has no library item behind it - it goes on as a
+        // direct address, the same way a hand-picked banner image does. Everything else keeps
+        // borrowing a library item's own artwork, exactly as before.
+        channel.Artwork = suggestion.Artwork.ExternalUrl
+            ? {
+                ImageItemId: '00000000-0000-0000-0000-000000000000',
+                ImageItemName: suggestion.Artwork.ItemName,
+                PosterUrl: suggestion.Artwork.ExternalUrl,
+                BannerUrl: suggestion.Artwork.ExternalUrl,
+            }
+            : {
+                ImageItemId: suggestion.Artwork.ItemId,
+                ImageItemName: suggestion.Artwork.ItemName,
+            };
         if (suggestion.MovieNight) {
             const block = suggestion.MovieNight;
             channel.Blocks = [{
@@ -267,15 +278,20 @@
         <div class="control">
             <span class="label">{german ? 'Quellen je Kanal' : 'Sources per channel'}</span>
             <div class="size">
-                <input type="range" min="2" max="12" step="1"
+                <input type="range" min="1" max="40" step="1"
                     bind:value={controls.minSources} onchange={() => void load()} />
                 <output>{german ? 'mindestens' : 'at least'} {controls.minSources}</output>
             </div>
             <div class="size">
-                <input type="range" min={controls.minSources} max="24" step="1"
+                <input type="range" min={controls.minSources} max="80" step="1"
                     bind:value={controls.maxSources} onchange={() => void load()} />
                 <output>{german ? 'höchstens' : 'at most'} {controls.maxSources}</output>
             </div>
+            <p class="hint">
+                {german
+                    ? 'Eine Quelle ist ein Film oder eine ganze Serie, nie eine einzelne Folge — eine Serie bringt so viele Folgen mit, wie sie hat.'
+                    : 'A source is one film or one whole series, never a single episode — a series brings along as many episodes as it has.'}
+            </p>
         </div>
 
         <div class="control">
@@ -337,6 +353,11 @@
             {#each suggestions as suggestion (suggestion.Name)}
                 <article class="strip">
                     <div class="signal" aria-hidden="true"></div>
+                    {#if suggestionThumb(suggestion.Artwork)}
+                        <img class="thumb" src={suggestionThumb(suggestion.Artwork)} alt="" loading="lazy" />
+                    {:else}
+                        <div class="thumb placeholder" aria-hidden="true"></div>
+                    {/if}
                     <div class="identity">
                         <p class="theme">{suggestion.Theme}</p>
                         <h3>{suggestion.Name}</h3>
@@ -448,8 +469,10 @@
     .problem { color: #e08585; }
     .problem button { color: var(--lt-text-muted); }
     .strips { display: flex; flex-direction: column; gap: 10px; max-width: 880px; margin: 0 auto; }
-    .strip { display: grid; grid-template-columns: 6px minmax(220px, 1.05fr) minmax(250px, 1fr) auto; gap: 18px; align-items: center; padding: 17px 18px 17px 0; border: 1px solid var(--lt-line); border-radius: var(--lt-radius); background: linear-gradient(90deg, rgba(119, 91, 244, .12), var(--lt-card) 22%, var(--lt-card)); overflow: hidden; }
+    .strip { display: grid; grid-template-columns: 6px 64px minmax(220px, 1.05fr) minmax(250px, 1fr) auto; gap: 18px; align-items: center; padding: 17px 18px 17px 0; border: 1px solid var(--lt-line); border-radius: var(--lt-radius); background: linear-gradient(90deg, rgba(119, 91, 244, .12), var(--lt-card) 22%, var(--lt-card)); overflow: hidden; }
     .signal { align-self: stretch; background: var(--lt-accent); box-shadow: 5px 0 20px var(--lt-accent-glow); }
+    .thumb { width: 64px; height: 64px; border-radius: var(--lt-radius-small); object-fit: cover; background: var(--lt-field); flex: 0 0 auto; }
+    .thumb.placeholder { background: linear-gradient(135deg, var(--lt-field), var(--lt-line)); }
     .identity { min-width: 0; }
     .theme { margin: 0 0 4px; color: var(--lt-queue); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
     h3 { margin: 0; color: var(--lt-text-title); font-size: 16px; }
@@ -463,5 +486,5 @@
     .movie-night.muted { color: var(--lt-text-dim); }
     .add { padding: 8px 12px; border: 1px solid var(--lt-accent); border-radius: var(--lt-radius-small); background: var(--lt-accent); color: #fff; font: 700 12px inherit; cursor: pointer; white-space: nowrap; }
     .add:hover { filter: brightness(1.08); }
-    @media (max-width: 760px) { .intro { align-items: start; flex-direction: column; } .strip { grid-template-columns: 5px 1fr auto; } .programme { grid-column: 2 / 4; border-left: 0; border-top: 1px solid var(--lt-line); padding: 10px 0 0; } }
+    @media (max-width: 760px) { .intro { align-items: start; flex-direction: column; } .strip { grid-template-columns: 5px 48px 1fr auto; } .thumb { width: 48px; height: 48px; } .programme { grid-column: 3 / 5; border-left: 0; border-top: 1px solid var(--lt-line); padding: 10px 0 0; } }
 </style>

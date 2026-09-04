@@ -54,5 +54,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Which parts of a trailer are not the trailer. Singleton for the same reason: the
         // segments of a trailer a channel airs every few hours should be fetched once.
         serviceCollection.AddSingleton<SponsorBlockClient>();
+
+        // A studio's own logo from TMDb, for a studio channel suggestion whose library has no
+        // picture for that studio at all. Optional: skipped entirely without an API key.
+        serviceCollection.AddSingleton<StudioLogoProvider>();
     }
 }

@@ -160,6 +160,19 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Gets or sets when the stored token was minted, so its age can be judged.</summary>
     public DateTime? ProofOfOriginMintedUtc { get; set; }
 
+    /// <summary>
+    /// Gets or sets a TMDb API key (v3 auth), used only to fetch a studio's own logo for a
+    /// studio/franchise channel suggestion when the library has no picture for that studio
+    /// itself.
+    /// <para>
+    /// Optional, like every other sibling integration this plugin has: empty by default, and
+    /// the lookup is simply skipped when it is - a suggestion then keeps borrowing artwork from
+    /// one of its titles, exactly as it always has. A free key from
+    /// <c>https://www.themoviedb.org/settings/api</c> is enough; nothing is written back to
+    /// TMDb and the key never leaves this server except to ask TMDb itself.
+    /// </para>
+    /// </summary>
+    public string TmdbApiKey { get; set; } = string.Empty;
 }
 
 /// <summary>

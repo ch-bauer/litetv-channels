@@ -5,7 +5,7 @@
  * suggestions had been running on the blunt scorer for weeks: a fallback that cannot be seen is
  * a fault that cannot be reported.
  */
-import { api } from '../jellyfin';
+import { api, absolute } from '../jellyfin';
 import type { ChannelSource, PlayOrder, ProgramBlock, TrailerMode } from '../types';
 
 /** One proposed source, with what the preview before adding needs to name it. */
@@ -30,8 +30,26 @@ export interface ReadyChannelSuggestion {
     TrailerLookahead: number;
     TrailersInGaps: boolean;
     MovieNight: Omit<ProgramBlock, 'Enabled' | 'DurationMinutes' | 'SameSourceProbability'> | null;
-    Artwork: { ItemId: string; ItemName: string };
+    Artwork: SuggestedArtwork;
     Reason: SuggestionReason;
+}
+
+/**
+ * The picture a suggestion wears: a library item to borrow from, or - for a studio channel
+ * whose library never scraped that studio - a logo fetched straight from TMDb.
+ */
+export interface SuggestedArtwork {
+    ItemId: string;
+    ItemName: string;
+    /** A direct picture address, set only for a studio logo TMDb answered. */
+    ExternalUrl?: string | null;
+}
+
+/** The suggestion's own picture, ready for an `<img src>`, or null when it has none at all. */
+export function suggestionThumb(artwork: SuggestedArtwork, width = 200): string | null {
+    if (artwork.ExternalUrl) { return artwork.ExternalUrl; }
+    if (!artwork.ItemId) { return null; }
+    return absolute('/Items/' + artwork.ItemId + '/Images/Primary?maxWidth=' + width);
 }
 
 /**
