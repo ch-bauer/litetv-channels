@@ -42,6 +42,13 @@ export interface SearchHit {
     openable?: boolean;
     /** For a link that turned out to be a playlist: how many videos, so a row can say so. */
     videoCount?: number;
+    /**
+     * A provider id ("tmdb:1234"), when the library has one. Two library items for the same
+     * film - a plain copy and a separate "(4K)" one, most often - carry the same id here even
+     * though nothing about their names says so; `search` uses this to show one of them rather
+     * than both.
+     */
+    providerKey?: string;
 }
 
 interface RawItem {
@@ -55,6 +62,7 @@ interface RawItem {
     SeriesId?: string;
     IndexNumber?: number;
     ParentIndexNumber?: number;
+    ProviderIds?: Record<string, string>;
 }
 
 function kindOf(type: string): ChannelSourceType | null {
@@ -104,7 +112,7 @@ async function ask(term: string, types: string, limit: number): Promise<SearchHi
         includeItemTypes: types,
         recursive: true,
         limit,
-        fields: 'ChildCount,ProductionYear',
+        fields: 'ChildCount,ProductionYear,ProviderIds',
     });
 
     const hits: SearchHit[] = [];
@@ -119,9 +127,41 @@ async function ask(term: string, types: string, limit: number): Promise<SearchHi
             year: item.ProductionYear,
             seriesId: item.SeriesId,
             openable: kind === 'Series' || kind === 'Collection',
+            providerKey: providerKeyOf(item.ProviderIds),
         });
     }
     return hits;
+}
+
+/**
+ * A stable key for "the same title", from whichever provider id the library happens to hold -
+ * Tmdb first since it is what almost every film and series carries, Imdb as a fallback for the
+ * rare item Tmdb never matched. Undefined when the library has neither, which is ordinary for a
+ * title nobody has scraped; nothing is deduplicated on a guess.
+ */
+function providerKeyOf(ids?: Record<string, string>): string | undefined {
+    if (!ids) { return undefined; }
+    const tmdb = ids.Tmdb ?? ids.tmdb;
+    if (tmdb) { return 'tmdb:' + tmdb; }
+    const imdb = ids.Imdb ?? ids.imdb;
+    return imdb ? 'imdb:' + imdb : undefined;
+}
+
+/**
+ * Two library items for the same film - a plain copy and a separately-organised "(4K)" one,
+ * most often - are two different search results with nothing in their names to say they are the
+ * same title. Kept to one wherever the library itself agrees they are: the same provider id.
+ * Anything without one (nothing scraped it) is left alone rather than guessed at from the name.
+ */
+function dedupeByProvider(hits: SearchHit[]): SearchHit[] {
+    const seen = new Set<string>();
+    return hits.filter((hit) => {
+        if (!hit.providerKey) { return true; }
+        const key = hit.kind + ':' + hit.providerKey;
+        if (seen.has(key)) { return false; }
+        seen.add(key);
+        return true;
+    });
 }
 
 /**
@@ -146,7 +186,7 @@ export async function search(term: string, limit = 20): Promise<SearchHit[]> {
         ask(trimmed, 'Episode', limit),
     ]);
 
-    return [...containers, ...episodes].slice(0, limit);
+    return [...dedupeByProvider(containers), ...episodes].slice(0, limit);
 }
 
 /**

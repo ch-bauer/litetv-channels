@@ -45,11 +45,22 @@ export interface SuggestedArtwork {
     ExternalUrl?: string | null;
 }
 
-/** The suggestion's own picture, ready for an `<img src>`, or null when it has none at all. */
-export function suggestionThumb(artwork: SuggestedArtwork, width = 200): string | null {
-    if (artwork.ExternalUrl) { return artwork.ExternalUrl; }
-    if (!artwork.ItemId) { return null; }
-    return absolute('/Items/' + artwork.ItemId + '/Images/Primary?maxWidth=' + width);
+/**
+ * The suggestion's own picture, as a fallback ladder rather than one fixed guess.
+ *
+ * A borrowed library item is not always a poster. Most are - a film or series almost always
+ * carries a Primary picture - but a studio channel can borrow from a Studio library item
+ * instead, and a studio-images provider commonly gives a studio a Banner or a Backdrop rather
+ * than a Primary, exactly the picture a logo actually is. Asking for Primary alone made every
+ * studio suggestion's thumbnail a broken-image icon the moment more of the offered suggestions
+ * were studio ones. Same order `ChannelImage` already tries server-side for a channel's own
+ * face, so a suggestion's thumbnail agrees with what the channel would actually wear.
+ */
+export function suggestionThumbCandidates(artwork: SuggestedArtwork, width = 200): string[] {
+    if (artwork.ExternalUrl) { return [artwork.ExternalUrl]; }
+    if (!artwork.ItemId) { return []; }
+    return ['Primary', 'Thumb', 'Banner', 'Backdrop']
+        .map((kind) => absolute('/Items/' + artwork.ItemId + '/Images/' + kind + '?maxWidth=' + width));
 }
 
 /**

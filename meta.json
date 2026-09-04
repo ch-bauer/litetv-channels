@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes ready-made channel suggestions returning zero channels, even after a long wait: the last release's franchise-completion feature was scanning every collection in the library once per chosen film - hundreds of times over in one request - rather than once for the whole request, on any server with a real collection count. Built once now and looked up per film instead of recomputed.",
+  "changelog": "Fixes broken-image icons on every ready-made channel suggestion's thumbnail: a studio suggestion often borrows a Studio library item, and a studio-images provider commonly gives it a Banner or Backdrop rather than a Primary picture, which was the only kind asked for. The thumbnail now tries Primary, Thumb, Banner and Backdrop in turn, and a picture that still fails to load falls back to the same placeholder already used for no artwork at all. Also fixes two library items for the same film - a plain copy and a separately organised \"(4K)\" one, most often - showing up as two separate search results when adding content: now shown once, matched by the library's own provider id rather than by name.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-04T23:15:00.000Z",
-  "version": "1.0.130.0",
+  "timestamp": "2026-09-04T23:45:00.000Z",
+  "version": "1.0.131.0",
   "status": "Active",
   "autoUpdate": false
 }

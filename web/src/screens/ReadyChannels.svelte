@@ -4,7 +4,7 @@
     import {
         readyChannels,
         suggestionLibraries,
-        suggestionThumb,
+        suggestionThumbCandidates,
         type ReadyChannelSuggestion,
         type SuggestionControls,
         type SuggestionLibrary,
@@ -18,6 +18,22 @@
     let suggestions = $state<ReadyChannelSuggestion[]>([]);
     let loading = $state(true);
     let error = $state<string | null>(null);
+
+    /*
+        Pictures the browser could not load, so a dead thumbnail falls back to the same
+        placeholder "no artwork" already draws instead of the browser's own broken-image icon.
+        Ordinary, not a fault: plenty of titles have no Primary picture at all, and a suggestion
+        drawn from a genre or a studio pool is exactly the kind of thing that pulls in one of
+        them.
+    */
+    let deadThumbs = $state<Record<string, boolean>>({});
+    function thumbFailed(url: string): void {
+        deadThumbs = { ...deadThumbs, [url]: true };
+    }
+    /** The first candidate picture this suggestion's browser has not already failed to load. */
+    function thumbFor(suggestion: ReadyChannelSuggestion): string | null {
+        return suggestionThumbCandidates(suggestion.Artwork).find((url) => !deadThumbs[url]) ?? null;
+    }
     let libraries = $state<SuggestionLibrary[]>([]);
 
     /*
@@ -353,8 +369,9 @@
             {#each suggestions as suggestion (suggestion.Name)}
                 <article class="strip">
                     <div class="signal" aria-hidden="true"></div>
-                    {#if suggestionThumb(suggestion.Artwork)}
-                        <img class="thumb" src={suggestionThumb(suggestion.Artwork)} alt="" loading="lazy" />
+                    {#if thumbFor(suggestion)}
+                        {@const image = thumbFor(suggestion)}
+                        <img class="thumb" src={image} alt="" loading="lazy" onerror={() => thumbFailed(image ?? '')} />
                     {:else}
                         <div class="thumb placeholder" aria-hidden="true"></div>
                     {/if}
