@@ -80,6 +80,58 @@ public class ChannelScheduleTests
         Assert.Equal(new[] { "Episode 3", "Episode 1", "Episode 2", "Episode 3", "Episode 1" }, programmes);
     }
 
+    /// <summary>
+    /// The report this answers: an owner with two films in an "advance one per week" film-night
+    /// block, "fit block to content" on, saw the base queue repeat an episode - but only after
+    /// the SECOND week's film, not the first. <see cref="AutoSizedWeeklyFilmBlockResumesTheBaseQueueAfterTheFilm"/>
+    /// only ever exercised the first occurrence, which is exactly the gap this fills.
+    /// </summary>
+    [Fact]
+    public void AutoSizedWeeklyFilmBlockResumesCorrectlyOnTheSecondOccurrenceToo()
+    {
+        var block = Block(1, 20, 3, DayOfWeek.Monday);
+        var schedule = new ChannelSchedule(
+            WeekTimeline.Build(new[] { block }),
+            new Dictionary<int, Lineup>
+            {
+                [WeekTimeline.BaseLineup] = Queue(0, ("Episode 1", 25), ("Episode 2", 25), ("Episode 3", 25), ("Episode 4", 25)),
+                // Two films of different lengths, matching the report: the second occurrence
+                // picks a differently-sized film than the first, which is exactly what an
+                // "advance one per week" block is for.
+                [1] = Queue(0, ("Film 1", 60), ("Film 2", 100))
+            },
+            new Dictionary<int, string> { [1] = "Filmabend" },
+            new HashSet<int> { 1 },
+            Anchor,
+            TimeZoneInfo.Utc,
+            new HashSet<int> { 1 },
+            new Dictionary<int, BlockWindow> { [1] = block });
+
+        // Both weeks' post-film runs, back to back: the base queue must not repeat an episode
+        // either time, and the two weeks must not repeat each other's last/first episode either.
+        var after = schedule.Enumerate(Anchor.AddHours(19), Anchor.AddDays(14)).ToList();
+        var programmes = after
+            .Where(a => a.Kind == AiringKind.Program && !a.Entry!.Name.StartsWith("Film", StringComparison.Ordinal))
+            .Select(a => a.Entry!.Name)
+            .ToList();
+
+        for (var i = 1; i < programmes.Count; i++)
+        {
+            Assert.False(
+                programmes[i] == programmes[i - 1],
+                $"Episode {programmes[i]} repeated back to back at position {i} in [{string.Join(", ", programmes)}]");
+        }
+
+        // And the second week's film-night episode plays as one continuous programme, not split
+        // into two identical-looking airings either side of the block's nominal boundary.
+        var secondWeek = schedule.Enumerate(Anchor.AddDays(7).AddHours(19), Anchor.AddDays(7).AddHours(23.5)).ToList();
+        Assert.Contains(
+            secondWeek,
+            a => a.Kind == AiringKind.Program && a.Entry!.Name == "Episode 1"
+                && a.StartUtc == Anchor.AddDays(7).AddHours(22).AddMinutes(55)
+                && a.EndUtc == Anchor.AddDays(7).AddHours(23).AddMinutes(20));
+    }
+
     [Fact]
     public void WeeklyFilmBlockUsesTheNextFilmAtEachOccurrenceInTheWeek()
     {

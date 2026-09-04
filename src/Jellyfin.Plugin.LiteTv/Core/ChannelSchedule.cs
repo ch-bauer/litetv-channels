@@ -303,6 +303,15 @@ public sealed class ChannelSchedule
 
                     owner = WeekTimeline.BaseLineup;
                     spanStart = release;
+
+                    // The timeline still calls this stretch the block's own window, which is
+                    // only true up to its nominal end - the base lineup plays straight through
+                    // that boundary once the film has released it back. Left at the stale
+                    // spanEnd, the phase-end clamp a few lines down cut the programme playing
+                    // across that boundary short there and started it again on the other side:
+                    // the same episode, reported as two airings back to back. Look past the
+                    // nominal end for the real next change instead.
+                    spanEnd = MinuteToLocal(_timeline.NextChangeAfter(WeekTimeline.AbsoluteMinute(spanEnd)), DateTime.MaxValue);
                 }
             }
 
