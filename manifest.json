@@ -13,7 +13,7 @@
         "changelog": "A film in a film-night block no longer also plays in the channel's regular rotation - true of every channel, not only suggestions. The Look page now shows the actual picture for a channel look borrowed from a title, directly in the three picture slots instead of only naming it underneath; the poster card is also no wider than the picture itself. Adding a film now offers its other parts too: channel suggestions complete them automatically, and adding by hand - to a channel's content, a block, or the \"from titles I like\" start - shows them as one-click chips.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.128.0/litetv-channels_1.0.128.0.zip",
-        "checksum": "",
+        "checksum": "7541e67bc5ae4955106ea84d2c878c5a",
         "timestamp": "2026-09-04T21:00:00.000Z"
       },
       {
