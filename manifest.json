@@ -13,7 +13,7 @@
         "changelog": "Fixes a genuine schedule fault: an auto-sized weekly film-night block (\"fit block to content\") could report the base queue's episode split into two identical-looking back-to-back airings around the block's nominal end, on any occurrence after the first - the episode itself played once, correctly, but the schedule reported it as repeating. Caused by a stale window boundary left over from the block's original (pre-film-length) span; the base queue now looks past it to the real next change once the film has released it back.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.137.0/litetv-channels_1.0.137.0.zip",
-        "checksum": "",
+        "checksum": "78418d880d35e43b074efcbdcbdd6d92",
         "timestamp": "2026-09-05T02:00:00.000Z"
       },
       {
