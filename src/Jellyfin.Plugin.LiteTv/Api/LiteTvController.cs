@@ -1599,6 +1599,14 @@ public class LiteTvController : ControllerBase
 
         var cohesion = await Cohesion(options, userId, cancellationToken).ConfigureAwait(false);
 
+        // Built once for the whole request, not once per film: FranchiseSiblings scans every
+        // BoxSet the library has, and a suggestion request composes films by the hundred across
+        // its candidates. Looking that up per film was the same shape of fault the Smart Similar
+        // retry storm was - repeating an expensive answer that does not change within one
+        // request - and it is why a server with any real BoxSet count saw suggestions never
+        // finish loading at all rather than merely take a while.
+        var franchiseIndex = FranchiseIndex(_libraryManager);
+
         var suggestions = ChannelSuggestionBuilder.Build(
             series,
             movies,
@@ -1607,7 +1615,7 @@ public class LiteTvController : ControllerBase
             EpisodeCount,
             wanted.Select(folder => folder.Name ?? string.Empty).Where(name => name.Length > 0).ToList(),
             cohesion,
-            id => FranchiseSiblings(_libraryManager, id).Select(movie => movie.Id).ToList());
+            id => franchiseIndex.TryGetValue(id, out var siblings) ? siblings : Array.Empty<Guid>());
 
         foreach (var suggestion in suggestions)
         {
@@ -1735,6 +1743,51 @@ public class LiteTvController : ControllerBase
             .DistinctBy(movie => movie.Id)
             .OrderBy(movie => movie.PremiereDate ?? DateTime.MaxValue)
             .ToList();
+    }
+
+    /// <summary>
+    /// Every film's siblings, for every collection the library has, in one pass.
+    /// </summary>
+    /// <remarks>
+    /// The bulk answer to the same question <see cref="FranchiseSiblings"/> answers one film at
+    /// a time. A single lookup - one click on a search result - is cheap enough to ask the
+    /// library fresh; a suggestion request that asks it once per chosen film, of which there can
+    /// be hundreds across a dozen composed candidates, is not. Built once here instead and handed
+    /// to the builder as a plain dictionary lookup.
+    /// </remarks>
+    /// <param name="libraryManager">The library.</param>
+    /// <returns>Every film's id mapped to its collection siblings' ids.</returns>
+    private static Dictionary<Guid, List<Guid>> FranchiseIndex(ILibraryManager libraryManager)
+    {
+        var index = new Dictionary<Guid, List<Guid>>();
+
+        var boxSets = libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.BoxSet },
+                Recursive = true
+            })
+            .OfType<BoxSet>();
+
+        foreach (var boxSet in boxSets)
+        {
+            var movieIds = boxSet.GetLinkedChildren().OfType<Movie>().Select(movie => movie.Id).Distinct().ToList();
+            if (movieIds.Count < 2)
+            {
+                continue;
+            }
+
+            foreach (var id in movieIds)
+            {
+                if (!index.TryGetValue(id, out var siblings))
+                {
+                    index[id] = siblings = new List<Guid>();
+                }
+
+                siblings.AddRange(movieIds.Where(other => other != id && !siblings.Contains(other)));
+            }
+        }
+
+        return index;
     }
 
     /// <summary>

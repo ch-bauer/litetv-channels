@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixes ready-made channel suggestions taking a very long time, or seeming to hang entirely, when Smart Similar is installed but not answering: the request was retrying that same slow HTTP call for every single candidate it composed - once per request now, with the rest falling straight back to the fast local scorer. Also lowers how many proposals one request composes at once (14 back to 10), which cuts both the time and the resource cost of a single request while keeping most of the added variety from the last release. A failed TMDb studio-logo lookup - a wrong API key, most commonly - is now logged as a warning instead of silently at a level nobody sees by default. The Look page's Crop button now also works on a borrowed picture, not only one already set explicitly - cropping it is what sets it.",
+  "changelog": "Fixes ready-made channel suggestions returning zero channels, even after a long wait: the last release's franchise-completion feature was scanning every collection in the library once per chosen film - hundreds of times over in one request - rather than once for the whole request, on any server with a real collection count. Built once now and looked up per film instead of recomputed.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-04T22:30:00.000Z",
-  "version": "1.0.129.0",
+  "timestamp": "2026-09-04T23:15:00.000Z",
+  "version": "1.0.130.0",
   "status": "Active",
   "autoUpdate": false
 }
