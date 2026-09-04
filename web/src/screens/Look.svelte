@@ -654,7 +654,10 @@
     });
 
     async function openCrop(slot: Slot): Promise<void> {
-        const src = current(slot);
+        // A borrowed picture crops the same way an explicitly set one does - the crop tool does
+        // not care where the source came from, only that there is one. Saving the crop is what
+        // turns it into an explicitly set picture; nothing here needs to know it was borrowed.
+        const src = current(slot) ?? borrowedImageFor(slot);
         if (!src) { return; }
         cropping = slot;
         cropError = null;
@@ -978,10 +981,12 @@
                         <button
                             type="button"
                             class="change"
-                            disabled={!current(entry.slot)}
+                            disabled={!current(entry.slot) && !borrowedImageFor(entry.slot)}
                             title={current(entry.slot)
                                 ? 'Choose which part of this picture the ' + entry.name.toLowerCase() + ' shows'
-                                : 'Nothing set yet - pick a picture below first'}
+                                : borrowedImageFor(entry.slot)
+                                    ? 'Crop the borrowed picture and set it for this ' + entry.name.toLowerCase() + ' explicitly'
+                                    : 'Nothing set yet - pick a picture below first'}
                             onclick={() => openCrop(entry.slot)}
                         >{cropping === entry.slot ? 'Cropping…' : 'Crop'}</button>
 

@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.129.0",
+        "changelog": "Fixes ready-made channel suggestions taking a very long time, or seeming to hang entirely, when Smart Similar is installed but not answering: the request was retrying that same slow HTTP call for every single candidate it composed - once per request now, with the rest falling straight back to the fast local scorer. Also lowers how many proposals one request composes at once (14 back to 10), which cuts both the time and the resource cost of a single request while keeping most of the added variety from the last release. A failed TMDb studio-logo lookup - a wrong API key, most commonly - is now logged as a warning instead of silently at a level nobody sees by default. The Look page's Crop button now also works on a borrowed picture, not only one already set explicitly - cropping it is what sets it.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.129.0/litetv-channels_1.0.129.0.zip",
+        "checksum": "",
+        "timestamp": "2026-09-04T22:30:00.000Z"
+      },
+      {
         "version": "1.0.128.0",
         "changelog": "A film in a film-night block no longer also plays in the channel's regular rotation - true of every channel, not only suggestions. The Look page now shows the actual picture for a channel look borrowed from a title, directly in the three picture slots instead of only naming it underneath; the poster card is also no wider than the picture itself. Adding a film now offers its other parts too: channel suggestions complete them automatically, and adding by hand - to a channel's content, a block, or the \"from titles I like\" start - shows them as one-click chips.",
         "targetAbi": "10.11.0.0",

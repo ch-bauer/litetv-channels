@@ -1754,6 +1754,17 @@ public class LiteTvController : ControllerBase
     /// community rating - a worse answer of the same shape. Which one answered is on the wire,
     /// because a fallback nobody can see is a fault nobody can report.
     /// </para>
+    /// <para>
+    /// <b>Tried at most once per request, not once per candidate.</b> A suggestion request now
+    /// composes far more candidates than it used to - more studio and genre templates, more
+    /// offered at once - and every composed candidate that clears the size floor calls this. If
+    /// Smart Similar is installed but not actually answering, each of those calls used to be its
+    /// own blocking HTTP attempt against <see cref="SmartSimilarClient"/>'s own timeout, so a
+    /// request that once made one slow attempt was making two or three dozen - the "creating
+    /// suggestions takes forever and nothing loads" report this fixes. The first failure now
+    /// turns the engine off for the rest of the request, exactly the way <see cref="SuggestionEngine"/>
+    /// already remembers it happened.
+    /// </para>
     /// </remarks>
     private async Task<Func<IReadOnlyList<BaseItem>, BaseItem, IReadOnlyList<BaseItem>>> Cohesion(
         SuggestionOptions options,
@@ -1792,6 +1803,9 @@ public class LiteTvController : ControllerBase
                     return pool.Where(item => keep.Contains(item.Id)).ToList();
                 }
 
+                // Stop asking for the rest of this request: every remaining candidate falls
+                // straight to Rough instead of repeating the same slow, silent HTTP attempt.
+                usable = false;
                 SuggestionEngine = "Rough";
             }
 

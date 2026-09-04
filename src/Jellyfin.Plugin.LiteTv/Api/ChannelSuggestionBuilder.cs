@@ -129,8 +129,14 @@ internal static class SuggestionFamily
 /// </remarks>
 internal static class ChannelSuggestionBuilder
 {
-    /// <summary>How many proposals are offered at once.</summary>
-    private const int Offered = 14;
+    /// <summary>
+    /// How many proposals are offered at once. Raised from 6 to widen variety, but not all the
+    /// way to the size of the candidate pool itself: each composed candidate costs a similarity
+    /// pass (Smart Similar or the rough fallback) and, for a studio, an artwork lookup, so this
+    /// is the deliberate ceiling on that cost per request - the pool of possible templates can
+    /// keep growing without every request paying for all of it.
+    /// </summary>
+    private const int Offered = 10;
 
     /// <summary>
     /// Builds the useful, distinct channel templates the current library can support.

@@ -76,9 +76,22 @@ public class StudioLogoProvider
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException)
         {
-            // A studio logo is decoration, not something a suggestion should fail over. The
-            // borrowed-title artwork already in place is a perfectly good fallback.
-            _logger.LogDebug(ex, "Could not fetch a TMDb logo for studio {Studio}", studioName);
+            /*
+                A studio logo is decoration, not something a suggestion should fail over - the
+                borrowed-title artwork already in place is a perfectly good fallback, and that is
+                why this is caught here rather than left to bubble up. But caught silently is not
+                the same as caught quietly: logged at Debug, this never appeared in a server's own
+                log at Jellyfin's default level, so a key that was simply wrong - most commonly a
+                401 from TMDb - looked identical to the key never having been set at all. Warning
+                is loud enough to actually be seen without being an error the plugin did not
+                cause.
+            */
+            var status = (ex as HttpRequestException)?.StatusCode;
+            _logger.LogWarning(
+                ex,
+                "Could not fetch a TMDb logo for studio {Studio}{Status}",
+                studioName,
+                status is null ? string.Empty : " (HTTP " + (int)status.Value + ")");
             return null;
         }
     }
