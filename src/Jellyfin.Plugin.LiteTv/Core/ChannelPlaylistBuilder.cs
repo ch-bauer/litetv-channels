@@ -429,13 +429,40 @@ public class ChannelPlaylistBuilder
     {
         return WithScheduledTrailers(
             Order(
-                Interleave(Expand(channel.Sources, channel.Name), channel.EpisodesPerBlock),
+                Interleave(Expand(WithoutBlockContent(channel), channel.Name), channel.EpisodesPerBlock),
                 channel.Order,
                 channel.Id,
                 WeekTimeline.BaseLineup,
                 channel.EpisodesPerBlock,
                 channel.RandomizeEpisodes),
             channel);
+    }
+
+    /// <summary>
+    /// The channel's own sources, minus whatever an enabled block already plays.
+    /// <para>
+    /// A block - a film night, a kids' hour - is a deliberate deviation from the regular
+    /// rotation, not an extra helping of it: the same film chosen for both aired twice, once in
+    /// the channel's own loop and again in its Saturday slot, which is exactly what
+    /// <see cref="Jellyfin.Plugin.LiteTv.Api.ChannelSuggestionBuilder"/> already reserves a
+    /// film night's titles out of a suggestion's own sources to avoid. This is that same rule
+    /// for a channel however it was built - by hand, or edited after a suggestion added it.
+    /// </para>
+    /// </summary>
+    /// <param name="channel">The channel.</param>
+    /// <returns>The channel's sources, with anything an enabled block plays removed.</returns>
+    internal static IReadOnlyList<ChannelSource> WithoutBlockContent(TvChannel channel)
+    {
+        var blocked = channel.Blocks
+            .Where(b => b.Enabled)
+            .SelectMany(b => b.Sources)
+            .Select(s => s.ItemId)
+            .Where(id => id != Guid.Empty)
+            .ToHashSet();
+
+        return blocked.Count == 0
+            ? channel.Sources
+            : channel.Sources.Where(s => !blocked.Contains(s.ItemId)).ToList();
     }
 
     /// <summary>

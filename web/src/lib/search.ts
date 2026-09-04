@@ -215,6 +215,25 @@ export function thumbFor(hit: SearchHit, width = 96): string | null {
     return absolute('/Items/' + hit.id + '/Images/Primary?maxWidth=' + width);
 }
 
+/** Another film in this hit's collection - "franchise", in the report that asked for it. */
+export interface FranchiseSibling {
+    id: string;
+    name: string;
+    year: number | null;
+}
+
+/**
+ * The other films sharing a collection with a film already found or already on a channel - a
+ * channel with Spider-Man 1 but not 2 or 3 was the report this answers. Empty for anything that
+ * is not a film, or has no collection; a series or a link has neither.
+ */
+export function franchiseSiblings(itemId: string): Promise<FranchiseSibling[]> {
+    return api()
+        .getJSON<{ ItemId: string; Name: string; Year: number | null }[]>(api().getUrl('LiteTv/Franchise/' + itemId))
+        .then((rows) => rows.map((row) => ({ id: row.ItemId, name: row.Name, year: row.Year })))
+        .catch(() => []);
+}
+
 /**
  * "1 season", "3 seasons". Written out because a series with one season read "1 seasons" on the
  * shelf, and a page that cannot count to one is not one anybody trusts with a schedule.

@@ -1606,7 +1606,8 @@ public class LiteTvController : ControllerBase
             options,
             EpisodeCount,
             wanted.Select(folder => folder.Name ?? string.Empty).Where(name => name.Length > 0).ToList(),
-            cohesion);
+            cohesion,
+            id => FranchiseSiblings(_libraryManager, id).Select(movie => movie.Id).ToList());
 
         foreach (var suggestion in suggestions)
         {
@@ -1680,6 +1681,61 @@ public class LiteTvController : ControllerBase
             })
             .OrderBy(folder => folder.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    /// <summary>
+    /// The other parts of the same film - a channel with Spider-Man 1 but not 2 or 3 was the
+    /// report this answers. Asked for on demand rather than folded into search itself: a search
+    /// result is one title, and offering its franchise as a one-click extra beside it is a
+    /// different question than finding the title in the first place.
+    /// </summary>
+    /// <param name="itemId">A film already found - by search, or as a suggestion's own source.</param>
+    /// <returns>The other films sharing a collection with it, oldest first; empty for anything that is not a film, or has no collection.</returns>
+    [HttpGet("Franchise/{itemId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<List<FranchiseSiblingDto>> GetFranchiseSiblings([FromRoute] Guid itemId) =>
+        FranchiseSiblings(_libraryManager, itemId)
+            .Select(movie => new FranchiseSiblingDto
+            {
+                ItemId = movie.Id,
+                Name = movie.Name ?? string.Empty,
+                Year = movie.ProductionYear
+            })
+            .ToList();
+
+    /// <summary>
+    /// The other films in whichever collection(s) hold this one.
+    /// </summary>
+    /// <remarks>
+    /// A film does not name its own collection - a <see cref="BoxSet"/> names its films instead,
+    /// as linked children - so answering "what else is this part of" means scanning every
+    /// BoxSet the library has rather than reading one property off the film. Libraries hold few
+    /// enough of them that this is cheap; nothing here is asked per request that was not already
+    /// being asked by <c>ChannelSources</c> for the same reason.
+    /// </remarks>
+    /// <param name="libraryManager">The library.</param>
+    /// <param name="itemId">The film.</param>
+    /// <returns>The other films sharing a collection with it, oldest first.</returns>
+    internal static List<Movie> FranchiseSiblings(ILibraryManager libraryManager, Guid itemId)
+    {
+        if (libraryManager.Find(itemId) is not Movie)
+        {
+            return new List<Movie>();
+        }
+
+        return libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.BoxSet },
+                Recursive = true
+            })
+            .OfType<BoxSet>()
+            .Where(boxSet => boxSet.GetLinkedChildren().Any(child => child.Id == itemId))
+            .SelectMany(boxSet => boxSet.GetLinkedChildren())
+            .OfType<Movie>()
+            .Where(movie => movie.Id != itemId)
+            .DistinctBy(movie => movie.Id)
+            .OrderBy(movie => movie.PremiereDate ?? DateTime.MaxValue)
+            .ToList();
+    }
 
     /// <summary>
     /// Builds the thing that decides which titles in a pool really belong together.
@@ -2800,6 +2856,19 @@ public class SuggestionLibraryDto
 
     /// <summary>Gets or sets what the library holds: movies, tvshows, and so on.</summary>
     public string Kind { get; set; } = string.Empty;
+}
+
+/// <summary>Another film in the same collection as one already found or already playing.</summary>
+public class FranchiseSiblingDto
+{
+    /// <summary>Gets or sets the film's library id.</summary>
+    public Guid ItemId { get; set; }
+
+    /// <summary>Gets or sets the film's name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the production year, so the row can say which one it is.</summary>
+    public int? Year { get; set; }
 }
 
 /// <summary>

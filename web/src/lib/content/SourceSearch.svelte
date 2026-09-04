@@ -1,6 +1,6 @@
 <script lang="ts">
     import { failureWords } from '../jellyfin';
-    import { linkHit, search, toSource, type SearchHit } from '../search';
+    import { franchiseSiblings, linkHit, search, toSource, type FranchiseSibling, type SearchHit } from '../search';
     import { looksLikeAddress } from '../api/playlist';
     import type { ChannelSource } from '../types';
     import { store } from '../config.svelte';
@@ -60,6 +60,13 @@
         if (hits.length > 0) { open = true; }
     }
 
+    /*
+        A film's own sequels, offered rather than added outright - the owner asked for a chip to
+        press, not a silent extra on the list. Kept per source list: a film added to a block's
+        lineup should offer chips there, not leave a stale row under the channel's own list.
+    */
+    let siblings = $state<FranchiseSibling[]>([]);
+
     function add(hit: SearchHit): void {
         if (already(hit)) { return; }
         const source = toSource(hit);
@@ -71,6 +78,19 @@
         // nothing else in the answer to pick from. A title search is left alone: adding three
         // episodes of one series in a row should not be three searches.
         if (hit.kind === 'Link') { term = ''; hits = []; open = false; }
+
+        if (hit.kind === 'Movie') {
+            void franchiseSiblings(hit.id).then((found) => {
+                siblings = found.filter((sibling) => !sources.some((s) => s.ItemId === sibling.id));
+            });
+        } else {
+            siblings = [];
+        }
+    }
+
+    function addSibling(sibling: FranchiseSibling): void {
+        sources.push({ Type: 'Movie', ItemId: sibling.id, Name: sibling.name, Probability: 0 });
+        siblings = siblings.filter((candidate) => candidate.id !== sibling.id);
     }
 
     /** Already on the list - by address for a link, by library id for anything else. */
@@ -130,6 +150,17 @@
                 </button>
             {/each}
         {/if}
+    </div>
+{/if}
+
+{#if siblings.length > 0}
+    <div class="siblings">
+        <span class="siblings-label">{german ? 'auch hinzufügen:' : 'also add:'}</span>
+        {#each siblings as sibling (sibling.id)}
+            <button type="button" class="sibling" onclick={() => addSibling(sibling)}>
+                {sibling.name}{sibling.year ? ' (' + sibling.year + ')' : ''}
+            </button>
+        {/each}
     </div>
 {/if}
 
@@ -220,4 +251,29 @@
     .none, .bad { padding: 12px 13px; margin: 0; font-size: 12.5px; }
     .none { color: var(--lt-text-dim); }
     .bad { color: #e08585; }
+
+    .siblings {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px;
+        padding: 9px 13px;
+        border-top: 1px solid var(--lt-line-soft);
+        background: var(--lt-card-inset);
+    }
+
+    .siblings-label { font-size: 11.5px; color: var(--lt-text-dim); }
+
+    .sibling {
+        padding: 4px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--lt-line-strong);
+        background: none;
+        color: var(--lt-accent);
+        font-size: 12px;
+        font-family: inherit;
+        cursor: pointer;
+    }
+
+    .sibling:hover { background: var(--lt-hover); }
 </style>

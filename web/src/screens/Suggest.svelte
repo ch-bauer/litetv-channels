@@ -14,7 +14,7 @@
     import Card from '../lib/ui/Card.svelte';
     import { store } from '../lib/config.svelte';
     import { api, failureWords } from '../lib/jellyfin';
-    import { search, type SearchHit } from '../lib/search';
+    import { franchiseSiblings, search, type FranchiseSibling, type SearchHit } from '../lib/search';
     import { engineWords, scored, type ScoredSuggestions, type SuggestionMatch } from '../lib/api/suggestions';
     import type { ChannelSource } from '../lib/types';
     import ReadyChannels from './ReadyChannels.svelte';
@@ -132,6 +132,13 @@
         }
     }
 
+    /*
+        A film's own sequels, offered as one-click chips beside the seeds rather than pulled in
+        on their own - a seed is a deliberate choice, and choosing Spider-Man should not silently
+        choose Spider-Man 2 and 3 with it.
+    */
+    let seedSiblings = $state<FranchiseSibling[]>([]);
+
     function addSeed(hit: SearchHit): void {
         if (hit.kind === 'Collection') {
             collectionSeed = hit;
@@ -143,6 +150,7 @@
             cutoff = 0;
             term = '';
             hits = [];
+            seedSiblings = [];
             return;
         }
         if (collectionSeed) { collectionSeed = null; }
@@ -151,6 +159,19 @@
         term = '';
         hits = [];
         void rescore();
+
+        if (hit.kind === 'Movie') {
+            void franchiseSiblings(hit.id).then((found) => {
+                seedSiblings = found.filter((sibling) => !seeds.some((s) => s.id === sibling.id));
+            });
+        } else {
+            seedSiblings = [];
+        }
+    }
+
+    function addSeedSibling(sibling: FranchiseSibling): void {
+        addSeed({ id: sibling.id, name: sibling.name, kind: 'Movie', detail: sibling.year ? String(sibling.year) : '' });
+        seedSiblings = seedSiblings.filter((candidate) => candidate.id !== sibling.id);
     }
 
     const kept = $derived(answer ? answer.Results.filter((r) => r.Score >= cutoff) : []);
@@ -425,6 +446,7 @@
             hiddenTicks = {};
             scoreError = null;
             cutoff = 0;
+            seedSiblings = [];
         } else {
             pickedGenres = [];
             pickedCollection = null;
@@ -482,7 +504,7 @@
                             {#each seeds as seed (seed.id)}
                                 <span class="seed">
                                     {seed.name}
-                                    <button type="button" onclick={() => { seeds = seeds.filter((s) => s.id !== seed.id); void rescore(); }} aria-label="Remove {seed.name}">✕</button>
+                                    <button type="button" onclick={() => { seeds = seeds.filter((s) => s.id !== seed.id); seedSiblings = []; void rescore(); }} aria-label="Remove {seed.name}">✕</button>
                                 </span>
                             {/each}
                         </div>
@@ -493,6 +515,17 @@
                                 {collectionSeed.name} <small>{german ? 'Sammlung' : 'Collection'}</small>
                                 <button type="button" onclick={() => { collectionSeed = null; }} aria-label="Remove {collectionSeed.name}">✕</button>
                             </span>
+                        </div>
+                    {/if}
+
+                    {#if seedSiblings.length > 0}
+                        <div class="siblings">
+                            <span class="siblings-label">{german ? 'auch hinzufügen:' : 'also add:'}</span>
+                            {#each seedSiblings as sibling (sibling.id)}
+                                <button type="button" class="sibling" onclick={() => addSeedSibling(sibling)}>
+                                    {sibling.name}{sibling.year ? ' (' + sibling.year + ')' : ''}
+                                </button>
+                            {/each}
                         </div>
                     {/if}
                 </Card>
@@ -747,6 +780,22 @@
     .hits button:hover { color: var(--lt-text-title); }
 
     .seeds { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+
+    .siblings { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+    .siblings-label { font-size: 11.5px; color: var(--lt-text-dim); }
+
+    .sibling {
+        padding: 4px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--lt-line-strong);
+        background: none;
+        color: var(--lt-accent);
+        font-size: 12px;
+        font-family: inherit;
+        cursor: pointer;
+    }
+
+    .sibling:hover { background: var(--lt-hover); }
 
     .seed {
         display: inline-flex;

@@ -157,6 +157,32 @@
         return current(slot) ?? '';
     }
 
+    /*
+        The picture a borrowed title would actually give this slot, when nothing has been set
+        explicitly. The frame used to fall straight to "nothing set" whenever there was no
+        uploaded or cropped picture, even though a suggestion or "Borrow from a title" had
+        pointed the channel at an item that has its own poster, banner and backdrop - the words
+        underneath said "borrowed from X" while the picture above showed nothing at all, which
+        reads as no picture having been chosen when one plainly had.
+
+        Same image kind the gallery already asks a library item for per slot: a poster wants the
+        item's Primary, a banner wants its Thumb (library items are rarely given a true banner),
+        a backdrop wants its Backdrop. A title with none of those answers 404, which just leaves
+        the frame on "nothing set" - no different from any other tile on this page failing to
+        load.
+    */
+    const EMPTY_ID = '00000000-0000-0000-0000-000000000000';
+
+    function borrowedImageFor(slot: Slot): string | null {
+        const id = artwork['ImageItemId'];
+        if (typeof id !== 'string' || id.length === 0 || id === EMPTY_ID) {
+            return null;
+        }
+        const kind = slot === 'Poster' ? 'Primary' : slot === 'Backdrop' ? 'Backdrop' : 'Thumb';
+        const url = absolute('/Items/' + id + '/Images/' + kind + '?maxHeight=480&quality=85');
+        return dead[url] ? null : url;
+    }
+
     function sourceOf(slot: Slot): string {
         if (current(slot)) { return 'set for this channel'; }
         const borrowed = artwork['ImageItemName'];
@@ -849,7 +875,7 @@
 
         <div class="slots">
             {#each SLOTS as entry (entry.slot)}
-                <div class="slot" class:full={entry.wide} class:cropping={cropping === entry.slot}>
+                <div class="slot" class:full={entry.wide} class:narrow={entry.slot === 'Poster'} class:cropping={cropping === entry.slot}>
                     <div class="slot-head">
                         <span class="slot-name">{entry.name}</span>
                         <span class="ratio">{entry.ratio}</span>
@@ -894,6 +920,16 @@
                             {#if current(entry.slot)}
                                 {@const image = imageFor(entry.slot)}
                                 <img src={image} alt="" onerror={() => artworkFailed(image)} />
+                            {:else if borrowedImageFor(entry.slot)}
+                                {@const image = borrowedImageFor(entry.slot)}
+                                <!--
+                                    Nothing chosen for this slot by hand, but the channel borrows
+                                    a title's own artwork - so show what that actually gives this
+                                    slot instead of an empty frame with "borrowed from X" written
+                                    underneath it and no picture to go with the words.
+                                -->
+                                <img src={image} alt="" onerror={() => artworkFailed(image ?? '')} />
+                                <span class="frame-borrowed">borrowed</span>
                             {:else}
                                 <span class="frame-empty">nothing set</span>
                             {/if}
@@ -1201,9 +1237,9 @@
                         <div class="tv-screen-left">
                             <div class="tv-head">
                                 <div class="tv-cover">
-                                    {#if current('Poster')}
-                                        {@const image = imageFor('Poster')}
-                                        <img src={image} alt="" onerror={() => artworkFailed(image)} />
+                                    {#if current('Poster') || borrowedImageFor('Poster')}
+                                        {@const image = imageFor('Poster') || borrowedImageFor('Poster')}
+                                        <img src={image} alt="" onerror={() => artworkFailed(image ?? '')} />
                                     {/if}
                                 </div>
                                 <div class="tv-name">{channel.Name}</div>
@@ -1228,15 +1264,17 @@
             <div class="tv-label">The cover on its own, uncropped</div>
             <div class="tv poster-strip">
                 <div class="tv-poster">
-                    {#if current('Poster')}
-                        {@const image = imageFor('Poster')}
-                        <img src={image} alt="" onerror={() => artworkFailed(image)} />
+                    {#if current('Poster') || borrowedImageFor('Poster')}
+                        {@const image = imageFor('Poster') || borrowedImageFor('Poster')}
+                        <img src={image} alt="" onerror={() => artworkFailed(image ?? '')} />
                     {/if}
                 </div>
                 <p class="hint tight">
                     {current('Poster')
                         ? 'The poster you set.'
-                        : 'Nothing set - the app takes an upright picture from the lineup.'}
+                        : borrowedImageFor('Poster')
+                            ? 'Borrowed from ' + (artwork['ImageItemName'] ?? 'the title this channel points at') + '.'
+                            : 'Nothing set - the app takes an upright picture from the lineup.'}
                 </p>
             </div>
 
@@ -1370,6 +1408,16 @@
     }
     .slot.full { grid-column: 1 / -1; }
 
+    /*
+        The poster is the narrowest of the three by a wide margin - 140px of picture against a
+        170px-plus backdrop - and the "auto" grid track it sits in is supposed to shrink to that,
+        but a flex column's children (the label, the source line, the wrapped button row) can
+        each report their own preferred width to that sizing pass, and the widest of them wins
+        even though every one of them wraps or truncates rather than actually needing the room.
+        Pinned to the frame's own width instead of trusting content-based sizing to land there.
+    */
+    .slot.narrow { width: 164px; }
+
     .slot {
         min-width: 0;
         border: 1px solid rgba(255, 255, 255, .1);
@@ -1476,6 +1524,21 @@
         margin: auto;
         font-size: 11px;
         color: rgba(255, 255, 255, .45);
+    }
+
+    /* A borrowed preview is not a chosen picture yet - Crop or the gallery below make it one. */
+    .frame-borrowed {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, .55);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, .85);
     }
 
     .source { font-size: 11.5px; color: var(--lt-text-dim); }

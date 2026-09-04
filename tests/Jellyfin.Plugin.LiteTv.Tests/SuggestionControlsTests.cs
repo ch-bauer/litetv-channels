@@ -272,6 +272,49 @@ public class SuggestionControlsTests
         Assert.NotEmpty(suggestions);
     }
 
+    /// <summary>
+    /// A film picked for a channel should not leave its own sequels out - "a channel with
+    /// Spider-Man 1 should have the other parts too" was the report. The completion runs after
+    /// the normal size cap, on purpose: two films of the same franchise are one idea, not two
+    /// competing for the same one slot.
+    /// </summary>
+    [Fact]
+    public void AChosenFilmBringsItsFranchiseSiblingsWithIt()
+    {
+        var first = Film("Spider-Man", "FSK-12", genres: ["Action"]);
+        var sequel = Film("Spider-Man 2", "FSK-12", genres: ["Action"]);
+        var unrelated = Film("Unrelated Film", "FSK-12", genres: ["Action"]);
+        var films = new[] { first, sequel, unrelated };
+
+        var suggestion = ChannelSuggestionBuilder.Build(
+            [],
+            films,
+            [],
+            SuggestionOptions.Default with { Families = [SuggestionFamily.Film], MaxSources = 1, MinSources = 1 },
+            null,
+            null,
+            null,
+            id => id == first.Id ? [sequel.Id] : Array.Empty<Guid>()).First();
+
+        Assert.Contains(suggestion.Sources, source => source.Name == "Spider-Man");
+        Assert.Contains(suggestion.Sources, source => source.Name == "Spider-Man 2");
+        Assert.DoesNotContain(suggestion.Sources, source => source.Name == "Unrelated Film");
+    }
+
+    /// <summary>With no franchise answer supplied at all, nothing changes - existing behaviour untouched.</summary>
+    [Fact]
+    public void NoFranchiseAnswererAddsNothingExtra()
+    {
+        var films = Enumerable.Range(1, 3)
+            .Select(index => Film("Film " + index, "FSK-12", genres: ["Action"]))
+            .ToList();
+
+        var suggestion = ChannelSuggestionBuilder.Build(
+            [], films, [], SuggestionOptions.Default with { Families = [SuggestionFamily.Film], MaxSources = 1, MinSources = 1 }).First();
+
+        Assert.Single(suggestion.Sources);
+    }
+
     // ------------------------------------------------------------------ families and rotation
 
     [Fact]

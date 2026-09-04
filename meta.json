@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fertige Kanalvorschläge zeigen jetzt ein Bild je Vorschlag. Findet die Bibliothek kein eigenes Bild für ein Studio, holt sich ein Studio-Kanal dessen Logo online von TMDb – mit einem eigenen, kostenlosen API-Schlüssel unter Server-Einstellungen; ohne Schlüssel entfällt nur diese eine Grafik. Deutlich mehr Auswahl: zehn weitere Studio-Vorlagen (u. a. Universal, Paramount, Sony, Illumination, Ghibli, A24, HBO, BBC, Netflix), mehr berücksichtigte Genres, und mehr Vorschläge je Anfrage, damit »Andere Ideen zeigen« wirklich andere zeigt. Die Grenzen für die Anzahl der Quellen je Kanal waren mit 3 bis 12 zu eng gefasst und liegen jetzt bei 2 bis 30, der Regler reicht bis 80 – eine Quelle bleibt dabei ein Film oder eine ganze Serie, nie eine einzelne Folge.",
+  "changelog": "A film in a film-night block no longer also plays in the channel's regular rotation - true of every channel, not only suggestions. The Look page now shows the actual picture for a channel look borrowed from a title, directly in the three picture slots instead of only naming it underneath; the poster card is also no wider than the picture itself. Adding a film now offers its other parts too: channel suggestions complete them automatically, and adding by hand - to a channel's content, a block, or the \"from titles I like\" start - shows them as one-click chips.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-04T18:00:00.000Z",
-  "version": "1.0.127.0",
+  "timestamp": "2026-09-04T21:00:00.000Z",
+  "version": "1.0.128.0",
   "status": "Active",
   "autoUpdate": false
 }

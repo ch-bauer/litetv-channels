@@ -150,6 +150,14 @@ internal static class ChannelSuggestionBuilder
     /// Similar plugin over HTTP; null keeps every title, which is what a test wants unless it is
     /// testing this.
     /// </param>
+    /// <param name="franchise">
+    /// The other films sharing a collection with a given film, so a proposal that picked
+    /// Spider-Man does not leave its sequels out - a channel is not really carrying "the
+    /// Spider-Man films" if it only has one of them. Supplied by the caller because the answer
+    /// comes from the library's BoxSets; null adds nothing, which is what a test wants unless it
+    /// is testing this. Only ever completes a film already reachable through the audience band
+    /// and cohesion cuts already applied - it does not reopen either of them.
+    /// </param>
     /// <returns>The proposals, most interesting first.</returns>
     internal static List<ChannelSuggestionDto> Build(
         IEnumerable<Series> series,
@@ -158,7 +166,8 @@ internal static class ChannelSuggestionBuilder
         SuggestionOptions? options = null,
         Func<Series, int>? episodeCount = null,
         IReadOnlyCollection<string>? libraries = null,
-        Func<IReadOnlyList<BaseItem>, BaseItem, IReadOnlyList<BaseItem>>? cohesion = null)
+        Func<IReadOnlyList<BaseItem>, BaseItem, IReadOnlyList<BaseItem>>? cohesion = null,
+        Func<Guid, IReadOnlyList<Guid>>? franchise = null)
     {
         var settings = options ?? SuggestionOptions.Default;
         var count = episodeCount ?? (_ => 1);
@@ -194,7 +203,7 @@ internal static class ChannelSuggestionBuilder
                 continue;
             }
 
-            var built = Compose(candidate, settings, count, libraries ?? Array.Empty<string>(), cohesion);
+            var built = Compose(candidate, settings, count, libraries ?? Array.Empty<string>(), cohesion, franchise);
             if (built is null)
             {
                 continue;
@@ -399,7 +408,8 @@ internal static class ChannelSuggestionBuilder
         SuggestionOptions options,
         Func<Series, int> episodeCount,
         IReadOnlyCollection<string> libraries,
-        Func<IReadOnlyList<BaseItem>, BaseItem, IReadOnlyList<BaseItem>>? cohesion)
+        Func<IReadOnlyList<BaseItem>, BaseItem, IReadOnlyList<BaseItem>>? cohesion,
+        Func<Guid, IReadOnlyList<Guid>>? franchise = null)
     {
         var band = options.Audience == AudienceBand.Unknown
             ? SuggestionAudience.Dominant(candidate.Pool)
@@ -489,6 +499,31 @@ internal static class ChannelSuggestionBuilder
 
             chosen.Add(item);
             titles += cost;
+        }
+
+        /*
+            A film picked for the channel should not leave its own sequels out - "a channel with
+            Spider-Man 1 should have the other parts too" was the report. Completed from what
+            cohesion and the audience band already allowed through (`coherent`), never beyond it:
+            this fills in a franchise the channel already qualified for, it does not go looking
+            for a reason to include one that did not. Kept out of the film-night reservation the
+            same way everything else here is, so a sequel never plays twice.
+        */
+        if (franchise != null)
+        {
+            var chosenIds = chosen.Select(item => item.Id).ToHashSet();
+            var eligible = coherent.Where(item => !reservedIds.Contains(item.Id)).ToDictionary(item => item.Id);
+            foreach (var movie in chosen.OfType<Movie>().ToList())
+            {
+                foreach (var siblingId in franchise(movie.Id))
+                {
+                    if (chosenIds.Add(siblingId) && eligible.TryGetValue(siblingId, out var sibling))
+                    {
+                        chosen.Add(sibling);
+                        titles += Titles(sibling);
+                    }
+                }
+            }
         }
 
         if (chosen.Count < options.MinSources)
