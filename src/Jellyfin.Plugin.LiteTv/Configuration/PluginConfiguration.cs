@@ -748,13 +748,22 @@ public class ChannelArtwork
     /// Gets or sets a value indicating whether the channel's face tracks whatever is actually
     /// airing right now, ahead of a borrowed item and the lineup scan below it.
     /// <para>
-    /// Off by default, and deliberately so: a channel's own icon used to be pointed at "what is
-    /// on" and the report was that it flickered between films as the clock moved, which reads
-    /// as a channel with no identity of its own rather than a face at all. This is that same
-    /// behaviour, restored on request rather than by default - an explicitly set picture still
-    /// wins over it regardless, since a picture somebody chose by hand is a deliberate choice
-    /// this should never override.
+    /// On by default, as of the owner's own second thoughts about the first release of this
+    /// setting - it started off by default over an old report that a channel's icon flickering
+    /// between films as the clock moved read as a channel with no identity of its own. An
+    /// explicitly set picture still wins over it regardless, since a picture somebody chose by
+    /// hand is a deliberate choice this should never override; turning it off is one click on
+    /// the Look page for anyone who still wants a fixed face.
     /// </para>
     /// </summary>
-    public bool FollowNowPlaying { get; set; }
+    public bool FollowNowPlaying { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the backdrop specifically follows whatever is
+    /// airing right now, independently of <see cref="FollowNowPlaying"/> - which is Poster and
+    /// Banner only. Also on by default; a separate control because the backdrop is what fills
+    /// the whole channel screen behind the guide, and that is worth being able to hold fixed
+    /// (or to let follow) without it being tied to whether the card in the channel list does.
+    /// </summary>
+    public bool FollowNowPlayingBackdrop { get; set; } = true;
 }

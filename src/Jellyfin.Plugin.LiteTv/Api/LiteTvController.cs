@@ -2155,14 +2155,25 @@ public class LiteTvController : ControllerBase
             PosterUrl = NullIfBlank(configured.PosterUrl)
         };
 
-        // Opt-in: see ChannelArtwork.FollowNowPlaying for why this is off by default. An
-        // explicitly set picture above has already filled the dto and wins regardless; this
-        // only fills what is still empty, ahead of the borrowed item and the lineup scan below.
-        if (configured.FollowNowPlaying
-            && nowPlaying is { Kind: AiringKind.Program, Entry: { ItemId: var nowItemId } } && nowItemId != Guid.Empty
-            && FillChannelImage(dto, Artwork(cache, nowItemId), null))
+        // Opt-in, and Poster/Banner and Backdrop follow independently - see
+        // ChannelArtwork.FollowNowPlaying and FollowNowPlayingBackdrop. An explicitly set
+        // picture above has already filled the dto and wins regardless.
+        //
+        // No early return here even when this fills everything it was asked to: unlike the
+        // borrowed-item and lineup-scan fallbacks below, this one is deliberately partial - with
+        // only Backdrop turned on, Poster and Banner are still empty and still need one of those
+        // two to fill them. FillChannelImage only ever sets a field that is still null (`??=`),
+        // so falling through costs nothing when this already filled everything.
+        if ((configured.FollowNowPlaying || configured.FollowNowPlayingBackdrop)
+            && nowPlaying is { Kind: AiringKind.Program, Entry: { ItemId: var nowItemId } } && nowItemId != Guid.Empty)
         {
-            return dto;
+            FillChannelImage(
+                dto,
+                Artwork(cache, nowItemId),
+                null,
+                poster: configured.FollowNowPlaying,
+                banner: configured.FollowNowPlaying,
+                backdrop: configured.FollowNowPlayingBackdrop);
         }
 
         // A named item fills whatever it can; the scan below tops up anything it did not have,
@@ -2251,27 +2262,35 @@ public class LiteTvController : ControllerBase
     /// one scene: its Primary is a 16:9 still, which is neither upright nor the channel.
     /// </para>
     /// </summary>
-    private static bool FillChannelImage(ChannelImageDto dto, BaseItem? item, BaseItem? series)
+    private static bool FillChannelImage(
+        ChannelImageDto dto,
+        BaseItem? item,
+        BaseItem? series,
+        bool poster = true,
+        bool banner = true,
+        bool backdrop = true)
     {
-        if (Pick(new[] { ImageType.Primary }, series, item) is { } poster)
+        if (poster && Pick(new[] { ImageType.Primary }, series, item) is { } pickedPoster)
         {
-            dto.PosterItemId ??= poster.ItemId;
-            dto.PosterType ??= poster.Type.ToString();
+            dto.PosterItemId ??= pickedPoster.ItemId;
+            dto.PosterType ??= pickedPoster.Type.ToString();
         }
 
-        if (Pick(new[] { ImageType.Banner, ImageType.Thumb }, series, item) is { } banner)
+        if (banner && Pick(new[] { ImageType.Banner, ImageType.Thumb }, series, item) is { } pickedBanner)
         {
-            dto.BannerItemId ??= banner.ItemId;
-            dto.BannerType ??= banner.Type.ToString();
+            dto.BannerItemId ??= pickedBanner.ItemId;
+            dto.BannerType ??= pickedBanner.Type.ToString();
         }
 
-        if (Pick(new[] { ImageType.Backdrop, ImageType.Thumb }, series, item) is { } wide)
+        if (backdrop && Pick(new[] { ImageType.Backdrop, ImageType.Thumb }, series, item) is { } pickedWide)
         {
-            dto.BackdropItemId ??= wide.ItemId;
-            dto.BackdropType ??= wide.Type.ToString();
+            dto.BackdropItemId ??= pickedWide.ItemId;
+            dto.BackdropType ??= pickedWide.Type.ToString();
         }
 
-        return dto.PosterItemId is not null && dto.BannerItemId is not null && dto.BackdropItemId is not null;
+        return (!poster || dto.PosterItemId is not null)
+            && (!banner || dto.BannerItemId is not null)
+            && (!backdrop || dto.BackdropItemId is not null);
     }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

@@ -864,14 +864,21 @@
     }
 
     /*
-        Off by default, on purpose: a channel's face used to be pointed at whatever was on, and
-        the report was that it flickered between films as the clock moved - a channel with no
-        face of its own rather than one at all. This restores that on request instead. An
-        explicitly set picture above still wins over it regardless.
+        On by default. Poster and Banner follow together; Backdrop is its own separate toggle,
+        since it is what fills the whole channel screen and someone may want that fixed while
+        the card in the channel list still tracks what is on, or the other way round. An
+        explicitly set picture above still wins over either regardless.
+
+        Absent (a channel made before this existed, or a fresh `{}`) reads as on - only an
+        explicit `false`, from having been turned off by hand, reads as off.
     */
-    const followNowPlaying = $derived(!!artwork['FollowNowPlaying']);
+    const followNowPlaying = $derived((channel.Artwork as Record<string, unknown>)['FollowNowPlaying'] !== false);
+    const followNowPlayingBackdrop = $derived((channel.Artwork as Record<string, unknown>)['FollowNowPlayingBackdrop'] !== false);
     function toggleFollowNowPlaying(): void {
         channel.Artwork = { ...(channel.Artwork ?? {}), FollowNowPlaying: !followNowPlaying };
+    }
+    function toggleFollowNowPlayingBackdrop(): void {
+        channel.Artwork = { ...(channel.Artwork ?? {}), FollowNowPlayingBackdrop: !followNowPlayingBackdrop };
     }
 </script>
 
@@ -1305,11 +1312,20 @@
             <label class="follow-now">
                 <input type="checkbox" checked={followNowPlaying} onchange={toggleFollowNowPlaying} />
                 <span>
-                    <strong>Use the currently playing title's own picture</strong>
+                    <strong>Poster and banner use the currently playing title's own picture</strong>
                     <small>
-                        Off by default: a channel's face used to track whatever was airing and the
-                        report was that it flickered between films as the clock moved. Turn this on
-                        to get that back - a picture set above always wins over it regardless.
+                        On by default. A picture set explicitly above always wins over it regardless.
+                    </small>
+                </span>
+            </label>
+            <label class="follow-now">
+                <input type="checkbox" checked={followNowPlayingBackdrop} onchange={toggleFollowNowPlayingBackdrop} />
+                <span>
+                    <strong>Backdrop uses the currently playing title's own picture</strong>
+                    <small>
+                        On by default, and separate from the toggle above - the backdrop fills the
+                        whole channel screen, and that may be worth holding fixed independently of
+                        whether the card in the channel list follows too.
                     </small>
                 </span>
             </label>

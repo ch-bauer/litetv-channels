@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Channels in the rail can now be reordered by dragging - the server has always stored a position for each one, but nothing let you change it. Also adds a \"make all equal\" button next to a channel's sources: distinct from the existing \"distribute to 100%\", which only rescales whatever ratio is already there, this gives every source the same share outright - for a weighted-random channel whose sources plainly were not equally likely.",
+  "changelog": "The \"Follow what is on now\" channel picture, added last release, is now on by default and split in two: Poster and Banner follow the currently playing title as one toggle, Backdrop follows (or not) as its own separate toggle, since it fills the whole channel screen and may be worth holding fixed independently of the card in the channel list. An explicitly set picture still always wins over either.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-05T01:10:00.000Z",
-  "version": "1.0.135.0",
+  "timestamp": "2026-09-05T01:30:00.000Z",
+  "version": "1.0.136.0",
   "status": "Active",
   "autoUpdate": false
 }
