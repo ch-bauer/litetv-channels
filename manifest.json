@@ -13,7 +13,7 @@
         "changelog": "Fixes a duplicate quality copy of the same film - \"Spider-Man\" and \"Spider-Man (4K)\", most often - still showing up as two separate search results after the last release's fix: that one only caught the case where both copies shared the same provider id, but a separately organised \"(4K)\" copy is often matched to its own metadata and carries none. Now also matched by a normalized title (quality and edition tags such as 4K, 1080p, HDR, Remux, Extended stripped) plus the same year where both have one, keeping whichever copy's name carries no such tag.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.134.0/litetv-channels_1.0.134.0.zip",
-        "checksum": "",
+        "checksum": "1b43be4bf7d22c4f491da8fa1d0cddcf",
         "timestamp": "2026-09-05T00:45:00.000Z"
       },
       {
