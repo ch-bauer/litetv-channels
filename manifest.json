@@ -13,7 +13,7 @@
         "changelog": "Fertige Kanalvorschläge zeigen jetzt ein Bild je Vorschlag. Findet die Bibliothek kein eigenes Bild für ein Studio, holt sich ein Studio-Kanal dessen Logo online von TMDb – mit einem eigenen, kostenlosen API-Schlüssel unter Server-Einstellungen; ohne Schlüssel entfällt nur diese eine Grafik. Deutlich mehr Auswahl: zehn weitere Studio-Vorlagen (u. a. Universal, Paramount, Sony, Illumination, Ghibli, A24, HBO, BBC, Netflix), mehr berücksichtigte Genres, und mehr Vorschläge je Anfrage, damit »Andere Ideen zeigen« wirklich andere zeigt. Die Grenzen für die Anzahl der Quellen je Kanal waren mit 3 bis 12 zu eng gefasst und liegen jetzt bei 2 bis 30, der Regler reicht bis 80 – eine Quelle bleibt dabei ein Film oder eine ganze Serie, nie eine einzelne Folge.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.127.0/litetv-channels_1.0.127.0.zip",
-        "checksum": "",
+        "checksum": "cebb2bfd483b80ffe6f4916bb66ca64a",
         "timestamp": "2026-09-04T18:00:00.000Z"
       },
       {
