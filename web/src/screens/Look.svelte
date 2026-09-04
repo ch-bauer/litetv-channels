@@ -1430,7 +1430,16 @@
         ratio keeps it the right shape and brings the two back into line - which is better than
         narrowing the whole block, since that only moves the empty space to the right of it.
     */
-    .frame.capped { height: 210px; width: auto; max-width: 100%; }
+    /*
+        align-self: start, or the fixed height is a lie. .slot is a column flex container, and a
+        flex item with width: auto is stretched to the container's full cross size by default -
+        even though it is written auto, that is still auto for stretch purposes. Stretched, the
+        frame ends up as wide as the slot regardless of what aspect-ratio would have computed
+        from the 210px height, so a 2:3 poster came out wider than it is tall: measured at
+        257x210 in the real dashboard, not the 140x210 the ratio asks for. Opting out of stretch
+        is what lets the fixed height and the ratio decide the width instead.
+    */
+    .frame.capped { height: 210px; width: auto; max-width: 100%; align-self: flex-start; }
 
     .frame {
         width: 100%;
