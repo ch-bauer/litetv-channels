@@ -1607,6 +1607,14 @@ public class LiteTvController : ControllerBase
         foreach (var suggestion in suggestions)
         {
             suggestion.Reason.Engine = SuggestionEngine;
+
+            // A studio channel's face should be the studio's own mark, not whichever title
+            // happened to rank first - see StudioArtwork for why and how.
+            if (string.Equals(suggestion.Reason.Family, SuggestionFamily.Studio, StringComparison.OrdinalIgnoreCase)
+                && StudioArtwork(suggestion) is { } studio)
+            {
+                suggestion.Artwork = studio;
+            }
         }
 
         // Collections remain a useful one-click channel in their own right. Keep the familiar
@@ -1743,6 +1751,56 @@ public class LiteTvController : ControllerBase
 
     /// <summary>Which engine answered the last suggestion request, for the page to show.</summary>
     private string SuggestionEngine { get; set; } = "None";
+
+    /// <summary>
+    /// The picture a studio channel should wear: the studio's own mark, when the library has
+    /// one, rather than whichever title happened to be ranked first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Jellyfin models a studio as its own library item, and a studio-images provider - not
+    /// part of this plugin - can give it a real picture: a logo, not a still from any one film.
+    /// A channel pointed at that item picks up whatever the item has through the artwork
+    /// pipeline every other channel already uses (<see cref="ChannelImage"/>), unchanged: poster,
+    /// banner and backdrop are asked for the same way and fall back to the lineup exactly as
+    /// they do for any other channel. Nothing about image resolution had to change for this;
+    /// only which item gets asked.
+    /// </para>
+    /// <para>
+    /// The studio to ask is read off the titles the channel actually ended up with, not the
+    /// loose match terms that found them - a Marvel channel might be built from "Marvel Studios"
+    /// on some titles and "Marvel Entertainment" on others, and only the library knows which
+    /// string, if either, was ever given a picture. The most common one is tried first; nothing
+    /// with a picture at all falls through to the borrowed-title artwork already in place.
+    /// </para>
+    /// </remarks>
+    /// <param name="suggestion">The composed proposal, already carrying its sources.</param>
+    /// <returns>The studio's own artwork, or null when no matching studio has any.</returns>
+    private SuggestedArtworkDto? StudioArtwork(ChannelSuggestionDto suggestion)
+    {
+        var studioNames = suggestion.Sources
+            .Select(source => _libraryManager.Find(source.ItemId))
+            .Where(item => item is not null)
+            .SelectMany(item => item!.Studios ?? Array.Empty<string>())
+            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(group => group.Count())
+            .Select(group => group.Key);
+
+        foreach (var name in studioNames)
+        {
+            var studio = _libraryManager.GetStudio(name);
+            if (studio is not null
+                && (studio.HasImage(ImageType.Primary)
+                    || studio.HasImage(ImageType.Thumb)
+                    || studio.HasImage(ImageType.Banner)
+                    || studio.HasImage(ImageType.Backdrop)))
+            {
+                return new SuggestedArtworkDto { ItemId = studio.Id, ItemName = studio.Name };
+            }
+        }
+
+        return null;
+    }
 
     private List<Folder> LibraryFolders() =>
         _libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
