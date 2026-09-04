@@ -13,7 +13,7 @@
         "changelog": "A channel's own picture can now follow whatever is actually airing right now, instead of always wearing a fixed borrowed or configured picture - a new \"Follow what is on now\" toggle on the Look page, off by default. It restores the channel's face tracking live content on request; an explicitly set picture always wins over it regardless, and it never applies unless turned on, so every existing channel is unaffected.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.133.0/litetv-channels_1.0.133.0.zip",
-        "checksum": "",
+        "checksum": "fc7c4db9ce0a6be4cc43dc22ceb7c380",
         "timestamp": "2026-09-05T00:25:00.000Z"
       },
       {
