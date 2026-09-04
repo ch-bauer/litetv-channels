@@ -13,7 +13,7 @@
         "changelog": "The \"Follow what is on now\" channel picture, added last release, is now on by default and split in two: Poster and Banner follow the currently playing title as one toggle, Backdrop follows (or not) as its own separate toggle, since it fills the whole channel screen and may be worth holding fixed independently of the card in the channel list. An explicitly set picture still always wins over either.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.136.0/litetv-channels_1.0.136.0.zip",
-        "checksum": "",
+        "checksum": "c9944cf112c39072eb34293b50d7b2f5",
         "timestamp": "2026-09-05T01:30:00.000Z"
       },
       {
