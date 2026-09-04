@@ -165,6 +165,59 @@ function dedupeByProvider(hits: SearchHit[]): SearchHit[] {
 }
 
 /**
+ * The tags a second copy of the same film is organised under, stripped so "Spider-Man" and
+ * "Spider-Man (4K)" read as the same title. A known, narrow list rather than "anything in
+ * parentheses" - a year, an edition nobody meant as a duplicate marker, or a genuinely different
+ * film that happens to share a name must not collapse into this.
+ */
+const QUALITY_TAG_PATTERN = '[[(](4k|2160p|1080p|720p|hdr\\d*|dv|dolby ?vision|hd|sd|remux|bluray|blu-ray|web-?dl|uhd|extended|director\'?s cut|theatrical( cut)?|uncut|unrated)[\\])]';
+
+/** A film's name with its quality/edition tags removed and whitespace tidied, for comparing two rows. */
+function normalizedTitle(name: string): string {
+    return name.replace(new RegExp(QUALITY_TAG_PATTERN, 'gi'), ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * Whether a name carries one of the quality/edition tags itself, rather than being the plain
+ * title. A fresh RegExp each time - `.test()` on a shared `g`-flagged pattern remembers where it
+ * left off between calls and alternates true/false on repeated titles, which is not what a
+ * membership check means.
+ */
+function hasQualityTag(name: string): boolean {
+    return new RegExp(QUALITY_TAG_PATTERN, 'i').test(name);
+}
+
+/**
+ * The fallback for when the library never gave the two copies a shared provider id at all - the
+ * "(4K)" one is often imported and matched separately from the plain one, so their metadata can
+ * disagree even though they are visibly the same film. Matched on the normalized name and, when
+ * both carry one, the same year; kept to whichever copy's name carries none of the quality tags,
+ * since that is the one somebody searching by title actually means.
+ */
+function dedupeByNormalizedTitle(hits: SearchHit[]): SearchHit[] {
+    const groups = new Map<string, SearchHit[]>();
+    const order: string[] = [];
+    for (const hit of hits) {
+        if (hit.kind !== 'Movie') { continue; }
+        const key = normalizedTitle(hit.name) + '|' + (hit.year ?? '');
+        if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+        groups.get(key)!.push(hit);
+    }
+
+    const drop = new Set<string>();
+    for (const key of order) {
+        const group = groups.get(key)!;
+        if (group.length < 2) { continue; }
+        const plain = group.find((hit) => !hasQualityTag(hit.name)) ?? group[0];
+        for (const hit of group) {
+            if (hit !== plain) { drop.add(hit.id); }
+        }
+    }
+
+    return hits.filter((hit) => !drop.has(hit.id));
+}
+
+/**
  * What the library has that matches.
  *
  * **Two requests, not one, and the series come first.** Asking for all four kinds together let
@@ -186,7 +239,7 @@ export async function search(term: string, limit = 20): Promise<SearchHit[]> {
         ask(trimmed, 'Episode', limit),
     ]);
 
-    return [...dedupeByProvider(containers), ...episodes].slice(0, limit);
+    return [...dedupeByNormalizedTitle(dedupeByProvider(containers)), ...episodes].slice(0, limit);
 }
 
 /**
