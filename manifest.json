@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.126.0",
+        "changelog": "Ein Studio-Kanal kann jetzt das Logo des Studios selbst tragen statt nur das Bild des erstplatzierten Titels: findet die Bibliothek ein Bild zum passenden Studio-Eintrag – etwa durch ein Studio-Bilder-Plugin –, wird es als Banner, Backdrop und Poster des Kanals übernommen, ausgewählt anhand der tatsächlich verwendeten Titel statt der losen Suchbegriffe. Außerdem: der leere Vorschau-Rahmen für das Poster einer Kanal-Grafik hatte das falsche Seitenverhältnis, solange kein Bild gesetzt war – behoben.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.126.0/litetv-channels_1.0.126.0.zip",
+        "checksum": "",
+        "timestamp": "2026-09-04T12:00:00.000Z"
+      },
+      {
         "version": "1.0.125.0",
         "changelog": "Kanalvorschläge urteilen jetzt über Ähnlichkeit statt nur über das Studio: ein Pool wird zusätzlich auf den Titel getrimmt, um den er überwiegend geht – gemessen mit Smart Similar, mit einem groben Rückfall, wenn dieses Plugin fehlt oder nicht antwortet. Ein DreamWorks-Sender hält damit keinen Thriller mehr neben Animationsfilmen, nur weil beide vom selben Studio sind. Der Filmabend eines Vorschlags verwendet nun eigens reservierte Filme statt der Kanalinhalte selbst, sodass kein Titel doppelt läuft; ein reiner Filmkanal bekommt gar keinen Filmabend mehr. Dazu vier weitere Einstellungen – Ähnlichkeitsstrenge, Filmabend immer/passend/nie, Trailer und Folgenmischen einzeln, sowie Mindest- und Höchstzahl der Quellen – und eine aufklappbare Titelliste je Vorschlag vor dem Hinzufügen.",
         "targetAbi": "10.11.0.0",
