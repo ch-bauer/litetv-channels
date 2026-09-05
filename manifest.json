@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
     "versions": [
       {
+        "version": "1.0.145.0",
+        "changelog": "Trailer breaks now select the best available stream in the configured YouTube language, preferring higher quality instead of accepting the first viable link. The status page calls HLS/DASH quality ladders \"adaptive stream\" rather than incorrectly reporting them as unknown. SponsorBlock-marked non-trailer sections are skipped automatically in trailer breaks when enabled.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.145.0/litetv-channels_1.0.145.0.zip",
+        "checksum": "",
+        "timestamp": "2026-09-05T21:50:00.000Z"
+      },
+      {
         "version": "1.0.144.0",
         "changelog": "Fixed the real cause of a trailer's caption naming the wrong movie: a channel's queue-level trailer insertion (Trailers: Preview) already knows exactly which movie a trailer promotes (several programmes ahead, recorded on the trailer's own entry), but ChannelSchedule stamped every queue item's NextProgram - trailers included - with whatever simply played next in the queue, discarding that choice. A trailer now carries its own recorded promotion instead.",
         "targetAbi": "10.11.0.0",

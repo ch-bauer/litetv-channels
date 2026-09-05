@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.LiteTv.Configuration;
+using Jellyfin.Plugin.LiteTv.Trailers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -318,7 +319,11 @@ public class ChannelPlaylistBuilder
             return null;
         }
 
-        var url = item.RemoteTrailers.FirstOrDefault(t => !string.IsNullOrEmpty(t.Url))?.Url;
+        var url = item.RemoteTrailers
+            .Where(t => !string.IsNullOrEmpty(t.Url))
+            .OrderBy(t => TrailerSelection.LanguageRank(t.Name, YouTubeLocale.Language()))
+            .ThenBy(t => TrailerSelection.KindRank(t.Name))
+            .FirstOrDefault()?.Url;
         if (!string.IsNullOrEmpty(url))
         {
             return url;
@@ -329,7 +334,11 @@ public class ChannelPlaylistBuilder
         if (item is MediaBrowser.Controller.Entities.TV.Episode episode && episode.SeriesId != Guid.Empty)
         {
             return _libraryManager.Find(episode.SeriesId)?
-                .RemoteTrailers.FirstOrDefault(t => !string.IsNullOrEmpty(t.Url))?.Url;
+                .RemoteTrailers
+                .Where(t => !string.IsNullOrEmpty(t.Url))
+                .OrderBy(t => TrailerSelection.LanguageRank(t.Name, YouTubeLocale.Language()))
+                .ThenBy(t => TrailerSelection.KindRank(t.Name))
+                .FirstOrDefault()?.Url;
         }
 
         return null;

@@ -142,12 +142,12 @@ public class ProofOfOriginTests : IDisposable
     }
 
     [Fact]
-    public void DoesNotPresentManifestSentinelAsPixelQuality()
+    public void PresentsAManifestAsAnAdaptiveStream()
     {
         var words = LiteTvController.LastResolvedWords(
             new YouTubeStreamResolver.Resolution("video", int.MaxValue, "VISIONOS", true, DateTime.UtcNow));
 
-        Assert.Equal("unknown quality · VISIONOS · with a token", words);
+        Assert.Equal("adaptive stream · VISIONOS · with a token", words);
     }
 
     [Fact]

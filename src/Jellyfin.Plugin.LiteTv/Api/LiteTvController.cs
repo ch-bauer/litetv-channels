@@ -1354,6 +1354,8 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ResolvedTrailerDto>> GetTrailer([FromRoute] Guid itemId)
     {
+        var language = YouTubeLocale.Language();
+        var candidates = new List<(TrailerDto Trailer, YouTubeStreamResolver.ResolvedStream Stream)>();
         foreach (var trailer in RemoteTrailers(itemId))
         {
             var stream = await _trailers.ResolveAsync(trailer.Url, HttpContext.RequestAborted).ConfigureAwait(false);
@@ -1364,20 +1366,35 @@ public class LiteTvController : ControllerBase
                 continue;
             }
 
-            return new ResolvedTrailerDto
-            {
-                Name = trailer.Name,
-                Url = stream.Url,
-                AudioUrl = stream.AudioUrl,
-                UserAgent = YouTubeStreamResolver.UserAgent,
-                Referer = YouTubeStreamResolver.Referer,
-                Client = stream.Client,
-                Quality = stream.Quality,
-                SkipSegments = await SkipSegmentsAsync(trailer.Url).ConfigureAwait(false)
-            };
+            candidates.Add((trailer, stream));
         }
 
-        return NotFound();
+        // Provider order is arbitrary. Resolve every viable candidate so a configured-language
+        // 360p trailer cannot win merely because it appeared before the 1080p one. Language
+        // remains the primary criterion: a clearer trailer in the wrong language is not better.
+        var selected = candidates
+            .OrderBy(candidate => TrailerSelection.LanguageRank(candidate.Trailer.Name, language))
+            .ThenByDescending(candidate => candidate.Stream.Quality)
+            .ThenBy(candidate => TrailerSelection.KindRank(candidate.Trailer.Name))
+            .ThenBy(candidate => candidate.Trailer.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+
+        if (selected.Stream is null)
+        {
+            return NotFound();
+        }
+
+        return new ResolvedTrailerDto
+        {
+            Name = selected.Trailer.Name,
+            Url = selected.Stream.Url,
+            AudioUrl = selected.Stream.AudioUrl,
+            UserAgent = YouTubeStreamResolver.UserAgent,
+            Referer = YouTubeStreamResolver.Referer,
+            Client = selected.Stream.Client,
+            Quality = selected.Stream.Quality,
+            SkipSegments = await SkipSegmentsAsync(selected.Trailer.Url).ConfigureAwait(false)
+        };
     }
 
     /// <summary>
@@ -1512,9 +1529,15 @@ public class LiteTvController : ControllerBase
             return null;
         }
 
-        var quality = last.Quality > 0 && last.Quality < 10000
-            ? last.Quality.ToString(CultureInfo.InvariantCulture) + "p"
-            : "unknown quality";
+        // A manifest is deliberately represented internally by int.MaxValue: it gives the
+        // client a ladder, not one fixed rendition. Calling it "unknown" made the best answers
+        // (usually the adaptive 1080p-capable ones) look broken, while an inferior fixed 360p
+        // stream looked informative. The app chooses the actual rung, so say exactly that.
+        var quality = last.Quality == int.MaxValue
+            ? "adaptive stream"
+            : last.Quality > 0
+                ? last.Quality.ToString(CultureInfo.InvariantCulture) + "p"
+                : "unknown quality";
 
         var client = string.IsNullOrWhiteSpace(last.Client) ? "unknown client" : last.Client;
 
@@ -2354,10 +2377,12 @@ public class LiteTvController : ControllerBase
             item = episode.SeriesId != Guid.Empty ? _libraryManager.Find(episode.SeriesId) ?? item : item;
         }
 
+        var language = YouTubeLocale.Language();
         return item?.RemoteTrailers
             .Where(t => !string.IsNullOrEmpty(t.Url))
             .Select(t => new TrailerDto { Name = t.Name ?? string.Empty, Url = t.Url })
-            .OrderBy(TrailerRank)
+            .OrderBy(t => TrailerSelection.LanguageRank(t.Name, language))
+            .ThenBy(t => TrailerSelection.KindRank(t.Name))
             .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .Take(4)
             .ToList() ?? new List<TrailerDto>();
@@ -2393,61 +2418,6 @@ public class LiteTvController : ControllerBase
                 Category = s.Category
             })
             .ToList();
-    }
-
-    private static int TrailerRank(TrailerDto trailer)
-    {
-        // Language first, and by a distance nothing else can close: a German household being
-        // told about tonight's film in English is worse than being told about it by a teaser.
-        // Which trailer it is only decides between trailers that are already in the language.
-        return (GermanRank(trailer.Name) * 100) + KindRank(trailer.Name);
-    }
-
-    /// <summary>
-    /// Guesses a trailer's language from its name, because that is all there is to go on -
-    /// <c>RemoteTrailer</c> carries a name and a URL and nothing else.
-    /// <para>
-    /// The markers are taken from what the providers actually wrote for this library:
-    /// "Trailer Deutsch HD", "Trailer German", "Deutsch Trailer", "offizieller Kinotrailer
-    /// german". A German trailer says so in its title nearly every time, because it was
-    /// uploaded to be found by people searching in German.
-    /// </para>
-    /// <para>
-    /// "Offizieller" and "Kinotrailer" count on their own: they are German words, and a
-    /// trailer titled in German is in German. <c>OmU</c> deliberately does not - it means the
-    /// original soundtrack with subtitles, which nobody reads off a television across a room.
-    /// </para>
-    /// </summary>
-    private static int GermanRank(string name)
-    {
-        foreach (var marker in new[] { "deutsch", "german", "offizieller", "kinotrailer" })
-        {
-            if (name.Contains(marker, StringComparison.OrdinalIgnoreCase))
-            {
-                return 0;
-            }
-        }
-
-        return 1;
-    }
-
-    /// <summary>Which kind of trailer it is: the full one, then anything, then a teaser.</summary>
-    private static int KindRank(string name)
-    {
-        if (name.Contains("Official Trailer", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Official Theatrical Trailer", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Offizieller Trailer", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("Kinotrailer", StringComparison.OrdinalIgnoreCase))
-        {
-            return 0;
-        }
-
-        if (name.Contains("Teaser", StringComparison.OrdinalIgnoreCase))
-        {
-            return 10;
-        }
-
-        return name.Contains("Trailer", StringComparison.OrdinalIgnoreCase) ? 1 : 5;
     }
 
     /// <summary>
