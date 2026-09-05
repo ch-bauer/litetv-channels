@@ -371,7 +371,7 @@ public sealed class ChannelGuide
                     // for a remote trailer, also reuses the promoted movie's own id) shows
                     // whether they already disagree here, at the point of insertion, or only
                     // downstream (WeekGenerator/ScheduleEditing/WeekReader).
-                    _logger.LogInformation(
+                    _logger.LogWarning(
                         "WithTrailers: trailed={TrailedId}/{TrailedName} trailer.ItemId={TrailerItemId} " +
                         "trailer.TrailerForItemId={TrailerForId}/{TrailerForName} blockTrailed={IsBlockTrailed}",
                         trailed.ItemId,
