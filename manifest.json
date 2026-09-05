@@ -13,7 +13,7 @@
         "changelog": "Fixed a bug where a scheduled trailer's \"coming up\" announcement showed the trailer's own title instead of the movie it was actually promoting. Reading a stored week back out set IsTrailer on the reconstructed entry but never carried over the curated TrailerForItemId/TrailerForName link the week generator had recorded for it, so every stored trailer reported no linked movie regardless of what was actually scheduled.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.141.0/litetv-channels_1.0.141.0.zip",
-        "checksum": "",
+        "checksum": "bafb50bc24b1a03b75adb194f81deb03",
         "timestamp": "2026-09-05T17:55:32.000Z"
       },
       {
