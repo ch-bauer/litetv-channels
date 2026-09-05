@@ -1,5 +1,6 @@
 ﻿using Jellyfin.Plugin.LiteTv.Configuration;
 using Jellyfin.Plugin.LiteTv.Trailers;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.LiteTv.Core;
 
@@ -24,6 +25,7 @@ public sealed class ChannelGuide
     private readonly YouTubeStreamResolver _trailers;
     private readonly SponsorBlockClient _sponsorBlock;
     private readonly ChannelStore _channels;
+    private readonly ILogger<ChannelGuide> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelGuide"/> class.
@@ -32,18 +34,22 @@ public sealed class ChannelGuide
     /// <param name="weeks">The stored weeks.</param>
     /// <param name="trailers">Knows how long a linked trailer is, once it has resolved one.</param>
     /// <param name="sponsorBlock">Knows which parts of it will be skipped.</param>
+    /// <param name="channels">The stored channels.</param>
+    /// <param name="logger">Logger.</param>
     public ChannelGuide(
         ChannelPlaylistBuilder builder,
         WeekStore weeks,
         YouTubeStreamResolver trailers,
         SponsorBlockClient sponsorBlock,
-        ChannelStore channels)
+        ChannelStore channels,
+        ILogger<ChannelGuide> logger)
     {
         _builder = builder;
         _weeks = weeks;
         _trailers = trailers;
         _sponsorBlock = sponsorBlock;
         _channels = channels;
+        _logger = logger;
     }
 
     /// <summary>
@@ -358,6 +364,22 @@ public sealed class ChannelGuide
                     {
                         break;
                     }
+
+                    // TEMPORARY diagnostic - remove once the "trailer announces the wrong movie"
+                    // report is nailed down. trailed and trailer.TrailerForItemId are both meant
+                    // to name the same promoted movie; logging both plus trailer.ItemId (which,
+                    // for a remote trailer, also reuses the promoted movie's own id) shows
+                    // whether they already disagree here, at the point of insertion, or only
+                    // downstream (WeekGenerator/ScheduleEditing/WeekReader).
+                    _logger.LogInformation(
+                        "WithTrailers: trailed={TrailedId}/{TrailedName} trailer.ItemId={TrailerItemId} " +
+                        "trailer.TrailerForItemId={TrailerForId}/{TrailerForName} blockTrailed={IsBlockTrailed}",
+                        trailed.ItemId,
+                        trailed.Name,
+                        trailer.ItemId,
+                        trailer.TrailerForItemId,
+                        trailer.TrailerForName,
+                        blockTrailed is not null);
 
                     yield return airing with { Entry = trailer, StartUtc = cursor, EndUtc = end, NextProgram = trailed };
                     cursor = end;

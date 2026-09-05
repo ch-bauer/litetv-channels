@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixed a bug where a scheduled trailer's \"coming up\" announcement showed the trailer's own title instead of the movie it was actually promoting. Reading a stored week back out set IsTrailer on the reconstructed entry but never carried over the curated TrailerForItemId/TrailerForName link the week generator had recorded for it, so every stored trailer reported no linked movie regardless of what was actually scheduled.",
+  "changelog": "Diagnostic-only release: added temporary logging to WithTrailers to track down a report that a trailer's announcement names the wrong movie (not the one the trailer itself is actually for) even after a week regeneration. No behavior change.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-05T17:55:32.000Z",
-  "version": "1.0.141.0",
+  "timestamp": "2026-09-05T18:37:17.000Z",
+  "version": "1.0.142.0",
   "status": "Active",
   "autoUpdate": false
 }
