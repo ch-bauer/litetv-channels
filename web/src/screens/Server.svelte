@@ -24,17 +24,23 @@
 
     interface Build {
         FileName: string;
+        /** "Wholphin" or "Findroid" - each family has its own idea of what "the latest" is. */
+        Family: string;
         Version: string;
         BuildType: string;
         Abi: string | null;
         Bytes: number;
         /** When it was uploaded. */
         Modified: string;
+        /** Whether this exact file is one of the assets its family's app is currently offered. */
+        Offered: boolean;
     }
 
     interface BuildList {
         LatestVersion: string | null;
         UpdateUrl: string;
+        FindroidLatestVersion: string | null;
+        FindroidUpdateUrl: string;
         Builds: Build[];
     }
 
@@ -69,6 +75,8 @@
     let builds = $state<BuildList | null>(null);
     let buildsError = $state<string | null>(null);
     let uploading = $state(false);
+    let uploadDone = $state(0);
+    let uploadTotal = $state(0);
     let accountHelp = $state(false);
     let skipHelp = $state(false);
     let siblings = $state<SiblingPlugin[] | null>(null);
@@ -125,15 +133,18 @@
         config !== null && users.some((u) => u.Name === config.ChannelUserName));
 
     /*
-        Every build the store holds except the version actually on offer - and there is one
-        build of that version per ABI, so this is a version test rather than a single name. A
-        store filling up with builds nobody is served is not readable, which is why it was asked
-        for.
+        Every build the store holds except the ones actually on offer. The store holds two
+        families (Wholphin and Findroid) with entirely separate version numbers, so "on offer"
+        is answered per build by the server - see BuildDto.Offered / UpdateController.IsOffered
+        - rather than compared against a single shared "latest version" here. Comparing against
+        one shared version was the bug: every Findroid build's version never matched Wholphin's
+        LatestVersion, so "remove what nobody is offered" deleted every Findroid build, including
+        the one actually being served.
     */
     const supplanted = $derived.by(() => {
         const held = builds;
         if (!held) { return [] as Build[]; }
-        return held.Builds.filter((b) => b.Version !== held.LatestVersion);
+        return held.Builds.filter((b) => !b.Offered);
     });
 
     async function clearOutOldBuilds(): Promise<void> {
@@ -172,20 +183,50 @@
         }
     });
 
-    async function upload(file: File): Promise<void> {
+    async function uploadOne(file: File): Promise<void> {
+        const answer = await fetch(
+            api().getUrl('LiteTv/Update/Builds/' + encodeURIComponent(file.name)),
+            { method: 'POST', headers: authHeaders(), body: file },
+        );
+        if (!answer.ok) { throw new Error(answer.status + ' ' + answer.statusText); }
+    }
+
+    /*
+        One file at a time on purpose - the ABI splits ship four APKs (arm64-v8a, armeabi-v7a,
+        x86_64, x86) plus a Findroid build alongside them, and picking those five files one at a
+        time was the actual complaint. Sent to the server in sequence rather than in parallel so
+        a slow upload cannot race a fast one and land the wrong "most recently written" file as
+        whichever a page reload happens to catch mid-flight.
+    */
+    async function upload(files: FileList | File[]): Promise<void> {
         const bar = dashboard();
+        const list = Array.from(files);
+        if (list.length === 0) { return; }
+
         uploading = true;
+        uploadDone = 0;
+        uploadTotal = list.length;
+        const failed: string[] = [];
+
         try {
-            const answer = await fetch(
-                api().getUrl('LiteTv/Update/Builds/' + encodeURIComponent(file.name)),
-                { method: 'POST', headers: authHeaders(), body: file },
-            );
-            if (!answer.ok) { throw new Error(answer.status + ' ' + answer.statusText); }
-            await loadBuilds();
-        } catch (err) {
-            bar.alert('That build could not be uploaded: ' + (failureWords(err)));
+            for (const file of list) {
+                try {
+                    await uploadOne(file);
+                } catch (err) {
+                    failed.push(file.name + ': ' + failureWords(err));
+                } finally {
+                    uploadDone += 1;
+                }
+            }
         } finally {
+            await loadBuilds();
             uploading = false;
+        }
+
+        if (failed.length > 0) {
+            bar.alert(
+                (failed.length === 1 ? 'A build' : failed.length + ' builds')
+                    + ' could not be uploaded:\n' + failed.join('\n'));
         }
     }
 
@@ -495,10 +536,11 @@
                             <div class="build">
                                 <div class="who">
                                     <div class="top">
+                                        <span class="tag quiet">{build.Family}</span>
                                         <span class="name">{build.Version}</span>
                                         {#if build.Abi}<span class="tag">{build.Abi}</span>{/if}
                                         <span class="tag quiet">{build.BuildType}</span>
-                                        {#if builds.LatestVersion === build.Version}
+                                        {#if build.Offered}
                                             <span class="tag on-offer">on offer</span>
                                         {/if}
                                     </div>
@@ -531,8 +573,10 @@
                                     + ' nobody is offered'}
                         </button>
                         <p class="note small">
-                            Everything except {builds.LatestVersion}, which is what a television
-                            asking this server is handed.
+                            Everything not currently on offer - Wholphin
+                            {builds.LatestVersion ? ' (' + builds.LatestVersion + ')' : ''} and
+                            Findroid{builds.FindroidLatestVersion ? ' (' + builds.FindroidLatestVersion + ')' : ''}
+                            each keep the build their own app is actually handed.
                         </p>
                     {/if}
 
@@ -540,15 +584,16 @@
                         <input
                             type="file"
                             accept=".apk"
+                            multiple
                             onchange={(e) => {
-                                const file = e.currentTarget.files?.[0];
-                                if (file) { void upload(file); }
+                                const files = e.currentTarget.files;
+                                if (files && files.length > 0) { void upload(files); }
                                 e.currentTarget.value = '';
                             }}
                         />
                         <span class="lt-swap">
-                            <span class="lt-ghost">Upload a build</span>
-                            <span>{uploading ? 'Uploading…' : 'Upload a build'}</span>
+                            <span class="lt-ghost">Uploading 99/99…</span>
+                            <span>{uploading ? `Uploading ${uploadDone}/${uploadTotal}…` : 'Upload builds'}</span>
                         </span>
                     </label>
                 {/if}
@@ -562,8 +607,10 @@
                         away inside a 69px card, which is the one outright bug the first real
                         server found.
                     -->
+                    <p class="prose small">Wholphin - Settings › Updates › Update source, on the television.</p>
                     <input class="url" readonly value={builds?.UpdateUrl ?? ''} onclick={(e) => e.currentTarget.select()} />
-                    <p class="prose small">Settings › Updates › Update source, on the television.</p>
+                    <p class="prose small">Findroid - Settings › About › Update URL, on the phone.</p>
+                    <input class="url" readonly value={builds?.FindroidUpdateUrl ?? ''} onclick={(e) => e.currentTarget.select()} />
                 </Card>
             </div>
         </div>
