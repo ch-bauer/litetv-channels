@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jellyfin.Plugin.LiteTv.Api;
 
 /// <summary>
-/// The update server for the Wholphin fork.
+/// The update server for the Wholphin fork, and for the findroid-litetv phone fork.
 /// <para>
 /// The television gets its builds over ADB today, which means ADB stays switched on for no
 /// other reason - a standing remote-access path kept open purely so an APK can be pushed. The
@@ -16,15 +16,25 @@ namespace Jellyfin.Plugin.LiteTv.Api;
 /// the shape GitHub's releases API answers with, and installs the asset it finds there. That
 /// URL is just a URL, so the plugin can be the thing at the other end of it. The television
 /// already talks to this server constantly, so nothing new has to be reachable, no repository
-/// has to be public, and no token has to live on the box.
+/// has to be public, and no token has to live on the box. The findroid phone fork later needed
+/// the exact same thing for the exact same reason, so it shares this store rather than getting
+/// its own - see <see cref="AppFamily"/> for how the two release trains stay apart.
 /// </para>
 /// <para>
-/// What the app requires, measured against <c>UpdateChecker.kt</c> and kept exactly:
-/// <c>name</c> must parse as <c>v1.0.5-22-g7b77227d</c> and nothing else, because the app
-/// matches the whole string; <c>assets</c> must carry a <c>name</c> the app asks for by name -
+/// What each app requires, measured against its own client source and kept exactly:
+/// <list type="bullet">
+/// <item><description>Wholphin (<c>UpdateChecker.kt</c>): <c>name</c> must parse as
+/// <c>v1.0.5-22-g7b77227d</c> and nothing else, because the app matches the whole string;
+/// <c>assets</c> must carry a <c>name</c> the app asks for by name -
 /// <c>Wholphin-release-armeabi-v7a.apk</c> first, then <c>Wholphin-release.apk</c>, then
-/// <c>Wholphin.apk</c> - and a <c>browser_download_url</c> to fetch it from. Everything else in
-/// a GitHub release is decoration and is answered anyway so the shape stays recognisable.
+/// <c>Wholphin.apk</c>.</description></item>
+/// <item><description>findroid (<c>LiteTvUpdateChecker.kt</c>): <c>tag_name</c> must parse as a
+/// plain <c>v1.2.0</c> (no commit-suffix scheme at all); <c>assets</c> must carry a <c>name</c>
+/// matching <c>findroid-&lt;tag&gt;-libre-&lt;abi&gt;.apk</c> exactly, one asset per ABI, no
+/// bare/universal fallback.</description></item>
+/// </list>
+/// Both need a <c>browser_download_url</c> to fetch their asset from. Everything else in a
+/// GitHub release is decoration and is answered anyway so the shape stays recognisable.
 /// </para>
 /// </summary>
 [ApiController]
@@ -47,9 +57,24 @@ public class UpdateController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<ReleaseDto> GetLatest()
+    public ActionResult<ReleaseDto> GetLatest() => LatestFor(AppFamily.Wholphin, AppBuild.Assets, "Download");
+
+    /// <summary>
+    /// The findroid fork's own version of <see cref="GetLatest"/> - a separate route rather than
+    /// the same one branching on e.g. a header, so the two apps' release trains can never be
+    /// crossed by an implicit signal (a proxy or future client change to how it identifies
+    /// itself). See <c>AppFamily</c>'s doc for why they must never share "newest".
+    /// </summary>
+    /// <returns>The newest findroid release, or 404 when no build has been uploaded for it.</returns>
+    [HttpGet("findroid/latest")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<ReleaseDto> GetLatestFindroid() => LatestFor(AppFamily.Findroid, AppBuild.AssetsForFindroid, "findroid/Download");
+
+    private ActionResult<ReleaseDto> LatestFor(AppFamily family, Func<IReadOnlyCollection<AppBuild>, IReadOnlyList<KeyValuePair<string, AppBuild>>> assetPairsFor, string downloadRoute)
     {
-        var sameVersion = Newest();
+        var sameVersion = Newest(family);
         if (sameVersion.Count == 0)
         {
             return NotFound();
@@ -62,7 +87,7 @@ public class UpdateController : ControllerBase
             TagName = newest.Version.ToString(),
             PublishedAt = newest.Modified.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
             Body = Notes(newest),
-            Assets = Assets(sameVersion)
+            Assets = ToAssetDtos(assetPairsFor(sameVersion), downloadRoute)
         };
     }
 
@@ -82,22 +107,34 @@ public class UpdateController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult GetDownload([FromRoute] string name)
+    public ActionResult GetDownload([FromRoute] string name) => DownloadFor(AppFamily.Wholphin, AppBuild.Assets, name);
+
+    /// <summary>The findroid fork's own version of <see cref="GetDownload"/> - see <see cref="GetLatestFindroid"/>'s doc for why this is a separate route rather than a branch.</summary>
+    /// <param name="name">The asset name, as advertised by <c>findroid/latest</c>.</param>
+    /// <returns>The APK, or 404 if no stored findroid build answers to that name.</returns>
+    [HttpGet("findroid/Download/{name}")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult GetDownloadFindroid([FromRoute] string name) => DownloadFor(AppFamily.Findroid, AppBuild.AssetsForFindroid, name);
+
+    private ActionResult DownloadFor(AppFamily family, Func<IReadOnlyCollection<AppBuild>, IReadOnlyList<KeyValuePair<string, AppBuild>>> assetPairsFor, string name)
     {
-        var builds = Builds();
-        var sameVersion = Newest();
+        var builds = Builds().Where(b => b.Family == family).ToList();
+        var sameVersion = Newest(family);
         if (builds.Count == 0)
         {
             return NotFound();
         }
 
-        var match = sameVersion.Count == 0 ? null : Assets(sameVersion)
-            .FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+        var match = sameVersion.Count == 0
+            ? default
+            : assetPairsFor(sameVersion).FirstOrDefault(a => string.Equals(a.Key, name, StringComparison.OrdinalIgnoreCase));
 
         // A file asked for by the name it has on disk is served too. Nothing the app does needs
         // that; a person copying a link out of the builds list does.
-        var path = match is not null
-            ? sameVersion.First(b => string.Equals(b.FileName, match.FileName, StringComparison.Ordinal)).Path
+        var path = match.Value is not null
+            ? sameVersion.First(b => string.Equals(b.FileName, match.Value.FileName, StringComparison.Ordinal)).Path
             : builds.FirstOrDefault(b => string.Equals(b.FileName, name, StringComparison.OrdinalIgnoreCase))?.Path;
 
         return path is not null && System.IO.File.Exists(path)
@@ -115,22 +152,33 @@ public class UpdateController : ControllerBase
     public ActionResult<BuildListDto> GetBuilds()
     {
         var builds = Builds().OrderByDescending(b => b.Version).ThenBy(b => b.FileName, StringComparer.Ordinal).ToList();
-        var offered = GetLatest().Value;
+        var offeredWholphin = GetLatest().Value;
+        var offeredFindroid = GetLatestFindroid().Value;
+
+        bool IsOffered(AppBuild build) =>
+            build.Family switch
+            {
+                AppFamily.Wholphin => offeredWholphin is not null && offeredWholphin.Assets.Any(a => string.Equals(a.FileName, build.FileName, StringComparison.Ordinal)),
+                AppFamily.Findroid => offeredFindroid is not null && offeredFindroid.Assets.Any(a => string.Equals(a.FileName, build.FileName, StringComparison.Ordinal)),
+                _ => false,
+            };
 
         return new BuildListDto
         {
-            LatestVersion = offered?.Name,
+            LatestVersion = offeredWholphin?.Name,
             UpdateUrl = Absolute("/LiteTv/Update/latest"),
+            FindroidLatestVersion = offeredFindroid?.Name,
+            FindroidUpdateUrl = Absolute("/LiteTv/Update/findroid/latest"),
             Builds = builds.Select(b => new BuildDto
             {
                 FileName = b.FileName,
+                Family = b.Family.ToString(),
                 Version = b.Version.ToString(),
                 BuildType = b.BuildType,
                 Abi = b.Abi,
                 Bytes = b.Bytes,
                 Modified = b.Modified.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
-                Offered = offered is not null
-                    && offered.Assets.Any(a => string.Equals(a.FileName, b.FileName, StringComparison.Ordinal))
+                Offered = IsOffered(b)
             }).ToList()
         };
     }
@@ -249,19 +297,21 @@ public class UpdateController : ControllerBase
         return GetBuilds();
     }
 
-    /// <summary>The asset list for a release, as JSON.</summary>
-    private List<AssetDto> Assets(IReadOnlyCollection<AppBuild> builds) =>
-        AppBuild.Assets(builds).Select(pair => new AssetDto
+    /// <summary>Turns asset-name/build pairs into the JSON shape a release answers with.</summary>
+    /// <param name="pairs">Asset name to the build that answers to it.</param>
+    /// <param name="downloadRoute">The route prefix to build each asset's download URL under - <c>Download</c> for Wholphin, <c>findroid/Download</c> for findroid, so a download link always resolves back through the same family's route.</param>
+    private List<AssetDto> ToAssetDtos(IReadOnlyList<KeyValuePair<string, AppBuild>> pairs, string downloadRoute = "Download") =>
+        pairs.Select(pair => new AssetDto
         {
             Name = pair.Key,
             FileName = pair.Value.FileName,
             Size = pair.Value.Bytes,
             ContentType = "application/vnd.android.package-archive",
-            DownloadUrl = Absolute($"/LiteTv/Update/Download/{Uri.EscapeDataString(pair.Key)}")
+            DownloadUrl = Absolute($"/LiteTv/Update/{downloadRoute}/{Uri.EscapeDataString(pair.Key)}")
         }).ToList();
 
-    /// <summary>The builds of the version currently on offer.</summary>
-    private static IReadOnlyList<AppBuild> Newest() => AppBuild.Newest(Builds());
+    /// <summary>The builds of the version currently on offer, for one app family.</summary>
+    private static IReadOnlyList<AppBuild> Newest(AppFamily family) => AppBuild.Newest(Builds(), family);
 
     /// <summary>Everything the store holds that can be read as a build.</summary>
     private static List<AppBuild> Builds()
@@ -371,11 +421,17 @@ public class AssetDto
 /// <summary>What the update store holds, for the configuration page.</summary>
 public class BuildListDto
 {
-    /// <summary>Gets or sets the version currently on offer, if any.</summary>
+    /// <summary>Gets or sets the Wholphin version currently on offer, if any.</summary>
     public string? LatestVersion { get; set; }
 
-    /// <summary>Gets or sets the address to put in the app's Update URL setting.</summary>
+    /// <summary>Gets or sets the address to put in the Wholphin app's Update URL setting.</summary>
     public string UpdateUrl { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the findroid version currently on offer, if any.</summary>
+    public string? FindroidLatestVersion { get; set; }
+
+    /// <summary>Gets or sets the address to put in the findroid app's Update URL setting.</summary>
+    public string FindroidUpdateUrl { get; set; } = string.Empty;
 
     /// <summary>Gets or sets the stored builds.</summary>
     public IReadOnlyList<BuildDto> Builds { get; set; } = Array.Empty<BuildDto>();
@@ -386,6 +442,9 @@ public class BuildDto
 {
     /// <summary>Gets or sets the file name on disk.</summary>
     public string FileName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets which app this build is for ("Wholphin" or "Findroid").</summary>
+    public string Family { get; set; } = string.Empty;
 
     /// <summary>Gets or sets the version read out of that name.</summary>
     public string Version { get; set; } = string.Empty;

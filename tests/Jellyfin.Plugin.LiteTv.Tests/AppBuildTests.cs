@@ -90,7 +90,7 @@ public class AppBuildTests
         {
             Build("Wholphin-default-release-1.0.5-22-g7b77227d-57-armeabi-v7a.apk"),
             Build("Wholphin-default-release-1.0.5-9-gaaaaaaa-44-armeabi-v7a.apk")
-        });
+        }, AppFamily.Wholphin);
 
         Assert.Single(offered);
         Assert.Equal("v1.0.5-22-g7b77227d", offered[0].Version.ToString());
@@ -103,7 +103,7 @@ public class AppBuildTests
         {
             Build("Wholphin-default-debug-1.0.6-1-gbbbbbbb-58-armeabi-v7a.apk"),
             Build("Wholphin-default-release-1.0.5-22-g7b77227d-57-armeabi-v7a.apk")
-        });
+        }, AppFamily.Wholphin);
 
         Assert.Single(offered);
         Assert.Equal("release", offered[0].BuildType);
@@ -167,5 +167,47 @@ public class AppBuildTests
     public void WritesVersionsTheWayTheAppReadsThem(string input, string expected)
     {
         Assert.Equal(expected, BuildVersion.TryParse(input)!.ToString());
+    }
+
+    /// <summary>findroid's own release naming - see its own `publish.yaml`.</summary>
+    [Fact]
+    public void ReadsAFindroidGradleName()
+    {
+        var build = Build("findroid-v1.2.0-libre-arm64-v8a.apk");
+
+        Assert.Equal(AppFamily.Findroid, build.Family);
+        Assert.Equal("release", build.BuildType);
+        Assert.Equal("arm64-v8a", build.Abi);
+        Assert.Equal("v1.2.0", build.Version.ToString());
+    }
+
+    /// <summary>findroid's client asks for its own exact file name - no synthesised alias.</summary>
+    [Fact]
+    public void AssetsForFindroidUsesTheLiteralFileName()
+    {
+        var build = Build("findroid-v1.2.0-libre-arm64-v8a.apk");
+
+        var assets = AppBuild.AssetsForFindroid(new[] { build });
+
+        Assert.Equal(
+            new[] { "findroid-v1.2.0-libre-arm64-v8a.apk" },
+            assets.Select(a => a.Key));
+    }
+
+    /// <summary>
+    /// A build never counts toward the other app's "newest" - two forks sharing this store must
+    /// never end up offering one another's release.
+    /// </summary>
+    [Fact]
+    public void NewestNeverMixesFamilies()
+    {
+        var wholphin = Build("Wholphin-default-release-1.0.5-22-g7b77227d-57-armeabi-v7a.apk");
+        var findroid = Build("findroid-v9.9.9-libre-arm64-v8a.apk");
+
+        var offeredWholphin = AppBuild.Newest(new[] { wholphin, findroid }, AppFamily.Wholphin);
+        var offeredFindroid = AppBuild.Newest(new[] { wholphin, findroid }, AppFamily.Findroid);
+
+        Assert.Equal(new[] { wholphin }, offeredWholphin);
+        Assert.Equal(new[] { findroid }, offeredFindroid);
     }
 }

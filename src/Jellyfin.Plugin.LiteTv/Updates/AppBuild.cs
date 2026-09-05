@@ -3,25 +3,38 @@ using System.Text.RegularExpressions;
 
 namespace Jellyfin.Plugin.LiteTv.Updates;
 
+/// <summary>Which app a stored build belongs to. Each family has its own naming and its own release train - never mixed when deciding what's "newest".</summary>
+internal enum AppFamily
+{
+    /// <summary>The original television fork this update server was built for.</summary>
+    Wholphin,
+
+    /// <summary>The findroid-based phone fork, added once it needed the same update server.</summary>
+    Findroid,
+}
+
 /// <summary>
 /// What the update server knows about one stored APK, read out of its file name.
 /// <para>
 /// A build carries no metadata anybody here can read - an APK is a zip and the version is
 /// inside a binary manifest - but Gradle already writes everything worth knowing into the file
-/// name: <c>Wholphin-default-release-1.0.5-22-g7b77227d-57-armeabi-v7a.apk</c>. Reading the
-/// name is exact for any build this fork produced and forgiving for anything else.
+/// name: <c>Wholphin-default-release-1.0.5-22-g7b77227d-57-armeabi-v7a.apk</c> for this fork's
+/// own television build, or <c>findroid-v1.2.0-libre-arm64-v8a.apk</c> for the phone fork's real
+/// CI release assets (see that project's own <c>publish.yaml</c>). Reading the name is exact for
+/// either shape and forgiving for anything else.
 /// </para>
 /// </summary>
 internal sealed record AppBuild(
     string FileName,
     string Path,
+    AppFamily Family,
     BuildVersion Version,
     string BuildType,
     string? Abi,
     long Bytes,
     DateTime Modified)
 {
-    /// <summary>The names the app asks for, in the order it asks. Kept from UpdateChecker.kt.</summary>
+    /// <summary>The names the Wholphin app asks for, in the order it asks. Kept from UpdateChecker.kt.</summary>
     private const string AssetName = "Wholphin";
 
     /// <summary>
@@ -30,6 +43,17 @@ internal sealed record AppBuild(
     /// </summary>
     private static readonly Regex GradleName = new(
         @"^Wholphin-(?<flavour>[A-Za-z0-9]+)-(?<type>release|debug)-(?<version>\d+\.\d+\.\d+(?:-\d+-g[0-9a-fA-F]+)?)-(?<code>\d+)(?:-(?<abi>[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*))?\.apk$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture);
+
+    /// <summary>
+    /// findroid's own release asset names, exactly as its CI produces them - no commit-suffix
+    /// scheme at all (that project's own version is a plain hand-bumped
+    /// <c>major.minor.patch</c>), so this is the one asset name to look for, not a fallback
+    /// chain. Kept as the literal advertised asset name too (see <see cref="AssetsForFindroid"/>)
+    /// rather than reformatted, since the app matches its own tag verbatim.
+    /// </summary>
+    private static readonly Regex FindroidGradleName = new(
+        @"^findroid-(?<version>v?\d+\.\d+\.\d+)-libre-(?<abi>armeabi-v7a|arm64-v8a|x86_64|x86)\.apk$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture);
 
     /// <summary>
@@ -63,9 +87,24 @@ internal sealed record AppBuild(
             return new AppBuild(
                 fileName,
                 path,
+                AppFamily.Wholphin,
                 version,
                 gradle.Groups["type"].Value.ToLowerInvariant(),
                 AbiOf(gradle.Groups["abi"].Success ? gradle.Groups["abi"].Value : null, fileName),
+                bytes,
+                modified);
+        }
+
+        var findroid = FindroidGradleName.Match(fileName);
+        if (findroid.Success && BuildVersion.TryParse(findroid.Groups["version"].Value) is { } findroidVersion)
+        {
+            return new AppBuild(
+                fileName,
+                path,
+                AppFamily.Findroid,
+                findroidVersion,
+                "release",
+                findroid.Groups["abi"].Value,
                 bytes,
                 modified);
         }
@@ -79,6 +118,7 @@ internal sealed record AppBuild(
         return new AppBuild(
             fileName,
             path,
+            fileName.StartsWith("findroid", StringComparison.OrdinalIgnoreCase) ? AppFamily.Findroid : AppFamily.Wholphin,
             parsed,
             fileName.Contains("debug", StringComparison.OrdinalIgnoreCase) ? "debug" : "release",
             AbiOf(null, fileName),
@@ -123,16 +163,18 @@ internal sealed record AppBuild(
     /// </para>
     /// </summary>
     /// <param name="builds">Everything the store holds.</param>
+    /// <param name="family">Which app is asking - a build never counts as "newest" for a family it doesn't belong to, so two forks sharing this store can never end up offering each other's release (this exact cross-app confusion happened once before with an upstream-vs-fork mismatch on the PO token side of things).</param>
     /// <returns>The builds of the version on offer, or an empty list.</returns>
-    public static IReadOnlyList<AppBuild> Newest(IReadOnlyCollection<AppBuild> builds)
+    public static IReadOnlyList<AppBuild> Newest(IReadOnlyCollection<AppBuild> builds, AppFamily family)
     {
-        if (builds.Count == 0)
+        var ofFamily = builds.Where(b => b.Family == family).ToList();
+        if (ofFamily.Count == 0)
         {
             return Array.Empty<AppBuild>();
         }
 
-        var kind = builds.Any(b => b.IsRelease) ? "release" : "debug";
-        var ofKind = builds
+        var kind = ofFamily.Any(b => b.IsRelease) ? "release" : "debug";
+        var ofKind = ofFamily
             .Where(b => string.Equals(b.BuildType, kind, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(b => b.Version)
             .ToList();
@@ -188,6 +230,17 @@ internal sealed record AppBuild(
 
         return assets;
     }
+
+    /// <summary>
+    /// The findroid fork's own asset list. Unlike <see cref="Assets"/>, this advertises each
+    /// build under its own literal file name rather than a synthesised one: findroid's client
+    /// asks for one exact name per device ABI (<c>findroid-&lt;tag&gt;-libre-&lt;abi&gt;.apk</c>)
+    /// and has no concept of a bare/universal fallback asset, so there is nothing to alias.
+    /// </summary>
+    /// <param name="builds">The findroid builds of the version on offer.</param>
+    /// <returns>Asset name to build - always the stored file's own name.</returns>
+    public static IReadOnlyList<KeyValuePair<string, AppBuild>> AssetsForFindroid(IReadOnlyCollection<AppBuild> builds) =>
+        builds.Select(b => new KeyValuePair<string, AppBuild>(b.FileName, b)).ToList();
 }
 
 /// <summary>
