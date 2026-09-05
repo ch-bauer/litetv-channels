@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "The update server now also recognizes and serves builds for the findroid-litetv phone fork, at its own /LiteTv/Update/findroid/latest and .../findroid/Download/{name} routes - Wholphin's own update checks on /LiteTv/Update/latest are unaffected.",
+  "changelog": "Fixed the config page's Updates tab: it never picked up the per-app Offered flag added for the findroid update route, so \"Remove the builds nobody is offered\" deleted every Findroid build, including the one actually being served. Also, the build upload picker now accepts more than one file at a time.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-05T00:19:30.000Z",
-  "version": "1.0.139.0",
+  "timestamp": "2026-09-05T11:12:29.000Z",
+  "version": "1.0.140.0",
   "status": "Active",
   "autoUpdate": false
 }
