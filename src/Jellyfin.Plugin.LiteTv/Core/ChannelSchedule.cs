@@ -413,7 +413,7 @@ public sealed class ChannelSchedule
                             ToUtc(naturalEnd),
                             offsetAtStart,
                             BlockName(owner),
-                            lineup.After(index));
+                            NextProgramFor(entry, lineup, index));
                         cursor = naturalEnd;
                         continue;
                     }
@@ -435,7 +435,7 @@ public sealed class ChannelSchedule
                 ToUtc(phaseEnd),
                 inProgram ? offsetAtStart : 0,
                 BlockName(owner),
-                lineup.After(index));
+                inProgram ? NextProgramFor(entry, lineup, index) : lineup.After(index));
 
             cursor = phaseEnd > cursor ? phaseEnd : cursor.AddMinutes(1);
         }
@@ -534,6 +534,25 @@ public sealed class ChannelSchedule
 
     private static DateTime MinuteToLocal(long? absoluteMinute, DateTime fallback)
         => absoluteMinute is { } minute ? new DateTime(minute * TimeSpan.TicksPerMinute, DateTimeKind.Unspecified) : fallback;
+
+    /// <summary>
+    /// What this queue entry leads into, for the guide's own "coming up"/trailer-announcement
+    /// fields.
+    /// <para>
+    /// For an ordinary programme that is genuinely whatever plays next in the queue. A trailer
+    /// is different: <see cref="ChannelPlaylistBuilder"/>'s own queue-level trailer insertion
+    /// (<c>WithScheduledTrailers</c>) already worked out which programme it actually promotes -
+    /// several slots further on, never the one immediately following it in the queue - and
+    /// recorded that choice on the trailer's own <see cref="ScheduledEntry.TrailerForItemId"/>/
+    /// <see cref="ScheduledEntry.TrailerForName"/>. Falling back to "whatever the queue plays
+    /// next" here would silently discard that choice and announce the wrong film - the queue
+    /// entry immediately after the trailer, not the one it was actually built for.
+    /// </para>
+    /// </summary>
+    private static ScheduledEntry NextProgramFor(ScheduledEntry entry, Lineup lineup, int index) =>
+        entry.IsTrailer && entry.TrailerForItemId is { } trailerForItemId
+            ? new ScheduledEntry(trailerForItemId, entry.TrailerForName ?? string.Empty, null, null, 0)
+            : lineup.After(index);
 
     private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
 
