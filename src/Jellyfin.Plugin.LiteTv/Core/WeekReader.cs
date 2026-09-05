@@ -82,7 +82,14 @@ public static class WeekReader
                     row.OffsetTicks + (row.DurationSeconds * TimeSpan.TicksPerSecond))
                 {
                     Url = isAddressProgramme ? row.Url : null,
-                    IsTrailer = isStoredTrailer
+                    IsTrailer = isStoredTrailer,
+                    // The generator's curated choice of what this trailer promotes (see
+                    // NextProgramme's doc) was being read back into NextProgram but never onto
+                    // the entry itself, so ToProgram's TrailsItemId/TrailsName (sourced from
+                    // entry.TrailerForItemId/TrailerForName for a Trailer row) came back null for
+                    // every stored trailer, regardless of what the week actually recorded.
+                    TrailerForItemId = isStoredTrailer && row.TrailedItemId != Guid.Empty ? row.TrailedItemId : null,
+                    TrailerForName = isStoredTrailer ? row.TrailedName : null
                 }
                 : null;
 

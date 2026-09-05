@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Fixed the config page's Updates tab: it never picked up the per-app Offered flag added for the findroid update route, so \"Remove the builds nobody is offered\" deleted every Findroid build, including the one actually being served. Also, the build upload picker now accepts more than one file at a time.",
+  "changelog": "Fixed a bug where a scheduled trailer's \"coming up\" announcement showed the trailer's own title instead of the movie it was actually promoting. Reading a stored week back out set IsTrailer on the reconstructed entry but never carried over the curated TrailerForItemId/TrailerForName link the week generator had recorded for it, so every stored trailer reported no linked movie regardless of what was actually scheduled.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-05T11:12:29.000Z",
-  "version": "1.0.140.0",
+  "timestamp": "2026-09-05T17:55:32.000Z",
+  "version": "1.0.141.0",
   "status": "Active",
   "autoUpdate": false
 }
