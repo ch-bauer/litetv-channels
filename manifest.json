@@ -13,7 +13,7 @@
         "changelog": "Fixed the real cause of a trailer's caption naming the wrong movie: a channel's queue-level trailer insertion (Trailers: Preview) already knows exactly which movie a trailer promotes (several programmes ahead, recorded on the trailer's own entry), but ChannelSchedule stamped every queue item's NextProgram - trailers included - with whatever simply played next in the queue, discarding that choice. A trailer now carries its own recorded promotion instead.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.144.0/litetv-channels_1.0.144.0.zip",
-        "checksum": "",
+        "checksum": "4c1b96b070e873f4a2f703a910706c8a",
         "timestamp": "2026-09-05T18:57:29.000Z"
       },
       {
