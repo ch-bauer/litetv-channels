@@ -2087,8 +2087,14 @@ public class LiteTvController : ControllerBase
         }
 
         // An interstitial wears the artwork of the programme it is trailing, which is what a
-        // trailer looks like on television anyway. A dark stretch has nothing to wear.
-        var subject = entry ?? airing.NextProgram;
+        // trailer looks like on television anyway - not the trailer's own entry: a remote
+        // trailer plays from a Url and its ItemId is Guid.Empty exactly then (see
+        // ScheduledEntry), so Pick found nothing there and every such trailer went out with
+        // no picture at all, even though the promoted item was already named right beside it.
+        // A dark stretch has nothing to wear.
+        var subject = airing.Kind == AiringKind.Trailer && entry?.TrailerForItemId is { } promotedId && promotedId != Guid.Empty
+            ? new ScheduledEntry(promotedId, entry.TrailerForName ?? string.Empty, null, null, 0)
+            : entry ?? airing.NextProgram;
         if (subject is not null)
         {
             ApplyArtwork(dto, subject, artwork);

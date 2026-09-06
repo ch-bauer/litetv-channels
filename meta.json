@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Trailer breaks now select the best available stream in the configured YouTube language, preferring higher quality instead of accepting the first viable link. The status page calls HLS/DASH quality ladders \"adaptive stream\" rather than incorrectly reporting them as unknown. SponsorBlock-marked non-trailer sections are skipped automatically in trailer breaks when enabled.",
+  "changelog": "A break trailer now wears the artwork of the movie it is promoting, not its own entry - which for a remote trailer has no library item behind it at all, so every such trailer went out with no picture even though the promoted title was already named right beside it.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-09-05T21:50:00.000Z",
-  "version": "1.0.145.0",
+  "timestamp": "2026-09-06T15:20:00.000Z",
+  "version": "1.0.146.0",
   "status": "Active",
   "autoUpdate": false
 }
