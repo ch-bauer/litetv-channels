@@ -13,7 +13,7 @@
         "changelog": "A break trailer now wears the artwork of the movie it is promoting, not its own entry - which for a remote trailer has no library item behind it at all, so every such trailer went out with no picture even though the promoted title was already named right beside it.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.146.0/litetv-channels_1.0.146.0.zip",
-        "checksum": "",
+        "checksum": "fdd34b514e5b41904a1941ae400e83f0",
         "timestamp": "2026-09-06T15:20:00.000Z"
       },
       {
