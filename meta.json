@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Adds trailer stream choices for LiteTV clients: play the configured-language option or the highest-quality alternative when both are available. Channel-break playback keeps its existing language-first selection.",
+  "changelog": "Trailer choices now offer the best available German and English streams. When only one language exists, LiteTV clients play it directly.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -8,8 +8,8 @@
   "overview": "TV channels from your library, without transcoding.",
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
-  "timestamp": "2026-10-11T00:00:00.000Z",
-  "version": "1.0.147.0",
+  "timestamp": "2026-10-12T00:00:00.000Z",
+  "version": "1.0.148.0",
   "status": "Active",
   "autoUpdate": false
 }

@@ -1408,7 +1408,6 @@ public class LiteTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TrailerOptionsDto>> GetTrailerOptions([FromRoute] Guid itemId)
     {
-        var language = YouTubeLocale.Language();
         var candidates = new List<(TrailerDto Trailer, YouTubeStreamResolver.ResolvedStream Stream)>();
         foreach (var trailer in RemoteTrailers(itemId))
         {
@@ -1424,15 +1423,18 @@ public class LiteTvController : ControllerBase
             return NotFound();
         }
 
-        var languageChoice = candidates
-            .OrderBy(candidate => TrailerSelection.LanguageRank(candidate.Trailer.Name, language))
+        // Interactive playback is intentionally a language choice, not a server-locale choice:
+        // German and English are the two useful alternatives for this client.  A Russian-only
+        // title has neither marker, so both policies collapse to its one playable trailer.
+        var germanChoice = candidates
+            .OrderBy(candidate => TrailerSelection.LanguageRank(candidate.Trailer.Name, "de"))
             .ThenByDescending(candidate => candidate.Stream.Quality)
             .ThenBy(candidate => TrailerSelection.KindRank(candidate.Trailer.Name))
             .ThenBy(candidate => candidate.Trailer.Name, StringComparer.OrdinalIgnoreCase)
             .First();
-        var qualityChoice = candidates
-            .OrderByDescending(candidate => candidate.Stream.Quality)
-            .ThenBy(candidate => TrailerSelection.LanguageRank(candidate.Trailer.Name, language))
+        var englishChoice = candidates
+            .OrderBy(candidate => TrailerSelection.LanguageRank(candidate.Trailer.Name, "en"))
+            .ThenByDescending(candidate => candidate.Stream.Quality)
             .ThenBy(candidate => TrailerSelection.KindRank(candidate.Trailer.Name))
             .ThenBy(candidate => candidate.Trailer.Name, StringComparer.OrdinalIgnoreCase)
             .First();
@@ -1450,16 +1452,16 @@ public class LiteTvController : ControllerBase
                 SkipSegments = await SkipSegmentsAsync(candidate.Trailer.Url).ConfigureAwait(false)
             };
 
-        var preferredLanguage = await ToDto(languageChoice).ConfigureAwait(false);
-        var bestQuality = await ToDto(qualityChoice).ConfigureAwait(false);
+        var preferredLanguage = await ToDto(germanChoice).ConfigureAwait(false);
+        var english = await ToDto(englishChoice).ConfigureAwait(false);
         return new TrailerOptionsDto
         {
             PreferredLanguage = preferredLanguage,
             // Do not make the phone ask the viewer the same question twice when both policy
             // choices resolved to the same stream.
-            BestQuality = bestQuality.Url == preferredLanguage.Url && bestQuality.AudioUrl == preferredLanguage.AudioUrl
+            BestQuality = english.Url == preferredLanguage.Url && english.AudioUrl == preferredLanguage.AudioUrl
                 ? null
-                : bestQuality
+                : english
         };
     }
 
