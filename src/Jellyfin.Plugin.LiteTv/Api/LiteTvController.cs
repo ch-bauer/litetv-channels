@@ -1398,6 +1398,72 @@ public class LiteTvController : ControllerBase
     }
 
     /// <summary>
+    /// Resolves the useful alternatives for a library trailer.  The ordinary trailer endpoint
+    /// deliberately keeps its historic single-result contract for channel breaks and older
+    /// clients; an interactive client can use this endpoint to let a viewer decide whether
+    /// spoken language or picture quality matters more for this particular trailer.
+    /// </summary>
+    [HttpGet("Trailer/{itemId}/Options")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TrailerOptionsDto>> GetTrailerOptions([FromRoute] Guid itemId)
+    {
+        var language = YouTubeLocale.Language();
+        var candidates = new List<(TrailerDto Trailer, YouTubeStreamResolver.ResolvedStream Stream)>();
+        foreach (var trailer in RemoteTrailers(itemId))
+        {
+            var stream = await _trailers.ResolveAsync(trailer.Url, HttpContext.RequestAborted).ConfigureAwait(false);
+            if (stream is not null && !string.IsNullOrEmpty(stream.Url))
+            {
+                candidates.Add((trailer, stream));
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return NotFound();
+        }
+
+        var languageChoice = candidates
+            .OrderBy(candidate => TrailerSelection.LanguageRank(candidate.Trailer.Name, language))
+            .ThenByDescending(candidate => candidate.Stream.Quality)
+            .ThenBy(candidate => TrailerSelection.KindRank(candidate.Trailer.Name))
+            .ThenBy(candidate => candidate.Trailer.Name, StringComparer.OrdinalIgnoreCase)
+            .First();
+        var qualityChoice = candidates
+            .OrderByDescending(candidate => candidate.Stream.Quality)
+            .ThenBy(candidate => TrailerSelection.LanguageRank(candidate.Trailer.Name, language))
+            .ThenBy(candidate => TrailerSelection.KindRank(candidate.Trailer.Name))
+            .ThenBy(candidate => candidate.Trailer.Name, StringComparer.OrdinalIgnoreCase)
+            .First();
+
+        async Task<ResolvedTrailerDto> ToDto((TrailerDto Trailer, YouTubeStreamResolver.ResolvedStream Stream) candidate) =>
+            new()
+            {
+                Name = candidate.Trailer.Name,
+                Url = candidate.Stream.Url,
+                AudioUrl = candidate.Stream.AudioUrl,
+                UserAgent = YouTubeStreamResolver.UserAgent,
+                Referer = YouTubeStreamResolver.Referer,
+                Client = candidate.Stream.Client,
+                Quality = candidate.Stream.Quality,
+                SkipSegments = await SkipSegmentsAsync(candidate.Trailer.Url).ConfigureAwait(false)
+            };
+
+        var preferredLanguage = await ToDto(languageChoice).ConfigureAwait(false);
+        var bestQuality = await ToDto(qualityChoice).ConfigureAwait(false);
+        return new TrailerOptionsDto
+        {
+            PreferredLanguage = preferredLanguage,
+            // Do not make the phone ask the viewer the same question twice when both policy
+            // choices resolved to the same stream.
+            BestQuality = bestQuality.Url == preferredLanguage.Url && bestQuality.AudioUrl == preferredLanguage.AudioUrl
+                ? null
+                : bestQuality
+        };
+    }
+
+    /// <summary>
     /// Turns an address the schedule named into something a player can be handed.
     /// <para>
     /// The trailer endpoint above starts from a library item and looks up what the metadata
@@ -2668,6 +2734,14 @@ public class ResolvedTrailerDto
     /// </para>
     /// </summary>
     public List<SkipSegmentDto> SkipSegments { get; set; } = new();
+}
+
+/// <summary>Two intentionally different ways to choose a resolved trailer stream.</summary>
+public class TrailerOptionsDto
+{
+    public ResolvedTrailerDto PreferredLanguage { get; set; } = new();
+
+    public ResolvedTrailerDto? BestQuality { get; set; }
 }
 
 /// <summary>
