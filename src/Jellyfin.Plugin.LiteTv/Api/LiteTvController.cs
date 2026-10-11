@@ -1601,15 +1601,9 @@ public class LiteTvController : ControllerBase
             return null;
         }
 
-        // A manifest is deliberately represented internally by int.MaxValue: it gives the
-        // client a ladder, not one fixed rendition. Calling it "unknown" made the best answers
-        // (usually the adaptive 1080p-capable ones) look broken, while an inferior fixed 360p
-        // stream looked informative. The app chooses the actual rung, so say exactly that.
-        var quality = last.Quality == int.MaxValue
-            ? "adaptive stream"
-            : last.Quality > 0
-                ? last.Quality.ToString(CultureInfo.InvariantCulture) + "p"
-                : "unknown quality";
+        var quality = last.Quality > 0
+            ? last.Quality.ToString(CultureInfo.InvariantCulture) + "p"
+            : "unknown quality";
 
         var client = string.IsNullOrWhiteSpace(last.Client) ? "unknown client" : last.Client;
 

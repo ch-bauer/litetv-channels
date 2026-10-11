@@ -67,21 +67,12 @@ public sealed class YouTubeStreamResolver
     /// rung is still asked. The client needs one predictable adaptive choice, not a rendition
     /// picker, so a real 1080p stream is the target whenever YouTube offers it.
     /// <para>
-    /// This is the whole of the 360p fix. Innertube's <c>formats</c> list - the muxed one,
-    /// video and audio in a single file - nowadays holds itag 18 and little else, so a client
-    /// that answers without a manifest hands back 360p and the old ladder stopped there
-    /// satisfied. ANDROID leads the ladder because it is the most likely to answer at all, and
-    /// it is precisely the one that tends not to return a manifest; IOS and the TV player
-    /// usually do. Carrying on costs a couple of fast requests and gets the quality ladder.
+    /// This avoids treating an adaptive manifest as a quality answer. The resolver takes the
+    /// concrete 1080p video and matching audio URLs itself, rather than making the phone pick
+    /// a rendition from a manifest.
     /// </para>
     /// </summary>
     private const int GoodEnough = 1080;
-
-    /// <summary>
-    /// The quality a manifest counts as: above anything a single file can score, since it
-    /// carries every rendition the video has.
-    /// </summary>
-    private const int Manifest = int.MaxValue;
 
     /// <summary>
     /// Sent when the stream is fetched as well as when it is resolved. Google serves a
@@ -422,7 +413,7 @@ public sealed class YouTubeStreamResolver
 
         foreach (var instance in PipedInstances)
         {
-            var found = await TryMirrorAsync($"{instance}/streams/{id}", "hls", "videoStreams", instance, cancellationToken)
+            var found = await TryMirrorAsync($"{instance}/streams/{id}", "videoStreams", instance, cancellationToken)
                 .ConfigureAwait(false);
             if (Better(found) is { } good)
             {
@@ -437,7 +428,7 @@ public sealed class YouTubeStreamResolver
 
         foreach (var instance in InvidiousInstances)
         {
-            var found = await TryMirrorAsync($"{instance}/api/v1/videos/{id}", null, "formatStreams", instance, cancellationToken)
+            var found = await TryMirrorAsync($"{instance}/api/v1/videos/{id}", "formatStreams", instance, cancellationToken)
                 .ConfigureAwait(false);
             if (Better(found) is { } good)
             {
@@ -761,16 +752,6 @@ public sealed class YouTubeStreamResolver
                 return null;
             }
 
-            // A manifest is preferred over a single file: it carries the quality ladder, so
-            // the player picks rather than being handed whatever one guess seemed best.
-            foreach (var manifest in new[] { "hlsManifestUrl", "dashManifestUrl" })
-            {
-                if (streaming.TryGetProperty(manifest, out var url) && url.GetString() is { Length: > 0 } value)
-                {
-                    return new StreamCandidate(value, Manifest, client.Name);
-                }
-            }
-
             // Adaptive first, muxed as the floor. The muxed list holds itag 18 and little
             // else - 360p - so everything worth watching is in adaptiveFormats, as a video
             // stream and an audio stream that have to be played together.
@@ -821,7 +802,6 @@ public sealed class YouTubeStreamResolver
 
     private async Task<StreamCandidate?> TryMirrorAsync(
         string url,
-        string? directProperty,
         string streamsProperty,
         string source,
         CancellationToken cancellationToken)
@@ -843,14 +823,6 @@ public sealed class YouTubeStreamResolver
                 .ConfigureAwait(false);
 
             var root = json.RootElement;
-            if (directProperty is not null
-                && root.TryGetProperty(directProperty, out var direct)
-                && direct.ValueKind == JsonValueKind.String
-                && direct.GetString() is { Length: > 0 } hls)
-            {
-                return new StreamCandidate(hls, Manifest, source);
-            }
-
             return root.TryGetProperty(streamsProperty, out var streams) ? BestOf(streams, source) : null;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
@@ -1029,11 +1001,6 @@ public sealed class YouTubeStreamResolver
 
     /// <summary>
     /// One answer from one rung of the ladder, with how good it is.
-    /// <para>
-    /// <see cref="Quality"/> is a picture height, and a manifest counts as
-    /// <see cref="Manifest"/> - better than any single file, because the player picks off the
-    /// whole ladder rather than being handed one guess.
-    /// </para>
     /// </summary>
     private sealed record StreamCandidate(string Url, int Quality, string Source, string? AudioUrl = null)
     {
@@ -1146,11 +1113,9 @@ public sealed class YouTubeStreamResolver
 
     /// <summary>For the log, so a bad-looking trailer can be explained without guessing.</summary>
     private static string Describe(StreamCandidate candidate) =>
-        candidate.Quality == Manifest
-            ? "a manifest"
-            : string.Create(
-                CultureInfo.InvariantCulture,
-                $"{candidate.Quality}p{(candidate.AudioUrl is null ? " muxed" : " with separate audio")}");
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"{candidate.Quality}p{(candidate.AudioUrl is null ? " muxed" : " with separate audio")}");
 
     private sealed record InnertubeClient(string Name, string NameId, string Version)
     {
