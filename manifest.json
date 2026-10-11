@@ -13,7 +13,7 @@
         "changelog": "Adds trailer stream choices for LiteTV clients: play the configured-language option or the highest-quality alternative when both are available. Channel-break playback keeps its existing language-first selection.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/ch-bauer/litetv-channels/releases/download/v1.0.147.0/litetv-channels_1.0.147.0.zip",
-        "checksum": "",
+        "checksum": "a17006bf8e98a3461e7052b512136662",
         "timestamp": "2026-10-11T00:00:00.000Z"
       },
       {
