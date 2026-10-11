@@ -64,7 +64,8 @@ public sealed class YouTubeStreamResolver
 
     /// <summary>
     /// The height at which the ladder stops looking. Below it the answer is kept but the next
-    /// rung is still asked.
+    /// rung is still asked. The client needs one predictable adaptive choice, not a rendition
+    /// picker, so a real 1080p stream is the target whenever YouTube offers it.
     /// <para>
     /// This is the whole of the 360p fix. Innertube's <c>formats</c> list - the muxed one,
     /// video and audio in a single file - nowadays holds itag 18 and little else, so a client
@@ -74,7 +75,7 @@ public sealed class YouTubeStreamResolver
     /// usually do. Carrying on costs a couple of fast requests and gets the quality ladder.
     /// </para>
     /// </summary>
-    private const int GoodEnough = 720;
+    private const int GoodEnough = 1080;
 
     /// <summary>
     /// The quality a manifest counts as: above anything a single file can score, since it

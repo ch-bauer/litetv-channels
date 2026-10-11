@@ -1,6 +1,6 @@
 {
   "category": "General",
-  "changelog": "Trailer choices now offer the best available German and English streams. When only one language exists, LiteTV clients play it directly.",
+  "changelog": "Trailer choices now find official German and English YouTube trailers even when Jellyfin metadata provides only one link. Adaptive playback prefers 1080p when available.",
   "description": "Lightweight virtual TV channels: deterministic schedules over your own library, tuned in via normal direct playback at the live position. No transcoding, no tuner emulation.",
   "guid": "13953c97-f5a0-4713-8d4c-96b5369e5791",
   "imageUrl": "https://raw.githubusercontent.com/ch-bauer/litetv-channels/main/images/icon.png",
@@ -9,7 +9,7 @@
   "owner": "Christian",
   "targetAbi": "10.11.0.0",
   "timestamp": "2026-10-12T00:00:00.000Z",
-  "version": "1.0.148.0",
+  "version": "1.0.149.0",
   "status": "Active",
   "autoUpdate": false
 }

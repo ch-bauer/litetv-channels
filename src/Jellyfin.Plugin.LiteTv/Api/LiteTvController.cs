@@ -41,6 +41,7 @@ public class LiteTvController : ControllerBase
     private readonly SiblingPlugins _siblings;
     private readonly SmartSimilarClient _smartSimilar;
     private readonly YouTubePlaylist _playlists;
+    private readonly YouTubeTrailerSearch _trailerSearch;
     private readonly ChannelStore _channels;
     private readonly StudioLogoProvider _studioLogos;
 
@@ -57,6 +58,7 @@ public class LiteTvController : ControllerBase
     /// <param name="siblings">Which of the other plugins are installed.</param>
     /// <param name="smartSimilar">Scores suggestions, when that plugin is there.</param>
     /// <param name="playlists">Reads YouTube playlists.</param>
+    /// <param name="trailerSearch">Finds language-specific official trailers when metadata has only one link.</param>
     /// <param name="channels">The channels, a file each.</param>
     /// <param name="studioLogos">Fetches a studio's own logo from TMDb, when configured.</param>
     public LiteTvController(
@@ -70,6 +72,7 @@ public class LiteTvController : ControllerBase
         SiblingPlugins siblings,
         SmartSimilarClient smartSimilar,
         YouTubePlaylist playlists,
+        YouTubeTrailerSearch trailerSearch,
         ChannelStore channels,
         StudioLogoProvider studioLogos)
     {
@@ -83,6 +86,7 @@ public class LiteTvController : ControllerBase
         _siblings = siblings;
         _smartSimilar = smartSimilar;
         _playlists = playlists;
+        _trailerSearch = trailerSearch;
         _channels = channels;
         _studioLogos = studioLogos;
     }
@@ -1409,7 +1413,7 @@ public class LiteTvController : ControllerBase
     public async Task<ActionResult<TrailerOptionsDto>> GetTrailerOptions([FromRoute] Guid itemId)
     {
         var candidates = new List<(TrailerDto Trailer, YouTubeStreamResolver.ResolvedStream Stream)>();
-        foreach (var trailer in RemoteTrailers(itemId))
+        foreach (var trailer in await InteractiveTrailerSourcesAsync(itemId, HttpContext.RequestAborted).ConfigureAwait(false))
         {
             var stream = await _trailers.ResolveAsync(trailer.Url, HttpContext.RequestAborted).ConfigureAwait(false);
             if (stream is not null && !string.IsNullOrEmpty(stream.Url))
@@ -2438,7 +2442,37 @@ public class LiteTvController : ControllerBase
     /// which is what the metadata providers fill in. Nothing the server can schedule, but
     /// the web client can embed them, and that is what fills an interstitial in practice.
     /// </summary>
-    private List<TrailerDto> RemoteTrailers(Guid itemId)
+    private async Task<List<TrailerDto>> InteractiveTrailerSourcesAsync(Guid itemId, CancellationToken cancellationToken)
+    {
+        var sources = RemoteTrailers(itemId);
+        var item = TrailerItem(itemId);
+        if (item is null || string.IsNullOrWhiteSpace(item.Name))
+        {
+            return sources;
+        }
+
+        // Russian titles should not be presented as a false German/English choice. For the
+        // ordinary case, search both release languages even when the metadata provider saved
+        // only one remote-trailer address.
+        var languages = LooksCyrillic(item.Name) ? new[] { "ru" } : new[] { "de", "en" };
+        var discovered = await Task.WhenAll(
+            languages.Select(language => _trailerSearch.OfficialTrailerAsync(
+                item.Name,
+                item.ProductionYear,
+                language,
+                cancellationToken))).ConfigureAwait(false);
+        foreach (var trailer in discovered.Where(result => result is not null))
+        {
+            if (sources.All(existing => !string.Equals(existing.Url, trailer!.Url, StringComparison.OrdinalIgnoreCase)))
+            {
+                sources.Add(new TrailerDto { Name = trailer!.Name, Url = trailer.Url });
+            }
+        }
+
+        return sources;
+    }
+
+    private BaseItem? TrailerItem(Guid itemId)
     {
         var item = _libraryManager.Find(itemId);
 
@@ -2451,6 +2485,13 @@ public class LiteTvController : ControllerBase
             item = episode.SeriesId != Guid.Empty ? _libraryManager.Find(episode.SeriesId) ?? item : item;
         }
 
+        return item;
+    }
+
+    private List<TrailerDto> RemoteTrailers(Guid itemId)
+    {
+        var item = TrailerItem(itemId);
+
         var language = YouTubeLocale.Language();
         return item?.RemoteTrailers
             .Where(t => !string.IsNullOrEmpty(t.Url))
@@ -2461,6 +2502,8 @@ public class LiteTvController : ControllerBase
             .Take(4)
             .ToList() ?? new List<TrailerDto>();
     }
+
+    private static bool LooksCyrillic(string value) => value.Any(character => character is >= '\u0400' and <= '\u04ff');
 
     /// <summary>
     /// Orders trailers the way a viewer would choose: the official trailer first, a teaser

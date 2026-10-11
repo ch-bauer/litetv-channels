@@ -19,6 +19,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Reads YouTube playlists, so a playlist can be a channel's content rather than only
         // something inside a break. Registered before the builder, which takes it.
         serviceCollection.AddSingleton<YouTubePlaylist>();
+        serviceCollection.AddSingleton<YouTubeTrailerSearch>();
 
         serviceCollection.AddSingleton<ChannelPlaylistBuilder>();
 
